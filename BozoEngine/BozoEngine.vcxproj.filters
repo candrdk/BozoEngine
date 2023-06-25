@@ -13,10 +13,111 @@
       <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
       <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
     </Filter>
+    <Filter Include="glfw">
+      <UniqueIdentifier>{8ca37cce-89dd-4c38-82a0-dbee24a71ba7}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="volk">
+      <UniqueIdentifier>{3e366fbb-0035-405e-a6e6-ca17ed84628e}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="main.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="..\Extern\glfw\src\context.c">
+      <Filter>glfw</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Extern\glfw\src\egl_context.c">
+      <Filter>glfw</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Extern\glfw\src\init.c">
+      <Filter>glfw</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Extern\glfw\src\input.c">
+      <Filter>glfw</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Extern\glfw\src\monitor.c">
+      <Filter>glfw</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Extern\glfw\src\osmesa_context.c">
+      <Filter>glfw</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Extern\glfw\src\vulkan.c">
+      <Filter>glfw</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Extern\glfw\src\wgl_context.c">
+      <Filter>glfw</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Extern\glfw\src\win32_init.c">
+      <Filter>glfw</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Extern\glfw\src\win32_joystick.c">
+      <Filter>glfw</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Extern\glfw\src\win32_module.c">
+      <Filter>glfw</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Extern\glfw\src\win32_monitor.c">
+      <Filter>glfw</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Extern\glfw\src\win32_thread.c">
+      <Filter>glfw</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Extern\glfw\src\win32_time.c">
+      <Filter>glfw</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Extern\glfw\src\win32_window.c">
+      <Filter>glfw</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Extern\glfw\src\window.c">
+      <Filter>glfw</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Extern\glfw\src\platform.c">
+      <Filter>glfw</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Extern\glfw\src\null_init.c">
+      <Filter>glfw</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Extern\glfw\src\null_joystick.c">
+      <Filter>glfw</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Extern\glfw\src\null_monitor.c">
+      <Filter>glfw</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Extern\glfw\src\null_window.c">
+      <Filter>glfw</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Extern\volk\volk.c">
+      <Filter>volk</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="..\Extern\glfw\src\win32_joystick.h">
+      <Filter>glfw</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Extern\glfw\src\win32_platform.h">
+      <Filter>glfw</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Extern\glfw\src\win32_thread.h">
+      <Filter>glfw</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Extern\glfw\src\win32_time.h">
+      <Filter>glfw</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Extern\glfw\src\internal.h">
+      <Filter>glfw</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Extern\glfw\src\platform.h">
+      <Filter>glfw</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Extern\glfw\src\null_joystick.h">
+      <Filter>glfw</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Extern\glfw\src\null_platform.h">
+      <Filter>glfw</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Extern\volk\volk.h">
+      <Filter>volk</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>

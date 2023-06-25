@@ -102,8 +102,9 @@
     <ClCompile>
       <WarningLevel>Level3</WarningLevel>
       <SDLCheck>true</SDLCheck>
-      <PreprocessorDefinitions>_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>_DEBUG;_CONSOLE;%(PreprocessorDefinitions);_GLFW_WIN32;_CRT_SECURE_NO_WARNINGS</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
+      <AdditionalIncludeDirectories>..\Extern\glm;..\Extern\glfw\include;..\Extern\volk;$(VULKAN_SDK)\Include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -116,8 +117,9 @@
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <SDLCheck>true</SDLCheck>
-      <PreprocessorDefinitions>NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>NDEBUG;_CONSOLE;%(PreprocessorDefinitions);_GLFW_WIN32;_CRT_SECURE_NO_WARNINGS</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
+      <AdditionalIncludeDirectories>..\Extern\glm;..\Extern\glfw\include;..\Extern\volk;$(VULKAN_SDK)\Include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -127,7 +129,40 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="..\Extern\glfw\src\context.c" />
+    <ClCompile Include="..\Extern\glfw\src\egl_context.c" />
+    <ClCompile Include="..\Extern\glfw\src\init.c" />
+    <ClCompile Include="..\Extern\glfw\src\input.c" />
+    <ClCompile Include="..\Extern\glfw\src\monitor.c" />
+    <ClCompile Include="..\Extern\glfw\src\null_init.c" />
+    <ClCompile Include="..\Extern\glfw\src\null_joystick.c" />
+    <ClCompile Include="..\Extern\glfw\src\null_monitor.c" />
+    <ClCompile Include="..\Extern\glfw\src\null_window.c" />
+    <ClCompile Include="..\Extern\glfw\src\osmesa_context.c" />
+    <ClCompile Include="..\Extern\glfw\src\platform.c" />
+    <ClCompile Include="..\Extern\glfw\src\vulkan.c" />
+    <ClCompile Include="..\Extern\glfw\src\wgl_context.c" />
+    <ClCompile Include="..\Extern\glfw\src\win32_init.c" />
+    <ClCompile Include="..\Extern\glfw\src\win32_joystick.c" />
+    <ClCompile Include="..\Extern\glfw\src\win32_module.c" />
+    <ClCompile Include="..\Extern\glfw\src\win32_monitor.c" />
+    <ClCompile Include="..\Extern\glfw\src\win32_thread.c" />
+    <ClCompile Include="..\Extern\glfw\src\win32_time.c" />
+    <ClCompile Include="..\Extern\glfw\src\win32_window.c" />
+    <ClCompile Include="..\Extern\glfw\src\window.c" />
+    <ClCompile Include="..\Extern\volk\volk.c" />
     <ClCompile Include="main.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="..\Extern\glfw\src\internal.h" />
+    <ClInclude Include="..\Extern\glfw\src\null_joystick.h" />
+    <ClInclude Include="..\Extern\glfw\src\null_platform.h" />
+    <ClInclude Include="..\Extern\glfw\src\platform.h" />
+    <ClInclude Include="..\Extern\glfw\src\win32_joystick.h" />
+    <ClInclude Include="..\Extern\glfw\src\win32_platform.h" />
+    <ClInclude Include="..\Extern\glfw\src\win32_thread.h" />
+    <ClInclude Include="..\Extern\glfw\src\win32_time.h" />
+    <ClInclude Include="..\Extern\volk\volk.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
