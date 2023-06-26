@@ -90,16 +90,17 @@ VkDebugUtilsMessengerCreateInfoEXT GetDebugMessengerCreateInfo() {
 }
 
 // Initialize glfw and create a window of width/height
-GLFWwindow* InitWindow(int width, int height) {
+GLFWwindow* window;
+void InitWindow(int width, int height) {
 	glfwInit();
 
 	glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
 	glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
 
-	return glfwCreateWindow(width, height, "BozoEngine", nullptr, nullptr);
+	window = glfwCreateWindow(width, height, "BozoEngine", nullptr, nullptr);
 }
 
-void CleanupWindow(GLFWwindow* window) {
+void CleanupWindow() {
 	glfwDestroyWindow(window);
 	glfwTerminate();
 }
@@ -109,7 +110,9 @@ VkDebugUtilsMessengerEXT debugMessenger;
 
 VkPhysicalDevice physicalDevice = VK_NULL_HANDLE;
 VkDevice device;
-VkQueue graphicsQueue;
+VkQueue queue;
+
+VkSurfaceKHR surface;
 
 void PrintAvailableVulkanExtensions() {
 	u32 extensionCount = 0;
@@ -164,6 +167,10 @@ void CreateInstance() {
 	volkLoadInstance(instance);
 }
 
+void CreateSurface() {
+	VkCheck(glfwCreateWindowSurface(instance, window, nullptr, &surface), "Failed to create window surface.");
+}
+
 void CreateDebugMessenger() {
 	VkDebugUtilsMessengerCreateInfoEXT createInfo = GetDebugMessengerCreateInfo();
 	VkCheck(vkCreateDebugUtilsMessengerEXT(instance, &createInfo, nullptr, &debugMessenger), "Failed to create debug messenger.");
@@ -192,22 +199,25 @@ void CreatePhysicalDevice() {
 	Check(physicalDevice != VK_NULL_HANDLE, "Failed to find a discrete GPU.");
 }
 
-u32 GetGraphicsQueueFamily() {
+u32 GetQueueFamily() {
 	u32 queueCount = 8;
 	VkQueueFamilyProperties queues[8];
 	vkGetPhysicalDeviceQueueFamilyProperties(physicalDevice, &queueCount, queues);
 
 	for (int i = 0; i < queueCount; i++) {
-		if (queues[i].queueFlags & VK_QUEUE_GRAPHICS_BIT) {
+		VkBool32 presentSupport = false;
+		vkGetPhysicalDeviceSurfaceSupportKHR(physicalDevice, i, surface, &presentSupport);
+
+		if (presentSupport && (queues[i].queueFlags & VK_QUEUE_GRAPHICS_BIT)) {
 			return i;
 		}
 	}
 
-	Check(false, "No queue family supporting graphics found.");
+	Check(false, "No queue family supporting graphics + present found.");
 }
 
 void CreateLogicalDevice() {
-	u32 queueFamilyIndex = GetGraphicsQueueFamily();
+	u32 queueFamilyIndex = GetQueueFamily();
 	float queuePriority[] = { 1.0f };
 	VkDeviceQueueCreateInfo queueCreateInfo = {
 		.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO,
@@ -228,13 +238,14 @@ void CreateLogicalDevice() {
 
 	VkCheck(vkCreateDevice(physicalDevice, &deviceCreateInfo, nullptr, &device), "Failed to create logical device.");
 
-	vkGetDeviceQueue(device, queueFamilyIndex, 0, &graphicsQueue);
+	vkGetDeviceQueue(device, queueFamilyIndex, 0, &queue);
 }
 
 void InitVulkan() {
 	volkInitialize();
 	CreateInstance();
 	CreateDebugMessenger();
+	CreateSurface();
 	CreatePhysicalDevice();
 	CreateLogicalDevice();
 }
@@ -242,12 +253,12 @@ void InitVulkan() {
 void CleanupVulkan() {
 	vkDestroyDevice(device, nullptr);
 	vkDestroyDebugUtilsMessengerEXT(instance, debugMessenger, nullptr);
+	vkDestroySurfaceKHR(instance, surface, nullptr);
 	vkDestroyInstance(instance, nullptr);
 }
 
 int main(int argc, char* argv[]) {
-	GLFWwindow* window = InitWindow(800, 600);
-
+	InitWindow(800, 600);
 	InitVulkan();
 
 	while (!glfwWindowShouldClose(window)) {
@@ -255,8 +266,7 @@ int main(int argc, char* argv[]) {
 	}
 
 	CleanupVulkan();
-
-	CleanupWindow(window);
+	CleanupWindow();
 
 	return 0;
 }
