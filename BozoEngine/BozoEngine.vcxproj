@@ -111,6 +111,20 @@
       <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
     </Link>
+    <CustomBuild>
+      <Command>
+      </Command>
+      <Message>
+      </Message>
+      <Outputs>
+      </Outputs>
+      <AdditionalInputs>
+      </AdditionalInputs>
+    </CustomBuild>
+    <PreBuildEvent>
+      <Command>$(ProjectDir)shaders\build_shaders.bat</Command>
+      <Message>Building shaders</Message>
+    </PreBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <ClCompile>
@@ -129,6 +143,20 @@
       <OptimizeReferences>true</OptimizeReferences>
       <GenerateDebugInformation>true</GenerateDebugInformation>
     </Link>
+    <CustomBuild>
+      <Command>
+      </Command>
+      <Message>
+      </Message>
+      <Outputs>
+      </Outputs>
+      <AdditionalInputs>
+      </AdditionalInputs>
+    </CustomBuild>
+    <PreBuildEvent>
+      <Command>$(ProjectDir)shaders\build_shaders.bat</Command>
+      <Message>Building shaders</Message>
+    </PreBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="..\Extern\glfw\src\context.c" />
@@ -165,6 +193,10 @@
     <ClInclude Include="..\Extern\glfw\src\win32_thread.h" />
     <ClInclude Include="..\Extern\glfw\src\win32_time.h" />
     <ClInclude Include="..\Extern\volk\volk.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="shaders\triangle.frag.glsl" />
+    <None Include="shaders\triangle.vert.glsl" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

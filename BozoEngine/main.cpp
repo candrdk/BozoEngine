@@ -379,6 +379,10 @@ void CreateImageViews() {
 	}
 }
 
+void CreateGraphicsPipeline() {
+
+}
+
 void InitVulkan() {
 	VkCheck(volkInitialize(), "Failed to initialzie volk.");
 	CreateInstance();
@@ -388,6 +392,7 @@ void InitVulkan() {
 	CreateLogicalDevice();
 	CreateSwapchain();
 	CreateImageViews();
+	CreateGraphicsPipeline();
 }
 
 void CleanupVulkan() {

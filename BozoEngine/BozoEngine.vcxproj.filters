@@ -19,6 +19,9 @@
     <Filter Include="volk">
       <UniqueIdentifier>{3e366fbb-0035-405e-a6e6-ca17ed84628e}</UniqueIdentifier>
     </Filter>
+    <Filter Include="shaders">
+      <UniqueIdentifier>{9fb3f89d-d67d-4ff5-885e-fab4601df355}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="main.cpp">
@@ -119,5 +122,13 @@
     <ClInclude Include="..\Extern\volk\volk.h">
       <Filter>volk</Filter>
     </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="shaders\triangle.vert.glsl">
+      <Filter>shaders</Filter>
+    </None>
+    <None Include="shaders\triangle.frag.glsl">
+      <Filter>shaders</Filter>
+    </None>
   </ItemGroup>
 </Project>
