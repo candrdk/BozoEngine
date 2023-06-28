@@ -131,6 +131,10 @@ namespace bz {
 	std::vector<VkImageView> swapchainImageViews;
 	VkFormat swapchainImageFormat;
 	VkExtent2D swapchainExtent;
+
+	VkRenderPass renderPass;
+	VkPipelineLayout pipelineLayout;
+	VkPipeline graphicsPipeline;
 }
 
 void PrintAvailableVulkanExtensions() {
@@ -379,23 +383,210 @@ void CreateImageViews() {
 	}
 }
 
-void CreateGraphicsPipeline() {
+VkShaderModule CreateShaderModule(const char* path) {
+	FILE* fp = fopen(path, "rb");
+	Check(fp != nullptr, "Failed open shader file.");
 
+	fseek(fp, 0, SEEK_END);
+	long length = ftell(fp);
+	fseek(fp, 0, SEEK_SET);
+	Check(length > 0, "Shader file was empty.");
+
+	char* buffer = new char[length];
+	Check(buffer, "Failed to allocate buffer.");
+
+	size_t read = fread(buffer, 1, length, fp);
+	Check(read == length, "Failed to read all contents of shader file.");
+	fclose(fp);
+
+	VkShaderModuleCreateInfo createInfo = {
+		.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
+		.codeSize = read,
+		.pCode = (u32*)buffer
+	};
+
+	VkShaderModule shaderModule;
+	VkCheck(vkCreateShaderModule(bz::device, &createInfo, nullptr, &shaderModule), "Failed to create shader module.");
+
+	return shaderModule;
+}
+
+void CreateRenderPass() {
+	VkAttachmentDescription colorAttachment = {
+		.format = bz::swapchainImageFormat,
+		.samples = VK_SAMPLE_COUNT_1_BIT,
+		.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
+		.storeOp = VK_ATTACHMENT_STORE_OP_STORE,
+		.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+		.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
+		.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,			// dont care. Note that contents wont be preserved. Ok, since loadOp = clear
+		.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR
+	};
+
+	VkAttachmentReference colorAttachmentRef = {
+		.attachment = 0,
+		.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL
+	};
+
+	VkSubpassDescription subpass = {
+		.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS,
+		.colorAttachmentCount = 1,
+		.pColorAttachments = &colorAttachmentRef
+	};
+
+	VkRenderPassCreateInfo renderPassInfo = {
+		.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO,
+		.attachmentCount = 1,
+		.pAttachments = &colorAttachment,
+		.subpassCount = 1,
+		.pSubpasses = &subpass
+	};
+
+	VkCheck(vkCreateRenderPass(bz::device, &renderPassInfo, nullptr, &bz::renderPass), "Failed to create render pass.");
+}
+
+void CreateGraphicsPipeline() {
+	VkShaderModule vertShaderModule = CreateShaderModule("shaders/triangle.vert.spv");
+	VkShaderModule fragShaderModule = CreateShaderModule("shaders/triangle.frag.spv");
+
+	VkPipelineShaderStageCreateInfo shaderStages[] = {
+		{ // Vertex shader module
+			.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+			.stage = VK_SHADER_STAGE_VERTEX_BIT,
+			.module = vertShaderModule,
+			.pName = "main"
+		},
+		{ // Fragment shader module
+		.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+		.stage = VK_SHADER_STAGE_FRAGMENT_BIT,
+		.module = fragShaderModule,
+		.pName = "main"
+		}
+	};
+
+	VkDynamicState dynamicState[] = {
+		VK_DYNAMIC_STATE_VIEWPORT,
+		VK_DYNAMIC_STATE_SCISSOR
+	};
+
+	VkPipelineDynamicStateCreateInfo dynamicStateInfo = {
+		.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO,
+		.dynamicStateCount = sizeof(dynamicState) / sizeof(dynamicState[0]),
+		.pDynamicStates = dynamicState
+	};
+
+#if 0
+	VkViewport viewport = {
+		.x = 0.0f,
+		.y = 0.0f,
+		.width = bz::swapchainExtent.width,
+		.height = bz::swapchainExtent.height,
+		.minDepth = 0.0f,
+		.maxDepth = 1.0f
+	};
+
+	VkRect2D scissor = {
+		.offset = { 0, 0 },
+		.extent = bz::swapchainExtent
+	};
+#endif
+
+	VkPipelineViewportStateCreateInfo viewportStateInfo = {
+		.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO,
+		.viewportCount = 1,
+		.scissorCount = 1
+	};
+
+	VkPipelineVertexInputStateCreateInfo vertexInputInfo = {
+		.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO
+	};
+
+	VkPipelineInputAssemblyStateCreateInfo inputAssemblyInfo = {
+		.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,
+		.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
+		.primitiveRestartEnable = VK_FALSE
+	};
+
+	VkPipelineRasterizationStateCreateInfo rasterizationInfo = {
+		.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
+		.depthClampEnable = VK_FALSE,		// depth clamp discards fragments outside the near/far planes. Usefull for shadow maps, requires enabling a GPU feature.
+		.rasterizerDiscardEnable = VK_FALSE,
+		.polygonMode = VK_POLYGON_MODE_FILL,
+		.cullMode = VK_CULL_MODE_BACK_BIT,
+		.frontFace = VK_FRONT_FACE_CLOCKWISE,
+		.depthBiasEnable = VK_FALSE,
+		.lineWidth = 1.0f,
+	};
+
+	VkPipelineMultisampleStateCreateInfo multisampeInfo = {
+		.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,
+		.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT,
+		.sampleShadingEnable = VK_FALSE
+	};
+
+	VkPipelineColorBlendAttachmentState colorBlendAttachment = {
+		.blendEnable = VK_FALSE,
+		.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT
+	};
+
+	VkPipelineColorBlendStateCreateInfo colorBlendStateInfo = { 
+		.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO,
+		.logicOpEnable = VK_FALSE,
+		.attachmentCount = 1,
+		.pAttachments = &colorBlendAttachment
+	};
+
+	VkPipelineLayoutCreateInfo pipelineLayoutInfo = {
+		.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
+	};
+
+	VkCheck(vkCreatePipelineLayout(bz::device, &pipelineLayoutInfo, nullptr, &bz::pipelineLayout), "Failed to create pipeline layout.");
+
+	VkGraphicsPipelineCreateInfo pipelineInfo = {
+		.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
+		.stageCount = 2,
+		.pStages = shaderStages,
+		.pVertexInputState = &vertexInputInfo,
+		.pInputAssemblyState = &inputAssemblyInfo,
+		.pViewportState = &viewportStateInfo,
+		.pRasterizationState = &rasterizationInfo,
+		.pMultisampleState = &multisampeInfo,
+		.pDepthStencilState = nullptr,
+		.pColorBlendState = &colorBlendStateInfo,
+		.pDynamicState = &dynamicStateInfo,
+		.layout = bz::pipelineLayout,
+		.renderPass = bz::renderPass,
+		.subpass = 0
+	};
+
+	VkCheck(vkCreateGraphicsPipelines(bz::device, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &bz::graphicsPipeline), "Failed to create graphics pipeline.");
+
+	vkDestroyShaderModule(bz::device, vertShaderModule, nullptr);
+	vkDestroyShaderModule(bz::device, fragShaderModule, nullptr);
 }
 
 void InitVulkan() {
 	VkCheck(volkInitialize(), "Failed to initialzie volk.");
+
 	CreateInstance();
 	CreateDebugMessenger();
 	CreateSurface();
+
 	CreatePhysicalDevice();
 	CreateLogicalDevice();
+
 	CreateSwapchain();
 	CreateImageViews();
+
+	CreateRenderPass();
 	CreateGraphicsPipeline();
 }
 
 void CleanupVulkan() {
+	vkDestroyPipeline(bz::device, bz::graphicsPipeline, nullptr);
+	vkDestroyPipelineLayout(bz::device, bz::pipelineLayout, nullptr);
+	vkDestroyRenderPass(bz::device, bz::renderPass, nullptr);
+
 	for (auto imageView : bz::swapchainImageViews) {
 		vkDestroyImageView(bz::device, imageView, nullptr);
 	}
