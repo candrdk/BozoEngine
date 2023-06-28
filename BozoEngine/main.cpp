@@ -30,6 +30,9 @@ typedef int64_t	i64;
 #define MAX(a, b) (((a) > (b)) ? (a) : (b))
 #define CLAMP(v, lo, hi) (MAX(MIN((v), (hi)), (lo)))
 
+
+///////////////////////////// DEBUG PRINTING STUFF ////////////////////////////
+
 // SGR escape sequences: https://docs.microsoft.com/en-us/windows/console/console-virtual-terminal-sequences
 #define SGR_SET_BG_GRAY  "\x1B[100;1m"
 #define SGR_SET_BG_BLUE	 "\x1B[44;1m"
@@ -40,29 +43,52 @@ typedef int64_t	i64;
 #include <source_location>
 #include <vulkan/vk_enum_string_helper.h>
 
-#define Check(expression, message) if (!(expression)) { \
-		std::source_location check_location = std::source_location::current(); \
-		fprintf(stderr, SGR_SET_BG_RED "[CHECK]" SGR_SET_DEFAULT " %s: `" #expression "`\n\tfile: %s(%u:%u) in `%s`\n", \
-			message,							\
-			check_location.file_name(),			\
-			check_location.line(),				\
-			check_location.column(),			\
-			check_location.function_name());	\
-		abort();								\
-	}
+void PrintCheck(const char* result, const char* message, std::source_location location) {
+	fprintf(stderr, SGR_SET_BG_RED "[CHECK]" SGR_SET_DEFAULT " %s: `%s`\n\tfile: %s(%u:%u) in `%s`\n",
+		message, 
+		result,
+		location.file_name(),
+		location.line(),
+		location.column(),
+		location.function_name());
+}
 
-VkResult VkCheck(VkResult result, const char* message = "", std::source_location location = std::source_location::current()) {
+#define Check(expression, message)	\
+	if (!(expression)) do {			\
+		PrintCheck(#expression, message, std::source_location::current()); \
+		abort();					\
+	} while(0)
+
+
+// Hack to get both source_location as a default parameter 
+// and variadic args for formatted string messages in the same function.
+struct StringWithLocation {
+	const char* str;
+	std::source_location loc;
+	StringWithLocation(const char* format = "", const std::source_location& location = std::source_location::current())
+		: str{ format }, loc{ location } {}
+};
+
+VkResult VkCheck(VkResult result, StringWithLocation message = StringWithLocation()) {
 	if (result != VK_SUCCESS) {
-		fprintf(stderr, SGR_SET_BG_RED "[CHECK]" SGR_SET_DEFAULT " %s: `%s`\n\tfile: %s(%u:%u) in `%s`\n", 
-			message, string_VkResult(result),
-			location.file_name(),
-			location.line(),
-			location.column(),
-			location.function_name());
+		PrintCheck(string_VkResult(result), message.str, message.loc);
 		abort();
 	}
 	return result;
 }
+
+template <typename... Args>
+VkResult VkCheck(VkResult result, StringWithLocation format, Args... args) {
+	if (result != VK_SUCCESS) {
+		char message[512];
+		_snprintf_s(message, _TRUNCATE, format.str, args...);
+		PrintCheck(string_VkResult(result), message, format.loc);
+		abort();
+	}
+	return result;
+}
+
+///////////////////////////////////////////////////////////////////////////////
 
 static VKAPI_ATTR VkBool32 VKAPI_CALL DebugCallback(
 	VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
@@ -129,12 +155,16 @@ namespace bz {
 	VkSwapchainKHR swapchain;
 	std::vector<VkImage> swapchainImages;
 	std::vector<VkImageView> swapchainImageViews;
+	std::vector<VkFramebuffer> swapchainFramebuffers;
 	VkFormat swapchainImageFormat;
 	VkExtent2D swapchainExtent;
 
 	VkRenderPass renderPass;
 	VkPipelineLayout pipelineLayout;
 	VkPipeline graphicsPipeline;
+
+	VkCommandPool commandPool;
+	VkCommandBuffer commandBuffer;
 }
 
 void PrintAvailableVulkanExtensions() {
@@ -145,7 +175,7 @@ void PrintAvailableVulkanExtensions() {
 	VkCheck(vkEnumerateInstanceExtensionProperties(nullptr, &extensionCount, extensions.data()));
 
 	printf("Available extensions:\n");
-	for (int i = 0; i < extensionCount; i++) {
+	for (u32 i = 0; i < extensionCount; i++) {
 		printf("\t%s\n", extensions[i].extensionName);
 	}
 }
@@ -223,7 +253,7 @@ u32 GetQueueFamily() {
 	VkQueueFamilyProperties queues[8];
 	vkGetPhysicalDeviceQueueFamilyProperties(bz::physicalDevice, &queueCount, queues);
 
-	for (int i = 0; i < queueCount; i++) {
+	for (u32 i = 0; i < queueCount; i++) {
 		VkBool32 presentSupport = false;
 		VkCheck(vkGetPhysicalDeviceSurfaceSupportKHR(bz::physicalDevice, i, bz::surface, &presentSupport));
 
@@ -321,8 +351,8 @@ VkExtent2D GetSwapchainExtent(const VkSurfaceCapabilitiesKHR& capabilities) {
 	glfwGetFramebufferSize(window, &width, &height);
 
 	VkExtent2D extent = { 
-		.width  = CLAMP(width, capabilities.minImageExtent.width, capabilities.maxImageExtent.width),
-		.height = CLAMP(height, capabilities.minImageExtent.height, capabilities.maxImageExtent.height)
+		.width  = CLAMP((u32)width, capabilities.minImageExtent.width, capabilities.maxImageExtent.width),
+		.height = CLAMP((u32)height, capabilities.minImageExtent.height, capabilities.maxImageExtent.height)
 	};
 
 	return extent;
@@ -475,22 +505,6 @@ void CreateGraphicsPipeline() {
 		.pDynamicStates = dynamicState
 	};
 
-#if 0
-	VkViewport viewport = {
-		.x = 0.0f,
-		.y = 0.0f,
-		.width = bz::swapchainExtent.width,
-		.height = bz::swapchainExtent.height,
-		.minDepth = 0.0f,
-		.maxDepth = 1.0f
-	};
-
-	VkRect2D scissor = {
-		.offset = { 0, 0 },
-		.extent = bz::swapchainExtent
-	};
-#endif
-
 	VkPipelineViewportStateCreateInfo viewportStateInfo = {
 		.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO,
 		.viewportCount = 1,
@@ -565,6 +579,94 @@ void CreateGraphicsPipeline() {
 	vkDestroyShaderModule(bz::device, fragShaderModule, nullptr);
 }
 
+void CreateFramebuffers() {
+	bz::swapchainFramebuffers.resize(bz::swapchainImageViews.size());
+
+	for (int i = 0; i < bz::swapchainImageViews.size(); i++) {
+		VkImageView attachments[] = {
+			bz::swapchainImageViews[i]
+		};
+
+		VkFramebufferCreateInfo framebufferInfo = {
+			.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
+			.renderPass = bz::renderPass,
+			.attachmentCount = 1,
+			.pAttachments = attachments,
+			.width = bz::swapchainExtent.width,
+			.height = bz::swapchainExtent.height,
+			.layers = 1
+		};
+
+		VkCheck(vkCreateFramebuffer(bz::device, &framebufferInfo, nullptr, &bz::swapchainFramebuffers[i]), "Failed to create framebuffer.");
+	}
+}
+
+void CreateCommandPool() {
+	VkCommandPoolCreateInfo poolInfo = {
+		.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
+		.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT,
+		.queueFamilyIndex = GetQueueFamily()
+	};
+
+	VkCheck(vkCreateCommandPool(bz::device, &poolInfo, nullptr, &bz::commandPool), "Failed to create command pool.");
+}
+
+void CreateCommandBuffer() {
+	VkCommandBufferAllocateInfo allocInfo = {
+		.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
+		.commandPool = bz::commandPool,
+		.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
+		.commandBufferCount = 1
+	};
+
+	VkCheck(vkAllocateCommandBuffers(bz::device, &allocInfo, &bz::commandBuffer), "Failed to allocate command buffers.");
+}
+
+void RecordCommandBuffer(VkCommandBuffer commandBuffer, u32 imageIndex) {
+	VkCommandBufferBeginInfo beginInfo = {
+		.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
+	};
+
+	VkCheck(vkBeginCommandBuffer(commandBuffer, &beginInfo), "Failed to begin recording command buffer!");
+
+	VkClearValue clearColor = { {{0.0f, 0.0f, 0.0f}} };
+	VkRenderPassBeginInfo renderPassInfo = {
+		.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
+		.renderPass = bz::renderPass,
+		.framebuffer = bz::swapchainFramebuffers[imageIndex],
+		.renderArea = {
+			.offset = {0, 0},
+			.extent = bz::swapchainExtent
+		},
+		.clearValueCount = 1,
+		.pClearValues = &clearColor
+	};
+
+	vkCmdBeginRenderPass(commandBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
+	vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, bz::graphicsPipeline);
+
+	VkViewport viewport = {
+		.x = 0.0f,
+		.y = 0.0f,
+		.width =  (float)bz::swapchainExtent.width,
+		.height = (float)bz::swapchainExtent.height,
+		.minDepth = 0.0f,
+		.maxDepth = 1.0f
+	};
+	vkCmdSetViewport(commandBuffer, 0, 1, &viewport);
+
+	VkRect2D scissor = {
+		.offset = { 0, 0 },
+		.extent = bz::swapchainExtent
+	};
+	vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
+
+	vkCmdDraw(commandBuffer, 3, 1, 0, 0);
+	vkCmdEndRenderPass(commandBuffer);
+
+	VkCheck(vkEndCommandBuffer(commandBuffer), "Failed to record command buffer.");
+}
+
 void InitVulkan() {
 	VkCheck(volkInitialize(), "Failed to initialzie volk.");
 
@@ -580,9 +682,19 @@ void InitVulkan() {
 
 	CreateRenderPass();
 	CreateGraphicsPipeline();
+	CreateFramebuffers();
+
+	CreateCommandPool();
+	CreateCommandBuffer();
 }
 
 void CleanupVulkan() {
+	vkDestroyCommandPool(bz::device, bz::commandPool, nullptr);
+
+	for (auto framebuffer : bz::swapchainFramebuffers) {
+		vkDestroyFramebuffer(bz::device, framebuffer, nullptr);
+	}
+
 	vkDestroyPipeline(bz::device, bz::graphicsPipeline, nullptr);
 	vkDestroyPipelineLayout(bz::device, bz::pipelineLayout, nullptr);
 	vkDestroyRenderPass(bz::device, bz::renderPass, nullptr);
