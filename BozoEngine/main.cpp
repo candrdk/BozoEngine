@@ -142,6 +142,9 @@ void CleanupWindow() {
 	glfwTerminate();
 }
 
+constexpr int MAX_FRAMES_IN_FLIGHT = 2;
+u32 currentFrame = 0;
+
 // Temporary namespace to contain globals
 namespace bz {
 	VkInstance instance;
@@ -164,7 +167,11 @@ namespace bz {
 	VkPipeline graphicsPipeline;
 
 	VkCommandPool commandPool;
-	VkCommandBuffer commandBuffer;
+	VkCommandBuffer commandBuffers[MAX_FRAMES_IN_FLIGHT];
+
+	VkSemaphore imageAvailableSemaphores[MAX_FRAMES_IN_FLIGHT];
+	VkSemaphore renderFinishedSemaphores[MAX_FRAMES_IN_FLIGHT];
+	VkFence inFlightFences[MAX_FRAMES_IN_FLIGHT];
 }
 
 void PrintAvailableVulkanExtensions() {
@@ -464,12 +471,25 @@ void CreateRenderPass() {
 		.pColorAttachments = &colorAttachmentRef
 	};
 
+	// Subpass dependency to synchronize our renderpass w/ the acquisition of swapchain images
+	// This could alternatively have been accomplished by waitStages if of imageAvailableSemaphore to VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT.
+	VkSubpassDependency dependency = {
+		.srcSubpass = VK_SUBPASS_EXTERNAL,		// implicit subpass before the renderpass
+		.dstSubpass = 0,						// our subpass
+		.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,	// wait until the color ouput stage (swapchain has finished reading)
+		.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,	// operations that should wait on this are in the color output stage
+		.srcAccessMask = 0,
+		.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT			// operations that should wait on this are writing to the framebuffer
+	};
+
 	VkRenderPassCreateInfo renderPassInfo = {
 		.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO,
 		.attachmentCount = 1,
 		.pAttachments = &colorAttachment,
 		.subpassCount = 1,
-		.pSubpasses = &subpass
+		.pSubpasses = &subpass,
+		.dependencyCount = 1,
+		.pDependencies = &dependency
 	};
 
 	VkCheck(vkCreateRenderPass(bz::device, &renderPassInfo, nullptr, &bz::renderPass), "Failed to create render pass.");
@@ -611,15 +631,15 @@ void CreateCommandPool() {
 	VkCheck(vkCreateCommandPool(bz::device, &poolInfo, nullptr, &bz::commandPool), "Failed to create command pool.");
 }
 
-void CreateCommandBuffer() {
+void CreateCommandBuffers() {
 	VkCommandBufferAllocateInfo allocInfo = {
 		.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
 		.commandPool = bz::commandPool,
 		.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
-		.commandBufferCount = 1
+		.commandBufferCount = sizeof(bz::commandBuffers) / sizeof(bz::commandBuffers[0])
 	};
 
-	VkCheck(vkAllocateCommandBuffers(bz::device, &allocInfo, &bz::commandBuffer), "Failed to allocate command buffers.");
+	VkCheck(vkAllocateCommandBuffers(bz::device, &allocInfo, bz::commandBuffers), "Failed to allocate command buffers.");
 }
 
 void RecordCommandBuffer(VkCommandBuffer commandBuffer, u32 imageIndex) {
@@ -667,6 +687,23 @@ void RecordCommandBuffer(VkCommandBuffer commandBuffer, u32 imageIndex) {
 	VkCheck(vkEndCommandBuffer(commandBuffer), "Failed to record command buffer.");
 }
 
+void CreateSyncObjects() {
+	VkSemaphoreCreateInfo semaphoreInfo = {
+		.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO
+	};
+
+	VkFenceCreateInfo fenceInfo = {
+		.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO,
+		.flags = VK_FENCE_CREATE_SIGNALED_BIT
+	};
+
+	for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
+		VkCheck(vkCreateSemaphore(bz::device, &semaphoreInfo, nullptr, &bz::imageAvailableSemaphores[i]), "Failed to create imageAvailable semaphore.");
+		VkCheck(vkCreateSemaphore(bz::device, &semaphoreInfo, nullptr, &bz::renderFinishedSemaphores[i]), "Failed to create renderFinished semaphore.");
+		VkCheck(vkCreateFence(bz::device, &fenceInfo, nullptr, &bz::inFlightFences[i]), "Failed to create inFlight fence.");
+	}
+}
+
 void InitVulkan() {
 	VkCheck(volkInitialize(), "Failed to initialzie volk.");
 
@@ -685,10 +722,18 @@ void InitVulkan() {
 	CreateFramebuffers();
 
 	CreateCommandPool();
-	CreateCommandBuffer();
+	CreateCommandBuffers();
+
+	CreateSyncObjects();
 }
 
 void CleanupVulkan() {
+	for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
+		vkDestroySemaphore(bz::device, bz::imageAvailableSemaphores[i], nullptr);
+		vkDestroySemaphore(bz::device, bz::renderFinishedSemaphores[i], nullptr);
+		vkDestroyFence(bz::device, bz::inFlightFences[i], nullptr);
+	}
+
 	vkDestroyCommandPool(bz::device, bz::commandPool, nullptr);
 
 	for (auto framebuffer : bz::swapchainFramebuffers) {
@@ -710,13 +755,57 @@ void CleanupVulkan() {
 	vkDestroyInstance(bz::instance, nullptr);
 }
 
+void DrawFrame() {
+	VkCheck(vkWaitForFences(bz::device, 1, &bz::inFlightFences[currentFrame], VK_TRUE, UINT64_MAX), "Wait for inFlight fence failed.");
+	VkCheck(vkResetFences(bz::device, 1, &bz::inFlightFences[currentFrame]), "Failed to reset inFlight fence.");
+
+	u32 imageIndex;
+	VkCheck(vkAcquireNextImageKHR(bz::device, bz::swapchain, UINT64_MAX, bz::imageAvailableSemaphores[currentFrame], VK_NULL_HANDLE, &imageIndex), "Failed to acquire swapchain image.");
+
+	// This reset happens implicitly on vkBeginCommandBuffer, as it was allocated from a commandPool with VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT set.
+	// VkCheck(vkResetCommandBuffer(bz::commandBuffers[currentFrame], 0), "Failed to reset command buffer"); 
+	RecordCommandBuffer(bz::commandBuffers[currentFrame], imageIndex);
+
+	VkSemaphore waitSemaphores[] = { bz::imageAvailableSemaphores[currentFrame] };
+	VkSemaphore signalSemaphores[] = { bz::renderFinishedSemaphores[currentFrame] };
+	VkPipelineStageFlags waitStages[] = { VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT };
+	VkSubmitInfo submitInfo = {
+		.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
+		.waitSemaphoreCount = 1,
+		.pWaitSemaphores = waitSemaphores,
+		.pWaitDstStageMask = waitStages,
+		.commandBufferCount = 1,
+		.pCommandBuffers = &bz::commandBuffers[currentFrame],
+		.signalSemaphoreCount = 1,
+		.pSignalSemaphores = signalSemaphores
+	};
+
+	VkPresentInfoKHR presentInfo = {
+		.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
+		.waitSemaphoreCount = 1,
+		.pWaitSemaphores = signalSemaphores,
+		.swapchainCount = 1,
+		.pSwapchains = &bz::swapchain,
+		.pImageIndices = &imageIndex
+	};
+
+	VkCheck(vkQueueSubmit(bz::queue, 1, &submitInfo, bz::inFlightFences[currentFrame]), "Failed to submit draw command buffer.");
+	VkCheck(vkQueuePresentKHR(bz::queue, &presentInfo), "Failed to submit to present queue.");
+
+	currentFrame = (currentFrame + 1) % MAX_FRAMES_IN_FLIGHT;
+}
+
 int main(int argc, char* argv[]) {
 	InitWindow(800, 600);
 	InitVulkan();
 
 	while (!glfwWindowShouldClose(window)) {
 		glfwPollEvents();
+		DrawFrame();
 	}
+
+	// Wait untill all commandbuffers are done so we can safely clean up semaphores they might potentially be using.
+	vkDeviceWaitIdle(bz::device);
 
 	CleanupVulkan();
 	CleanupWindow();
