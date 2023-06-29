@@ -23,19 +23,33 @@ struct StringWithLocation {
 // The _assume(expression) is just there to get rid of "pointer could be null" errors.
 #define Check(expression, message, ...) _Check(expression, #expression, message, __VA_ARGS__); _assume(expression)
 
-// Assert result. If not true, expression and the formatted message are printed, along with source location information.
-template <typename... Args>
-bool _Check(bool result, const char* expression, StringWithLocation format, Args... args);
-
 // Assert result. If not true, expression and message are printed, along with source location information.
 bool _Check(bool result, const char* expression, StringWithLocation message);
 
 // Assert result. If not VK_SUCCESS, message is printed, along with source location information.
 VkResult VkCheck(VkResult result, StringWithLocation message = StringWithLocation());
 
-// Assert result. If not VK_SUCCESS, a formatted message is printed, along with source location information.
+// Templated function definition cannot be seperated from its declaration.
+// Assert result. If not true, expression and the formatted message are printed, along with source location information.
 template <typename... Args>
-VkResult VkCheck(VkResult result, StringWithLocation format, Args... args);
+bool _Check(bool result, const char* expression, StringWithLocation format, Args... args) {
+	if (result == false) {
+		char message[512];
+		_snprintf_s(message, _TRUNCATE, format.str, args...);
+		_Check(result, expression, StringWithLocation(message, format.loc));
+	}
+	return result;
+}
+
+template <typename... Args>
+VkResult VkCheck(VkResult result, StringWithLocation format, Args... args) {
+	if (result != VK_SUCCESS) {
+		char message[512];
+		_snprintf_s(message, _TRUNCATE, format.str, args...);
+		VkCheck(result, StringWithLocation(message, format.loc));
+	}
+	return result;
+}
 
 // Get a DebugMessengerCreateInfo pointing to a custom DebugCallBack.
 VkDebugUtilsMessengerCreateInfoEXT GetDebugMessengerCreateInfo();

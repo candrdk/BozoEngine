@@ -18,31 +18,9 @@ bool _Check(bool result, const char* expression, StringWithLocation message) {
 	return result;
 }
 
-template <typename... Args>
-bool _Check(bool result, const char* expression, StringWithLocation format, Args... args) {
-	if (result == false) {
-		char message[512];
-		_snprintf_s(message, _TRUNCATE, format.str, args...);
-		PrintCheck(expression, message, format.loc);
-		exit(-1);
-	}
-	return result;
-}
-
 VkResult VkCheck(VkResult result, StringWithLocation message) {
 	if (result != VK_SUCCESS) {
 		PrintCheck(string_VkResult(result), message.str, message.loc);
-		exit(-1);
-	}
-	return result;
-}
-
-template <typename... Args>
-VkResult VkCheck(VkResult result, StringWithLocation format, Args... args) {
-	if (result != VK_SUCCESS) {
-		char message[512];
-		_snprintf_s(message, _TRUNCATE, format.str, args...);
-		PrintCheck(string_VkResult(result), message, format.loc);
 		exit(-1);
 	}
 	return result;
