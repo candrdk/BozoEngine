@@ -93,6 +93,9 @@
     <ClCompile Include="..\Extern\volk\volk.c">
       <Filter>volk</Filter>
     </ClCompile>
+    <ClCompile Include="Logging.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\Extern\glfw\src\win32_joystick.h">
@@ -121,6 +124,9 @@
     </ClInclude>
     <ClInclude Include="..\Extern\volk\volk.h">
       <Filter>volk</Filter>
+    </ClInclude>
+    <ClInclude Include="Logging.h">
+      <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

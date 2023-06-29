@@ -17,6 +17,8 @@ typedef int64_t	i64;
 #include <volk.h>
 #include <GLFW/glfw3.h>
 
+#include "Logging.h"
+
 // Only used to quickly expand inline code when writing
 // Shouldn't actually be left in code.
 #define VK_GET(identifier, type, vkFunction, ...) \
@@ -29,102 +31,6 @@ typedef int64_t	i64;
 #define MIN(a, b) (((a) < (b)) ? (a) : (b))
 #define MAX(a, b) (((a) > (b)) ? (a) : (b))
 #define CLAMP(v, lo, hi) (MAX(MIN((v), (hi)), (lo)))
-
-
-///////////////////////////// DEBUG PRINTING STUFF ////////////////////////////
-
-// SGR escape sequences: https://docs.microsoft.com/en-us/windows/console/console-virtual-terminal-sequences
-#define SGR_SET_BG_GRAY  "\x1B[100;1m"
-#define SGR_SET_BG_BLUE	 "\x1B[44;1m"
-#define SGR_SET_BG_RED	 "\x1B[41;1m"
-#define SGR_SET_TXT_BLUE "\x1B[34;1m"
-#define SGR_SET_DEFAULT  "\x1B[0m"
-
-#include <source_location>
-#include <vulkan/vk_enum_string_helper.h>
-
-void PrintCheck(const char* result, const char* message, std::source_location location) {
-	fprintf(stderr, SGR_SET_BG_RED "[CHECK]" SGR_SET_DEFAULT " %s: `%s`\n\tfile: %s(%u:%u) in `%s`\n",
-		message, 
-		result,
-		location.file_name(),
-		location.line(),
-		location.column(),
-		location.function_name());
-}
-
-#define Check(expression, message)	\
-	if (!(expression)) do {			\
-		PrintCheck(#expression, message, std::source_location::current()); \
-		abort();					\
-	} while(0)
-
-
-// Hack to get both source_location as a default parameter 
-// and variadic args for formatted string messages in the same function.
-struct StringWithLocation {
-	const char* str;
-	std::source_location loc;
-	StringWithLocation(const char* format = "", const std::source_location& location = std::source_location::current())
-		: str{ format }, loc{ location } {}
-};
-
-VkResult VkCheck(VkResult result, StringWithLocation message = StringWithLocation()) {
-	if (result != VK_SUCCESS) {
-		PrintCheck(string_VkResult(result), message.str, message.loc);
-		abort();
-	}
-	return result;
-}
-
-template <typename... Args>
-VkResult VkCheck(VkResult result, StringWithLocation format, Args... args) {
-	if (result != VK_SUCCESS) {
-		char message[512];
-		_snprintf_s(message, _TRUNCATE, format.str, args...);
-		PrintCheck(string_VkResult(result), message, format.loc);
-		abort();
-	}
-	return result;
-}
-
-///////////////////////////////////////////////////////////////////////////////
-
-static VKAPI_ATTR VkBool32 VKAPI_CALL DebugCallback(
-	VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
-	VkDebugUtilsMessageTypeFlagsEXT messageType,
-	const VkDebugUtilsMessengerCallbackDataEXT* pCallbackData,
-	void* pUserData) 
-{
-	if      (messageSeverity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT)   printf(SGR_SET_BG_RED  "[ERROR]" SGR_SET_DEFAULT "   ");
-	else if (messageSeverity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT) printf(SGR_SET_BG_BLUE "[WARNING]" SGR_SET_DEFAULT " ");
-	else if (messageSeverity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT) printf("[VERBOSE] ");
-	
-	const char* vkSpecLinkBegin = strstr(pCallbackData->pMessage, "https");
-	if (vkSpecLinkBegin) {
-		const char* vkSpecLinkEnd = strchr(vkSpecLinkBegin, ')');
-		printf("%.*s", (u32)ptrdiff_t(vkSpecLinkBegin - pCallbackData->pMessage), pCallbackData->pMessage);
-		printf(SGR_SET_TXT_BLUE "%.*s" SGR_SET_DEFAULT ")\n", (u32)ptrdiff_t(vkSpecLinkEnd - vkSpecLinkBegin), vkSpecLinkBegin);
-	}
-	else {
-		printf("%s\n", pCallbackData->pMessage);
-	}
-
-	return VK_FALSE;
-}
-
-VkDebugUtilsMessengerCreateInfoEXT GetDebugMessengerCreateInfo() {
-	return {
-		.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT,
-		.messageSeverity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT
-						 | VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT
-						 | VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT,
-		.messageType = VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT
-					 | VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT
-					 | VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT,
-		.pfnUserCallback = DebugCallback
-	};
-}
 
 // Initialize glfw and create a window of width/height
 GLFWwindow* window;
