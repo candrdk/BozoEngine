@@ -32,22 +32,6 @@ typedef int64_t	i64;
 #define MAX(a, b) (((a) > (b)) ? (a) : (b))
 #define CLAMP(v, lo, hi) (MAX(MIN((v), (hi)), (lo)))
 
-// Initialize glfw and create a window of width/height
-GLFWwindow* window;
-void InitWindow(int width, int height) {
-	glfwInit();
-
-	glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
-	glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
-
-	window = glfwCreateWindow(width, height, "BozoEngine", nullptr, nullptr);
-}
-
-void CleanupWindow() {
-	glfwDestroyWindow(window);
-	glfwTerminate();
-}
-
 constexpr int MAX_FRAMES_IN_FLIGHT = 2;
 u32 currentFrame = 0;
 
@@ -78,6 +62,29 @@ namespace bz {
 	VkSemaphore imageAvailableSemaphores[MAX_FRAMES_IN_FLIGHT];
 	VkSemaphore renderFinishedSemaphores[MAX_FRAMES_IN_FLIGHT];
 	VkFence inFlightFences[MAX_FRAMES_IN_FLIGHT];
+
+	bool framebufferResized = false;
+}
+
+static void FramebufferResizeCallback(GLFWwindow* window, int width, int height) {
+	bz::framebufferResized = true;
+}
+
+// Initialize glfw and create a window of width/height
+GLFWwindow* window;
+void InitWindow(int width, int height) {
+	glfwInit();
+
+	glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
+	glfwWindowHint(GLFW_RESIZABLE, GLFW_TRUE);
+
+	window = glfwCreateWindow(width, height, "BozoEngine", nullptr, nullptr);
+	glfwSetFramebufferSizeCallback(window, FramebufferResizeCallback);
+}
+
+void CleanupWindow() {
+	glfwDestroyWindow(window);
+	glfwTerminate();
 }
 
 void PrintAvailableVulkanExtensions() {
@@ -616,7 +623,11 @@ void InitVulkan() {
 	VkCheck(volkInitialize(), "Failed to initialzie volk.");
 
 	CreateInstance();
+
+#if _DEBUG
 	CreateDebugMessenger();
+#endif
+
 	CreateSurface();
 
 	CreatePhysicalDevice();
@@ -635,7 +646,46 @@ void InitVulkan() {
 	CreateSyncObjects();
 }
 
+void CleanupSwapchain() {
+	for (auto framebuffer : bz::swapchainFramebuffers) {
+		vkDestroyFramebuffer(bz::device, framebuffer, nullptr);
+	}
+
+	for (auto imageView : bz::swapchainImageViews) {
+		vkDestroyImageView(bz::device, imageView, nullptr);
+	}
+
+	vkDestroySwapchainKHR(bz::device, bz::swapchain, nullptr);
+}
+
+// In theory the swap chain image could change during the applications lifetime,
+// for example if the window was moved between an sdr and hdr display.
+// We dont handle those changes.
+void RecreateSwapchain() {
+	int width, height;
+	glfwGetFramebufferSize(window, &width, &height);
+	while (width == 0 || height == 0) {
+		glfwGetFramebufferSize(window, &width, &height);
+		glfwWaitEvents();
+	}
+
+	vkDeviceWaitIdle(bz::device);
+
+	CleanupSwapchain();
+
+	CreateSwapchain();
+	CreateImageViews();
+	CreateFramebuffers();
+}
+
 void CleanupVulkan() {
+	CleanupSwapchain();
+
+	vkDestroyPipeline(bz::device, bz::graphicsPipeline, nullptr);
+	vkDestroyPipelineLayout(bz::device, bz::pipelineLayout, nullptr);
+
+	vkDestroyRenderPass(bz::device, bz::renderPass, nullptr);
+
 	for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
 		vkDestroySemaphore(bz::device, bz::imageAvailableSemaphores[i], nullptr);
 		vkDestroySemaphore(bz::device, bz::renderFinishedSemaphores[i], nullptr);
@@ -643,32 +693,31 @@ void CleanupVulkan() {
 	}
 
 	vkDestroyCommandPool(bz::device, bz::commandPool, nullptr);
-
-	for (auto framebuffer : bz::swapchainFramebuffers) {
-		vkDestroyFramebuffer(bz::device, framebuffer, nullptr);
-	}
-
-	vkDestroyPipeline(bz::device, bz::graphicsPipeline, nullptr);
-	vkDestroyPipelineLayout(bz::device, bz::pipelineLayout, nullptr);
-	vkDestroyRenderPass(bz::device, bz::renderPass, nullptr);
-
-	for (auto imageView : bz::swapchainImageViews) {
-		vkDestroyImageView(bz::device, imageView, nullptr);
-	}
-
-	vkDestroySwapchainKHR(bz::device, bz::swapchain, nullptr);
 	vkDestroyDevice(bz::device, nullptr);
+
+#if _DEBUG
 	vkDestroyDebugUtilsMessengerEXT(bz::instance, bz::debugMessenger, nullptr);
+#endif
+
 	vkDestroySurfaceKHR(bz::instance, bz::surface, nullptr);
 	vkDestroyInstance(bz::instance, nullptr);
 }
 
 void DrawFrame() {
 	VkCheck(vkWaitForFences(bz::device, 1, &bz::inFlightFences[currentFrame], VK_TRUE, UINT64_MAX), "Wait for inFlight fence failed.");
-	VkCheck(vkResetFences(bz::device, 1, &bz::inFlightFences[currentFrame]), "Failed to reset inFlight fence.");
 
 	u32 imageIndex;
-	VkCheck(vkAcquireNextImageKHR(bz::device, bz::swapchain, UINT64_MAX, bz::imageAvailableSemaphores[currentFrame], VK_NULL_HANDLE, &imageIndex), "Failed to acquire swapchain image.");
+	VkResult result = vkAcquireNextImageKHR(bz::device, bz::swapchain, UINT64_MAX, bz::imageAvailableSemaphores[currentFrame], VK_NULL_HANDLE, &imageIndex);
+	if (result == VK_ERROR_OUT_OF_DATE_KHR) {
+		RecreateSwapchain();
+		return;
+	}
+	else if (result != VK_SUCCESS && result != VK_SUBOPTIMAL_KHR) {
+		VkCheck(result, "Failed to acquire swapchain image!");
+	}
+
+	// Only reset the fence if we swapchain was valid and we are actually submitting work.
+	VkCheck(vkResetFences(bz::device, 1, &bz::inFlightFences[currentFrame]), "Failed to reset inFlight fence.");
 
 	// This reset happens implicitly on vkBeginCommandBuffer, as it was allocated from a commandPool with VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT set.
 	// VkCheck(vkResetCommandBuffer(bz::commandBuffers[currentFrame], 0), "Failed to reset command buffer"); 
@@ -698,7 +747,15 @@ void DrawFrame() {
 	};
 
 	VkCheck(vkQueueSubmit(bz::queue, 1, &submitInfo, bz::inFlightFences[currentFrame]), "Failed to submit draw command buffer.");
-	VkCheck(vkQueuePresentKHR(bz::queue, &presentInfo), "Failed to submit to present queue.");
+	result = vkQueuePresentKHR(bz::queue, &presentInfo);
+
+	if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR || bz::framebufferResized) {
+		bz::framebufferResized = false;
+		RecreateSwapchain();
+	}
+	else if (result != VK_SUCCESS) {
+		VkCheck(result, "Failed to present swapchain image.");
+	}
 
 	currentFrame = (currentFrame + 1) % MAX_FRAMES_IN_FLIGHT;
 }
