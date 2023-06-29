@@ -16,6 +16,7 @@ typedef int64_t	i64;
 #include <Windows.h>
 #include <volk.h>
 #include <GLFW/glfw3.h>
+#include <glm/glm.hpp>
 
 #include "Logging.h"
 
@@ -31,6 +32,46 @@ typedef int64_t	i64;
 #define MIN(a, b) (((a) < (b)) ? (a) : (b))
 #define MAX(a, b) (((a) > (b)) ? (a) : (b))
 #define CLAMP(v, lo, hi) (MAX(MIN((v), (hi)), (lo)))
+
+struct Vertex {
+	glm::vec2 pos;
+	glm::vec3 color;
+	
+	static VkVertexInputBindingDescription GetBindingDescription() {
+		VkVertexInputBindingDescription bindingDescription = {
+			.binding = 0,
+			.stride = sizeof(Vertex),
+			.inputRate = VK_VERTEX_INPUT_RATE_VERTEX
+		};
+
+		return bindingDescription;
+	}
+
+	static std::vector<VkVertexInputAttributeDescription> GetAttributeDescriptions() {
+		std::vector<VkVertexInputAttributeDescription> attributeDescriptions = {
+			{	// Position attribute
+				.location = 0,
+				.binding = 0,
+				.format = VK_FORMAT_R32G32_SFLOAT,
+				.offset = offsetof(Vertex, pos)
+			},
+			{	// Color attribute
+				.location = 1,
+				.binding = 0,
+				.format = VK_FORMAT_R32G32B32_SFLOAT,
+				.offset = offsetof(Vertex, color)
+			}
+		};
+
+		return attributeDescriptions;
+	}
+};
+
+const std::vector<Vertex> vertices = {
+	{{0.0f, -0.5f}, {1.0f, 0.0f, 0.0f}},
+	{{0.5f, 0.5f}, {0.0f, 1.0f, 0.0f}},
+	{{-0.5f, 0.5f}, {0.0f, 0.0f, 1.0f}}
+};
 
 constexpr int MAX_FRAMES_IN_FLIGHT = 2;
 u32 currentFrame = 0;
@@ -62,6 +103,9 @@ namespace bz {
 	VkSemaphore imageAvailableSemaphores[MAX_FRAMES_IN_FLIGHT];
 	VkSemaphore renderFinishedSemaphores[MAX_FRAMES_IN_FLIGHT];
 	VkFence inFlightFences[MAX_FRAMES_IN_FLIGHT];
+
+	VkBuffer vertexBuffer;
+	VkDeviceMemory vertexBufferMemory;
 
 	bool framebufferResized = false;
 }
@@ -446,8 +490,14 @@ void CreateGraphicsPipeline() {
 		.scissorCount = 1
 	};
 
+	VkVertexInputBindingDescription bindingDescription = Vertex::GetBindingDescription();
+	std::vector<VkVertexInputAttributeDescription> attributeDescriptions = Vertex::GetAttributeDescriptions();
 	VkPipelineVertexInputStateCreateInfo vertexInputInfo = {
-		.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO
+		.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
+		.vertexBindingDescriptionCount = 1,
+		.pVertexBindingDescriptions = &bindingDescription,
+		.vertexAttributeDescriptionCount = (u32)attributeDescriptions.size(),
+		.pVertexAttributeDescriptions = attributeDescriptions.data()
 	};
 
 	VkPipelineInputAssemblyStateCreateInfo inputAssemblyInfo = {
@@ -546,6 +596,47 @@ void CreateCommandPool() {
 	VkCheck(vkCreateCommandPool(bz::device, &poolInfo, nullptr, &bz::commandPool), "Failed to create command pool.");
 }
 
+u32 FindMemoryType(u32 typeFilter, VkMemoryPropertyFlags properties) {
+	VkPhysicalDeviceMemoryProperties memProperties;
+	vkGetPhysicalDeviceMemoryProperties(bz::physicalDevice, &memProperties);
+
+	for (u32 i = 0; i < memProperties.memoryTypeCount; i++) {
+		if ((typeFilter & (1 << i)) && (memProperties.memoryTypes[i].propertyFlags & properties) == properties) {
+			return i;
+		}
+	}
+
+	Check(false, "Failed to find suitable memory type.");
+}
+
+void CreateVertexBuffer() {
+	VkBufferCreateInfo bufferInfo = {
+		.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+		.size = sizeof(vertices[0]) * vertices.size(),
+		.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+		.sharingMode = VK_SHARING_MODE_EXCLUSIVE
+	};
+
+	VkCheck(vkCreateBuffer(bz::device, &bufferInfo, nullptr, &bz::vertexBuffer), "Failed to create vertex buffer");
+
+	VkMemoryRequirements memRequirements;
+	vkGetBufferMemoryRequirements(bz::device, bz::vertexBuffer, &memRequirements);
+
+	VkMemoryAllocateInfo allocInfo = {
+		.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
+		.allocationSize = memRequirements.size,
+		.memoryTypeIndex = FindMemoryType(memRequirements.memoryTypeBits, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT)
+	};
+
+	VkCheck(vkAllocateMemory(bz::device, &allocInfo, nullptr, &bz::vertexBufferMemory), "Failed to allocate vertex buffer memory.");
+	VkCheck(vkBindBufferMemory(bz::device, bz::vertexBuffer, bz::vertexBufferMemory, 0), "Failed to bind vertex buffer memory to VkBuffer.");
+
+	void* data;
+	VkCheck(vkMapMemory(bz::device, bz::vertexBufferMemory, 0, bufferInfo.size, 0, &data), "Failed to map memory.");
+	memcpy(data, vertices.data(), bufferInfo.size);
+	vkUnmapMemory(bz::device, bz::vertexBufferMemory);
+}
+
 void CreateCommandBuffers() {
 	VkCommandBufferAllocateInfo allocInfo = {
 		.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
@@ -578,12 +669,13 @@ void RecordCommandBuffer(VkCommandBuffer commandBuffer, u32 imageIndex) {
 	};
 
 	vkCmdBeginRenderPass(commandBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
+
 	vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, bz::graphicsPipeline);
 
 	VkViewport viewport = {
 		.x = 0.0f,
 		.y = 0.0f,
-		.width =  (float)bz::swapchainExtent.width,
+		.width = (float)bz::swapchainExtent.width,
 		.height = (float)bz::swapchainExtent.height,
 		.minDepth = 0.0f,
 		.maxDepth = 1.0f
@@ -596,7 +688,12 @@ void RecordCommandBuffer(VkCommandBuffer commandBuffer, u32 imageIndex) {
 	};
 	vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
 
-	vkCmdDraw(commandBuffer, 3, 1, 0, 0);
+	VkBuffer vertexBuffers[] = { bz::vertexBuffer };
+	VkDeviceSize offsets[] = { 0 };
+	vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets);
+
+	vkCmdDraw(commandBuffer, (u32)vertices.size(), 1, 0, 0);
+
 	vkCmdEndRenderPass(commandBuffer);
 
 	VkCheck(vkEndCommandBuffer(commandBuffer), "Failed to record command buffer.");
@@ -641,6 +738,7 @@ void InitVulkan() {
 	CreateFramebuffers();
 
 	CreateCommandPool();
+	CreateVertexBuffer();
 	CreateCommandBuffers();
 
 	CreateSyncObjects();
@@ -680,6 +778,9 @@ void RecreateSwapchain() {
 
 void CleanupVulkan() {
 	CleanupSwapchain();
+
+	vkDestroyBuffer(bz::device, bz::vertexBuffer, nullptr);
+	vkFreeMemory(bz::device, bz::vertexBufferMemory, nullptr);
 
 	vkDestroyPipeline(bz::device, bz::graphicsPipeline, nullptr);
 	vkDestroyPipelineLayout(bz::device, bz::pipelineLayout, nullptr);
