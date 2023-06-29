@@ -445,6 +445,8 @@ VkShaderModule CreateShaderModule(const char* path) {
 	VkShaderModule shaderModule;
 	VkCheck(vkCreateShaderModule(bz::device, &createInfo, nullptr, &shaderModule), "Failed to create shader module.");
 
+	delete[] buffer;
+
 	return shaderModule;
 }
 
