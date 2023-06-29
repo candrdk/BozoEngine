@@ -1,3 +1,7 @@
+// Stuff TODO in the future: 
+//	- At some point VMA should be integrated instead of making individual allocations for every buffer.
+//	- Read up on driver developer recommendations (fx. suballocating vertex/index buffers inside the same VkBuffer)
+
 #include <assert.h>
 #include <stdio.h>
 #include <stdint.h>
@@ -68,9 +72,14 @@ struct Vertex {
 };
 
 const std::vector<Vertex> vertices = {
-	{{0.0f, -0.5f}, {1.0f, 0.0f, 0.0f}},
-	{{0.5f, 0.5f}, {0.0f, 1.0f, 0.0f}},
-	{{-0.5f, 0.5f}, {0.0f, 0.0f, 1.0f}}
+	{{-0.5f, -0.5f}, {1.0f, 0.0f, 0.0f}},
+	{{0.5f, -0.5f}, {0.0f, 1.0f, 0.0f}},
+	{{0.5f, 0.5f}, {0.0f, 0.0f, 1.0f}},
+	{{-0.5f, 0.5f}, {1.0f, 1.0f, 1.0f}}
+};
+
+const std::vector<u16> indices = {
+	0, 1, 2, 2, 3, 0
 };
 
 constexpr int MAX_FRAMES_IN_FLIGHT = 2;
@@ -106,6 +115,8 @@ namespace bz {
 
 	VkBuffer vertexBuffer;
 	VkDeviceMemory vertexBufferMemory;
+	VkBuffer indexBuffer;
+	VkDeviceMemory indexBufferMemory;
 
 	bool framebufferResized = false;
 }
@@ -609,32 +620,107 @@ u32 FindMemoryType(u32 typeFilter, VkMemoryPropertyFlags properties) {
 	Check(false, "Failed to find suitable memory type.");
 }
 
-void CreateVertexBuffer() {
+void CreateBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkBuffer& buffer, VkDeviceMemory& bufferMemory) {
 	VkBufferCreateInfo bufferInfo = {
 		.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
-		.size = sizeof(vertices[0]) * vertices.size(),
-		.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+		.size = size,
+		.usage = usage,
 		.sharingMode = VK_SHARING_MODE_EXCLUSIVE
 	};
 
-	VkCheck(vkCreateBuffer(bz::device, &bufferInfo, nullptr, &bz::vertexBuffer), "Failed to create vertex buffer");
+	VkCheck(vkCreateBuffer(bz::device, &bufferInfo, nullptr, &buffer), "Failed to create buffer");
 
 	VkMemoryRequirements memRequirements;
-	vkGetBufferMemoryRequirements(bz::device, bz::vertexBuffer, &memRequirements);
+	vkGetBufferMemoryRequirements(bz::device, buffer, &memRequirements);
 
 	VkMemoryAllocateInfo allocInfo = {
 		.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
 		.allocationSize = memRequirements.size,
-		.memoryTypeIndex = FindMemoryType(memRequirements.memoryTypeBits, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT)
+		.memoryTypeIndex = FindMemoryType(memRequirements.memoryTypeBits, properties)
 	};
 
-	VkCheck(vkAllocateMemory(bz::device, &allocInfo, nullptr, &bz::vertexBufferMemory), "Failed to allocate vertex buffer memory.");
-	VkCheck(vkBindBufferMemory(bz::device, bz::vertexBuffer, bz::vertexBufferMemory, 0), "Failed to bind vertex buffer memory to VkBuffer.");
+	VkCheck(vkAllocateMemory(bz::device, &allocInfo, nullptr, &bufferMemory), "Failed to allocate vertex buffer memory.");
+	VkCheck(vkBindBufferMemory(bz::device, buffer, bufferMemory, 0), "Failed to bind DeviceMemory to VkBuffer.");
+}
+
+// TODO: should allocate a separate command pool for these kinds of short-lived buffers.
+// When we do, use the VK_COMMAND_POOL_CREATE_TRANSIENT_BIT flag during command pool generation.
+void CopyBuffer(VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize size) {
+	VkCommandBufferAllocateInfo allocInfo = {
+		.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
+		.commandPool = bz::commandPool,
+		.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
+		.commandBufferCount = 1
+	};
+
+	VkCommandBuffer commandBuffer;
+	VkCheck(vkAllocateCommandBuffers(bz::device, &allocInfo, &commandBuffer), "Failed to allocate command buffer.");
+
+	VkCommandBufferBeginInfo beginInfo = {
+		.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
+		.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT
+	};
+
+	VkCheck(vkBeginCommandBuffer(commandBuffer, &beginInfo), "Failed to begin command buffer.");
+
+	VkBufferCopy copyRegion = {
+		.srcOffset = 0,
+		.dstOffset = 0,
+		.size = size
+	};
+
+	vkCmdCopyBuffer(commandBuffer, srcBuffer, dstBuffer, 1, &copyRegion);
+
+	VkCheck(vkEndCommandBuffer(commandBuffer), "Failed to end command buffer.");
+
+	VkSubmitInfo submitInfo = {
+		.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
+		.commandBufferCount = 1,
+		.pCommandBuffers = &commandBuffer
+	};
+
+	VkCheck(vkQueueSubmit(bz::queue, 1, &submitInfo, VK_NULL_HANDLE), "Failed to submit command buffer to queue.");
+	VkCheck(vkQueueWaitIdle(bz::queue), "QueueWaitIdle failed.");
+
+	vkFreeCommandBuffers(bz::device, bz::commandPool, 1, &commandBuffer);
+}
+
+void CreateVertexBuffer() {
+	VkDeviceSize bufferSize = sizeof(vertices[0]) * vertices.size();
+
+	VkBuffer stagingBuffer;
+	VkDeviceMemory stagingBufferMemory;
+	CreateBuffer(bufferSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, stagingBuffer, stagingBufferMemory);
 
 	void* data;
-	VkCheck(vkMapMemory(bz::device, bz::vertexBufferMemory, 0, bufferInfo.size, 0, &data), "Failed to map memory.");
-	memcpy(data, vertices.data(), bufferInfo.size);
-	vkUnmapMemory(bz::device, bz::vertexBufferMemory);
+	VkCheck(vkMapMemory(bz::device, stagingBufferMemory, 0, bufferSize, 0, &data), "Failed to map memory.");
+	memcpy(data, vertices.data(), bufferSize);
+	vkUnmapMemory(bz::device, stagingBufferMemory);
+
+	CreateBuffer(bufferSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, bz::vertexBuffer, bz::vertexBufferMemory);
+	CopyBuffer(stagingBuffer, bz::vertexBuffer, bufferSize);
+
+	vkDestroyBuffer(bz::device, stagingBuffer, nullptr);
+	vkFreeMemory(bz::device, stagingBufferMemory, nullptr);
+}
+
+void CreateIndexBuffer() {
+	VkDeviceSize bufferSize = sizeof(indices[0]) * indices.size();
+
+	VkBuffer stagingBuffer;
+	VkDeviceMemory stagingBufferMemory;
+	CreateBuffer(bufferSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, stagingBuffer, stagingBufferMemory);
+	
+	void* data;
+	VkCheck(vkMapMemory(bz::device, stagingBufferMemory, 0, bufferSize, 0, &data), "Failed to map memory.");
+	memcpy(data, indices.data(), bufferSize);
+	vkUnmapMemory(bz::device, stagingBufferMemory);
+
+	CreateBuffer(bufferSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, bz::indexBuffer, bz::indexBufferMemory);
+	CopyBuffer(stagingBuffer, bz::indexBuffer, bufferSize);
+
+	vkDestroyBuffer(bz::device, stagingBuffer, nullptr);
+	vkFreeMemory(bz::device, stagingBufferMemory, nullptr);
 }
 
 void CreateCommandBuffers() {
@@ -691,8 +777,9 @@ void RecordCommandBuffer(VkCommandBuffer commandBuffer, u32 imageIndex) {
 	VkBuffer vertexBuffers[] = { bz::vertexBuffer };
 	VkDeviceSize offsets[] = { 0 };
 	vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets);
+	vkCmdBindIndexBuffer(commandBuffer, bz::indexBuffer, 0, VK_INDEX_TYPE_UINT16);
 
-	vkCmdDraw(commandBuffer, (u32)vertices.size(), 1, 0, 0);
+	vkCmdDrawIndexed(commandBuffer, (u32)indices.size(), 1, 0, 0, 0);
 
 	vkCmdEndRenderPass(commandBuffer);
 
@@ -739,6 +826,7 @@ void InitVulkan() {
 
 	CreateCommandPool();
 	CreateVertexBuffer();
+	CreateIndexBuffer();
 	CreateCommandBuffers();
 
 	CreateSyncObjects();
@@ -778,6 +866,9 @@ void RecreateSwapchain() {
 
 void CleanupVulkan() {
 	CleanupSwapchain();
+
+	vkDestroyBuffer(bz::device, bz::indexBuffer, nullptr);
+	vkFreeMemory(bz::device, bz::indexBufferMemory, nullptr);
 
 	vkDestroyBuffer(bz::device, bz::vertexBuffer, nullptr);
 	vkFreeMemory(bz::device, bz::vertexBufferMemory, nullptr);
