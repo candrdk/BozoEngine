@@ -1,6 +1,7 @@
 #include <assert.h>
 #include <stdio.h>
 #include <stdint.h>
+#include <vector>
 
 typedef uint8_t	 u8;
 typedef uint16_t u16;
@@ -12,8 +13,7 @@ typedef int16_t	i16;
 typedef int32_t	i32;
 typedef int64_t	i64;
 
-#include <vector>
-
+#include <Windows.h>
 #include <volk.h>
 #include <GLFW/glfw3.h>
 
