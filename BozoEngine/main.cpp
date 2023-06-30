@@ -40,6 +40,7 @@ typedef int64_t	i64;
 struct Vertex {
 	glm::vec2 pos;
 	glm::vec3 color;
+	glm::vec2 texCoord;
 	
 	static VkVertexInputBindingDescription GetBindingDescription() {
 		VkVertexInputBindingDescription bindingDescription = {
@@ -64,6 +65,12 @@ struct Vertex {
 				.binding = 0,
 				.format = VK_FORMAT_R32G32B32_SFLOAT,
 				.offset = offsetof(Vertex, color)
+			},
+			{	// Texture coordinate attribute
+				.location = 2,
+				.binding = 0,
+				.format = VK_FORMAT_R32G32_SFLOAT,
+				.offset = offsetof(Vertex, texCoord)
 			}
 		};
 
@@ -72,10 +79,10 @@ struct Vertex {
 };
 
 const std::vector<Vertex> vertices = {
-	{{-0.5f, -0.5f}, {1.0f, 0.0f, 0.0f}},
-	{{0.5f, -0.5f}, {0.0f, 1.0f, 0.0f}},
-	{{0.5f, 0.5f}, {0.0f, 0.0f, 1.0f}},
-	{{-0.5f, 0.5f}, {1.0f, 1.0f, 1.0f}}
+	{{-0.5f, -0.5f}, {1.0f, 0.0f, 0.0f}, {1.0f, 0.0f}},
+	{{ 0.5f, -0.5f}, {0.0f, 1.0f, 0.0f}, {0.0f, 0.0f}},
+	{{ 0.5f,  0.5f}, {0.0f, 0.0f, 1.0f}, {0.0f, 1.0f}},
+	{{-0.5f,  0.5f}, {1.0f, 1.0f, 1.0f}, {1.0f, 1.0f}}
 };
 
 const std::vector<u16> indices = {
@@ -510,10 +517,20 @@ void CreateDescriptorSetLayout() {
 		.stageFlags = VK_SHADER_STAGE_VERTEX_BIT
 	};
 
+	VkDescriptorSetLayoutBinding samplerLayoutBinding = {
+		.binding = 1,
+		.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+		.descriptorCount = 1,
+		.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
+		.pImmutableSamplers = nullptr
+	};
+
+	VkDescriptorSetLayoutBinding bindings[] = { uboLayoutBinding, samplerLayoutBinding };
+
 	VkDescriptorSetLayoutCreateInfo layoutInfo = {
 		.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
-		.bindingCount = 1,
-		.pBindings = &uboLayoutBinding
+		.bindingCount = sizeof(bindings) / sizeof(bindings[0]),
+		.pBindings = bindings
 	};
 
 	VkCheck(vkCreateDescriptorSetLayout(bz::device, &layoutInfo, nullptr, &bz::descriptorSetLayout), "Failed to create a descriptor set layout.");
@@ -664,16 +681,22 @@ void CreateCommandPool() {
 }
 
 void CreateDescriptorPool() {
-	VkDescriptorPoolSize poolSize = {
-		.type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-		.descriptorCount = MAX_FRAMES_IN_FLIGHT
+	VkDescriptorPoolSize poolSizes[] = {
+		{ // uniform buffer descriptor pool
+			.type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+			.descriptorCount = MAX_FRAMES_IN_FLIGHT
+		},
+		{ // combined image sampler descriptor pool
+			.type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+			.descriptorCount = MAX_FRAMES_IN_FLIGHT
+		}
 	};
 
 	VkDescriptorPoolCreateInfo poolInfo = {
 		.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
 		.maxSets = MAX_FRAMES_IN_FLIGHT,
-		.poolSizeCount = 1,
-		.pPoolSizes = &poolSize
+		.poolSizeCount = sizeof(poolSizes) / sizeof(poolSizes[0]),
+		.pPoolSizes = poolSizes
 	};
 
 	VkCheck(vkCreateDescriptorPool(bz::device, &poolInfo, nullptr, &bz::descriptorPool), "Failed to create descriptor pool.");
@@ -1028,17 +1051,34 @@ void CreateDescriptorSets() {
 			.range = sizeof(UniformBufferObject)
 		};
 
-		VkWriteDescriptorSet descriptorWrite = {
-			.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-			.dstSet = bz::descriptorSets[i],
-			.dstBinding = 0,
-			.dstArrayElement = 0,
-			.descriptorCount = 1,
-			.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-			.pBufferInfo = &bufferInfo
+		VkDescriptorImageInfo imageInfo = {
+			.sampler = bz::textureSampler,
+			.imageView = bz::textureImageView,
+			.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
 		};
 
-		vkUpdateDescriptorSets(bz::device, 1, &descriptorWrite, 0, nullptr);
+		VkWriteDescriptorSet descriptorWrites[] = {
+			{
+				.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+				.dstSet = bz::descriptorSets[i],
+				.dstBinding = 0,
+				.dstArrayElement = 0,
+				.descriptorCount = 1,
+				.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+				.pBufferInfo = &bufferInfo
+			},
+			{
+				.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+				.dstSet = bz::descriptorSets[i],
+				.dstBinding = 1,
+				.dstArrayElement = 0,
+				.descriptorCount = 1,
+				.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+				.pImageInfo = &imageInfo
+			}
+		};
+
+		vkUpdateDescriptorSets(bz::device, sizeof(descriptorWrites) / sizeof(descriptorWrites[0]), descriptorWrites, 0, nullptr);
 	}
 }
 

@@ -201,7 +201,9 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="shaders\triangle.frag.glsl" />
-    <None Include="shaders\triangle.vert.glsl" />
+    <None Include="shaders\triangle.vert.glsl">
+      <FileType>Document</FileType>
+    </None>
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
