@@ -126,6 +126,8 @@ namespace bz {
 
 	VkImage textureImage;
 	VkDeviceMemory textureImageMemory;
+	VkImageView textureImageView;
+	VkSampler textureSampler;
 
 	VkBuffer vertexBuffer;
 	VkDeviceMemory vertexBufferMemory;
@@ -222,6 +224,7 @@ void CreateDebugMessenger() {
 	VkCheck(vkCreateDebugUtilsMessengerEXT(bz::instance, &createInfo, nullptr, &bz::debugMessenger), "Failed to create debug messenger.");
 }
 
+// Verifying that the device is suitable is not rigorous atm.
 void CreatePhysicalDevice() {
 	u32 deviceCount = 8;
 	VkPhysicalDevice devices[8];
@@ -231,8 +234,10 @@ void CreatePhysicalDevice() {
 	for (u32 i = 0; i < deviceCount; i++) {
 		VkPhysicalDeviceProperties deviceProperties;
 		vkGetPhysicalDeviceProperties(devices[i], &deviceProperties);
+		VkPhysicalDeviceFeatures deviceFeatures;
+		vkGetPhysicalDeviceFeatures(devices[i], &deviceFeatures);
 
-		if (deviceProperties.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU) {
+		if (deviceProperties.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU && deviceFeatures.samplerAnisotropy) {
 			bz::physicalDevice = devices[i]; 
 			printf(SGR_SET_BG_GRAY "[INFO]" SGR_SET_DEFAULT "    Found suitable GPU: %s\n", deviceProperties.deviceName);
 			break;
@@ -287,11 +292,15 @@ void CreateLogicalDevice() {
 	};
 	VkPhysicalDeviceFeatures2 features = {
 		.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2,
-		.pNext = &features11
+		.pNext = &features11,
+		.features = {
+			.samplerAnisotropy = VK_TRUE
+		}
 	};
 
 	VkDeviceCreateInfo deviceCreateInfo = {
 		.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO,
+		.pNext = &features,
 		.queueCreateInfoCount = 1,
 		.pQueueCreateInfos = &queueCreateInfo,
 		.enabledExtensionCount = sizeof(extensions) / sizeof(extensions[0]),
@@ -387,23 +396,32 @@ void CreateSwapchain() {
 	bz::swapchainExtent = extent;
 }
 
+VkImageView CreateImageView(VkImage image, VkFormat format) {
+	VkImageViewCreateInfo viewInfo = {
+			.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
+			.image = image,
+			.viewType = VK_IMAGE_VIEW_TYPE_2D,
+			.format = format,
+			.subresourceRange = {
+				.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+				.baseMipLevel = 0,
+				.levelCount = 1,
+				.baseArrayLayer = 0,
+				.layerCount = 1
+			}
+	};
+
+	VkImageView imageView;
+	VkCheck(vkCreateImageView(bz::device, &viewInfo, nullptr, &imageView), "Failed to create image view.");
+
+	return imageView;
+}
+
 void CreateImageViews() {
 	bz::swapchainImageViews.resize(bz::swapchainImages.size());
 
 	for (int i = 0; i < bz::swapchainImages.size(); i++) {
-		VkImageViewCreateInfo createInfo = {
-			.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
-			.image = bz::swapchainImages[i],
-			.viewType = VK_IMAGE_VIEW_TYPE_2D,
-			.format = bz::swapchainImageFormat,
-			.subresourceRange = {
-				.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-				.levelCount = 1,
-				.layerCount = 1
-			}
-		};
-
-		VkCheck(vkCreateImageView(bz::device, &createInfo, nullptr, &bz::swapchainImageViews[i]), "Failed to create image views.");
+		bz::swapchainImageViews[i] = CreateImageView(bz::swapchainImages[i], bz::swapchainImageFormat);
 	}
 }
 
@@ -895,6 +913,36 @@ void CreateTextureImage() {
 	vkFreeMemory(bz::device, stagingBufferMemory, nullptr);
 }
 
+void CreateTextureImageView() {
+	bz::textureImageView = CreateImageView(bz::textureImage, VK_FORMAT_R8G8B8A8_SRGB);
+}
+
+void CreateTextureSampler() {
+	VkPhysicalDeviceProperties properties;
+	vkGetPhysicalDeviceProperties(bz::physicalDevice, &properties);
+
+	VkSamplerCreateInfo samplerInfo = {
+		.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
+		.magFilter = VK_FILTER_LINEAR,
+		.minFilter = VK_FILTER_LINEAR,
+		.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR,
+		.addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT,
+		.addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT,
+		.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT,
+		.mipLodBias = 0.0f,
+		.anisotropyEnable = VK_TRUE,
+		.maxAnisotropy = properties.limits.maxSamplerAnisotropy,
+		.compareEnable = VK_FALSE,
+		.compareOp = VK_COMPARE_OP_ALWAYS,
+		.minLod = 0.0f,
+		.maxLod = 0.0f,
+		.borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK,
+		.unnormalizedCoordinates = VK_FALSE
+	};
+
+	VkCheck(vkCreateSampler(bz::device, &samplerInfo, nullptr, &bz::textureSampler), "Failed to create texture sampler.");
+}
+
 void CreateVertexBuffer() {
 	VkDeviceSize bufferSize = sizeof(vertices[0]) * vertices.size();
 
@@ -1102,6 +1150,9 @@ void InitVulkan() {
 	CreateDescriptorPool();
 
 	CreateTextureImage();
+	CreateTextureImageView();
+	CreateTextureSampler();
+
 	CreateVertexBuffer();
 	CreateIndexBuffer();
 	CreateUniformBuffers();
@@ -1147,6 +1198,8 @@ void RecreateSwapchain() {
 void CleanupVulkan() {
 	CleanupSwapchain();
 
+	vkDestroySampler(bz::device, bz::textureSampler, nullptr);
+	vkDestroyImageView(bz::device, bz::textureImageView, nullptr);
 	vkDestroyImage(bz::device, bz::textureImage, nullptr);
 	vkFreeMemory(bz::device, bz::textureImageMemory, nullptr);
 
