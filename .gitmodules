@@ -7,3 +7,6 @@
 [submodule "Extern/glfw"]
 	path = Extern/glfw
 	url = git@github.com:glfw/glfw.git
+[submodule "Extern/stb"]
+	path = Extern/stb
+	url = git@github.com:nothings/stb.git
