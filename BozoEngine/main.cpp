@@ -148,6 +148,11 @@ namespace bz {
 	VkDeviceMemory uniformBuffersMemory[MAX_FRAMES_IN_FLIGHT];
 	void* uniformBuffersMapped[MAX_FRAMES_IN_FLIGHT];
 
+	VkSampleCountFlagBits msaaSamples = VK_SAMPLE_COUNT_1_BIT;
+	VkImage colorImage;
+	VkDeviceMemory colorImageMemory;
+	VkImageView colorImageView;
+
 	bool framebufferResized = false;
 }
 
@@ -233,6 +238,19 @@ void CreateDebugMessenger() {
 	VkCheck(vkCreateDebugUtilsMessengerEXT(bz::instance, &createInfo, nullptr, &bz::debugMessenger), "Failed to create debug messenger");
 }
 
+VkSampleCountFlagBits GetMaxUsableSampleCount(VkSampleCountFlags colorSampleCounts, VkSampleCountFlags depthSampleCounts) {
+	VkSampleCountFlags counts = colorSampleCounts & depthSampleCounts;
+
+	if (counts & VK_SAMPLE_COUNT_64_BIT) { return VK_SAMPLE_COUNT_64_BIT; }
+	if (counts & VK_SAMPLE_COUNT_32_BIT) { return VK_SAMPLE_COUNT_32_BIT; }
+	if (counts & VK_SAMPLE_COUNT_16_BIT) { return VK_SAMPLE_COUNT_16_BIT; }
+	if (counts & VK_SAMPLE_COUNT_8_BIT)  { return VK_SAMPLE_COUNT_8_BIT;  }
+	if (counts & VK_SAMPLE_COUNT_4_BIT)  { return VK_SAMPLE_COUNT_4_BIT;  }
+	if (counts & VK_SAMPLE_COUNT_2_BIT)  { return VK_SAMPLE_COUNT_2_BIT;  }
+
+	return VK_SAMPLE_COUNT_1_BIT;
+}
+
 // Verifying that the device is suitable is not rigorous atm.
 void CreatePhysicalDevice() {
 	u32 deviceCount = 8;
@@ -241,14 +259,15 @@ void CreatePhysicalDevice() {
 	Check(deviceCount > 0, "Failed to find GPUs with Vulkan support");
 
 	for (u32 i = 0; i < deviceCount; i++) {
-		VkPhysicalDeviceProperties deviceProperties;
-		vkGetPhysicalDeviceProperties(devices[i], &deviceProperties);
-		VkPhysicalDeviceFeatures deviceFeatures;
-		vkGetPhysicalDeviceFeatures(devices[i], &deviceFeatures);
+		VkPhysicalDeviceProperties properties;
+		vkGetPhysicalDeviceProperties(devices[i], &properties);
+		VkPhysicalDeviceFeatures features;
+		vkGetPhysicalDeviceFeatures(devices[i], &features);
 
-		if (deviceProperties.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU && deviceFeatures.samplerAnisotropy) {
-			bz::physicalDevice = devices[i]; 
-			printf(SGR_SET_BG_GRAY "[INFO]" SGR_SET_DEFAULT "    Found suitable GPU: %s\n", deviceProperties.deviceName);
+		if (properties.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU && features.samplerAnisotropy) {
+			bz::physicalDevice = devices[i];
+			bz::msaaSamples = GetMaxUsableSampleCount(properties.limits.framebufferColorSampleCounts, properties.limits.framebufferDepthSampleCounts);
+			printf(SGR_SET_BG_GRAY "[INFO]" SGR_SET_DEFAULT "    Found suitable GPU: `%s`. Max MSAA samples: %u\n", properties.deviceName, 1 << (31 - __lzcnt(bz::msaaSamples)));
 			break;
 		}
 	}
@@ -467,24 +486,35 @@ VkShaderModule CreateShaderModule(const char* path) {
 void CreateRenderPass() {
 	VkAttachmentDescription colorAttachment = {
 		.format = bz::swapchainImageFormat,
-		.samples = VK_SAMPLE_COUNT_1_BIT,
+		.samples = bz::msaaSamples,
 		.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
 		.storeOp = VK_ATTACHMENT_STORE_OP_STORE,
 		.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
 		.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
-		.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,			// dont care. Note that contents wont be preserved. Ok, since loadOp = clear
-		.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR
+		.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,					// dont care. Note that contents wont be preserved. Ok, since loadOp = clear
+		.finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL
 	};
 
 	VkAttachmentDescription depthAttachment = {
 		.format = VK_FORMAT_D32_SFLOAT,
-		.samples = VK_SAMPLE_COUNT_1_BIT,
+		.samples = bz::msaaSamples,
 		.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
 		.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
 		.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
 		.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
 		.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
 		.finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL
+	};
+
+	VkAttachmentDescription colorAttachmentResolve = {
+		.format = bz::swapchainImageFormat,
+		.samples = VK_SAMPLE_COUNT_1_BIT,
+		.loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+		.storeOp = VK_ATTACHMENT_STORE_OP_STORE,
+		.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+		.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
+		.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+		.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR
 	};
 
 	VkAttachmentReference colorAttachmentRef = {
@@ -497,11 +527,17 @@ void CreateRenderPass() {
 		.layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL
 	};
 
+	VkAttachmentReference colorAttachmentResolveRef = {
+		.attachment = 2,
+		.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL
+	};
+
 	VkSubpassDescription subpass = {
 		.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS,
 		.colorAttachmentCount = 1,
 		.pColorAttachments = &colorAttachmentRef,
-		.pDepthStencilAttachment = &depthAttachmentRef
+		.pResolveAttachments = &colorAttachmentResolveRef,
+		.pDepthStencilAttachment = &depthAttachmentRef,
 	};
 
 	VkSubpassDependency dependency = {
@@ -513,7 +549,7 @@ void CreateRenderPass() {
 		.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT
 	};
 
-	VkAttachmentDescription attachments[] = { colorAttachment, depthAttachment };
+	VkAttachmentDescription attachments[] = { colorAttachment, depthAttachment, colorAttachmentResolve };
 	VkRenderPassCreateInfo renderPassInfo = {
 		.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO,
 		.attachmentCount = sizeof(attachments) / sizeof(attachments[0]),
@@ -619,7 +655,7 @@ void CreateGraphicsPipeline() {
 
 	VkPipelineMultisampleStateCreateInfo multisampeInfo = {
 		.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,
-		.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT,
+		.rasterizationSamples = bz::msaaSamples,
 		.sampleShadingEnable = VK_FALSE
 	};
 
@@ -690,7 +726,7 @@ u32 FindMemoryType(u32 typeFilter, VkMemoryPropertyFlags properties) {
 	Check(false, "Failed to find suitable memory type");
 }
 
-void CreateImage(u32 width, u32 height, u32 mipLevels, VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage, VkMemoryPropertyFlags properties, VkImage& image, VkDeviceMemory& imageMemory) {
+void CreateImage(u32 width, u32 height, u32 mipLevels, VkSampleCountFlagBits samples, VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage, VkMemoryPropertyFlags properties, VkImage& image, VkDeviceMemory& imageMemory) {
 	VkImageCreateInfo imageInfo = {
 		.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
 		.imageType = VK_IMAGE_TYPE_2D,
@@ -702,7 +738,7 @@ void CreateImage(u32 width, u32 height, u32 mipLevels, VkFormat format, VkImageT
 		},
 		.mipLevels = mipLevels,
 		.arrayLayers = 1,
-		.samples = VK_SAMPLE_COUNT_1_BIT,
+		.samples = samples,
 		.tiling = tiling,
 		.usage = usage,
 		.sharingMode = VK_SHARING_MODE_EXCLUSIVE,
@@ -724,10 +760,21 @@ void CreateImage(u32 width, u32 height, u32 mipLevels, VkFormat format, VkImageT
 	VkCheck(vkBindImageMemory(bz::device, image, imageMemory, 0), "Failed to bind VkDeviceMemory to VkImage");
 }
 
+void CreateColorResources() {
+	VkFormat colorFormat = bz::swapchainImageFormat;
+
+	CreateImage(bz::swapchainExtent.width, bz::swapchainExtent.height, 1, bz::msaaSamples, colorFormat,
+		VK_IMAGE_TILING_OPTIMAL,
+		VK_IMAGE_USAGE_TRANSIENT_ATTACHMENT_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
+		VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+		bz::colorImage, bz::colorImageMemory);
+	bz::colorImageView = CreateImageView(bz::colorImage, colorFormat, VK_IMAGE_ASPECT_COLOR_BIT, 1);
+}
+
 void CreateDepthResources() {
 	// TODO: should query supported formats and select from them.
 
-	CreateImage(bz::swapchainExtent.width, bz::swapchainExtent.height, 1,
+	CreateImage(bz::swapchainExtent.width, bz::swapchainExtent.height, 1, bz::msaaSamples,
 		VK_FORMAT_D32_SFLOAT,
 		VK_IMAGE_TILING_OPTIMAL,
 		VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
@@ -741,8 +788,9 @@ void CreateFramebuffers() {
 
 	for (int i = 0; i < bz::swapchainImageViews.size(); i++) {
 		VkImageView attachments[] = {
-			bz::swapchainImageViews[i],
-			bz::depthImageView
+			bz::colorImageView,
+			bz::depthImageView,
+			bz::swapchainImageViews[i]
 		};
 
 		VkFramebufferCreateInfo framebufferInfo = {
@@ -1044,7 +1092,7 @@ void CreateTextureImage() {
 
 	stbi_image_free(pixels);
 
-	CreateImage(width, height, bz::textureMipLevels,
+	CreateImage(width, height, bz::textureMipLevels, VK_SAMPLE_COUNT_1_BIT,
 		VK_FORMAT_R8G8B8A8_SRGB, 
 		VK_IMAGE_TILING_OPTIMAL, 
 		VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
@@ -1345,6 +1393,7 @@ void InitVulkan() {
 	CreateDescriptorSetLayout();
 	CreateGraphicsPipeline();
 
+	CreateColorResources();
 	CreateDepthResources();
 	CreateFramebuffers();
 
@@ -1367,6 +1416,10 @@ void InitVulkan() {
 }
 
 void CleanupSwapchain() {
+	vkDestroyImageView(bz::device, bz::colorImageView, nullptr);
+	vkDestroyImage(bz::device, bz::colorImage, nullptr);
+	vkFreeMemory(bz::device, bz::colorImageMemory, nullptr);
+
 	vkDestroyImageView(bz::device, bz::depthImageView, nullptr);
 	vkDestroyImage(bz::device, bz::depthImage, nullptr);
 	vkFreeMemory(bz::device, bz::depthImageMemory, nullptr);
@@ -1395,10 +1448,12 @@ void RecreateSwapchain() {
 	vkDeviceWaitIdle(bz::device);
 
 	CleanupSwapchain();
-
 	CreateSwapchain();
+
 	CreateImageViews();
+	CreateColorResources();
 	CreateDepthResources();
+
 	CreateFramebuffers();
 }
 
