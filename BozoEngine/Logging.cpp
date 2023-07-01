@@ -1,7 +1,7 @@
 #include "Logging.h"
 
 static void PrintCheck(const char* result, const char* message, std::source_location location) {
-	fprintf(stderr, SGR_SET_BG_RED "[CHECK]" SGR_SET_DEFAULT " %s: `%s`\n\tfile: %s(%u:%u) in `%s`\n",
+	fprintf(stderr, SGR_SET_BG_RED "[CHECK]" SGR_SET_DEFAULT " %s: `%s`\n\tFile: %s(%u:%u) in `%s`\n",
 		message,
 		result,
 		location.file_name(),

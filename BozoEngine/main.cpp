@@ -218,17 +218,17 @@ void CreateInstance() {
 		.ppEnabledExtensionNames = extensions,
 	};
 
-	VkCheck(vkCreateInstance(&createInfo, nullptr, &bz::instance), "Failed to create instance.");
+	VkCheck(vkCreateInstance(&createInfo, nullptr, &bz::instance), "Failed to create instance");
 	volkLoadInstance(bz::instance);
 }
 
 void CreateSurface() {
-	VkCheck(glfwCreateWindowSurface(bz::instance, window, nullptr, &bz::surface), "Failed to create window surface.");
+	VkCheck(glfwCreateWindowSurface(bz::instance, window, nullptr, &bz::surface), "Failed to create window surface");
 }
 
 void CreateDebugMessenger() {
 	VkDebugUtilsMessengerCreateInfoEXT createInfo = GetDebugMessengerCreateInfo();
-	VkCheck(vkCreateDebugUtilsMessengerEXT(bz::instance, &createInfo, nullptr, &bz::debugMessenger), "Failed to create debug messenger.");
+	VkCheck(vkCreateDebugUtilsMessengerEXT(bz::instance, &createInfo, nullptr, &bz::debugMessenger), "Failed to create debug messenger");
 }
 
 // Verifying that the device is suitable is not rigorous atm.
@@ -236,7 +236,7 @@ void CreatePhysicalDevice() {
 	u32 deviceCount = 8;
 	VkPhysicalDevice devices[8];
 	VkCheck(vkEnumeratePhysicalDevices(bz::instance, &deviceCount, devices));
-	Check(deviceCount > 0, "Failed to find GPUs with Vulkan support.");
+	Check(deviceCount > 0, "Failed to find GPUs with Vulkan support");
 
 	for (u32 i = 0; i < deviceCount; i++) {
 		VkPhysicalDeviceProperties deviceProperties;
@@ -251,7 +251,7 @@ void CreatePhysicalDevice() {
 		}
 	}
 
-	Check(bz::physicalDevice != VK_NULL_HANDLE, "Failed to find a suitable GPU.");
+	Check(bz::physicalDevice != VK_NULL_HANDLE, "Failed to find a suitable GPU");
 }
 
 u32 GetQueueFamily() {
@@ -268,7 +268,7 @@ u32 GetQueueFamily() {
 		}
 	}
 
-	Check(false, "No queue family supporting graphics + present found.");
+	Check(false, "No queue family supporting graphics + present found");
 }
 
 void CreateLogicalDevice() {
@@ -314,7 +314,7 @@ void CreateLogicalDevice() {
 		.ppEnabledExtensionNames = extensions
 	};
 
-	VkCheck(vkCreateDevice(bz::physicalDevice, &deviceCreateInfo, nullptr, &bz::device), "Failed to create logical device.");
+	VkCheck(vkCreateDevice(bz::physicalDevice, &deviceCreateInfo, nullptr, &bz::device), "Failed to create logical device");
 	volkLoadDevice(bz::device);
 	vkGetDeviceQueue(bz::device, queueFamilyIndex, 0, &bz::queue);
 }
@@ -392,7 +392,7 @@ void CreateSwapchain() {
 		.oldSwapchain = VK_NULL_HANDLE
 	};
 
-	VkCheck(vkCreateSwapchainKHR(bz::device, &createInfo, nullptr, &bz::swapchain), "Failed to create swapchain.");
+	VkCheck(vkCreateSwapchainKHR(bz::device, &createInfo, nullptr, &bz::swapchain), "Failed to create swapchain");
 
 	// We only specified the minimum number of images we want, so we have to check how many were actually created
 	vkGetSwapchainImagesKHR(bz::device, bz::swapchain, &imageCount, nullptr); 
@@ -419,7 +419,7 @@ VkImageView CreateImageView(VkImage image, VkFormat format) {
 	};
 
 	VkImageView imageView;
-	VkCheck(vkCreateImageView(bz::device, &viewInfo, nullptr, &imageView), "Failed to create image view.");
+	VkCheck(vkCreateImageView(bz::device, &viewInfo, nullptr, &imageView), "Failed to create image view");
 
 	return imageView;
 }
@@ -434,18 +434,18 @@ void CreateImageViews() {
 
 VkShaderModule CreateShaderModule(const char* path) {
 	FILE* fp = fopen(path, "rb");
-	Check(fp != nullptr, "Failed open shader file.");
+	Check(fp != nullptr, "File: `%s` failed to open", path);
 
 	fseek(fp, 0, SEEK_END);
 	long length = ftell(fp);
 	fseek(fp, 0, SEEK_SET);
-	Check(length > 0, "Shader file was empty.");
+	Check(length > 0, "File: `%s` was empty", path);
 
 	char* buffer = new char[length];
-	Check(buffer, "Failed to allocate buffer.");
+	Check(buffer, "Failed to allocate buffer");
 
 	size_t read = fread(buffer, 1, length, fp);
-	Check(read == length, "Failed to read all contents of shader file.");
+	Check(read == length, "Failed to read all contents of `%s`", path);
 	fclose(fp);
 
 	VkShaderModuleCreateInfo createInfo = {
@@ -455,7 +455,7 @@ VkShaderModule CreateShaderModule(const char* path) {
 	};
 
 	VkShaderModule shaderModule;
-	VkCheck(vkCreateShaderModule(bz::device, &createInfo, nullptr, &shaderModule), "Failed to create shader module.");
+	VkCheck(vkCreateShaderModule(bz::device, &createInfo, nullptr, &shaderModule), "Failed to create shader module");
 
 	delete[] buffer;
 
@@ -506,7 +506,7 @@ void CreateRenderPass() {
 		.pDependencies = &dependency
 	};
 
-	VkCheck(vkCreateRenderPass(bz::device, &renderPassInfo, nullptr, &bz::renderPass), "Failed to create render pass.");
+	VkCheck(vkCreateRenderPass(bz::device, &renderPassInfo, nullptr, &bz::renderPass), "Failed to create render pass");
 }
 
 void CreateDescriptorSetLayout() {
@@ -533,7 +533,7 @@ void CreateDescriptorSetLayout() {
 		.pBindings = bindings
 	};
 
-	VkCheck(vkCreateDescriptorSetLayout(bz::device, &layoutInfo, nullptr, &bz::descriptorSetLayout), "Failed to create a descriptor set layout.");
+	VkCheck(vkCreateDescriptorSetLayout(bz::device, &layoutInfo, nullptr, &bz::descriptorSetLayout), "Failed to create a descriptor set layout");
 }
 
 void CreateGraphicsPipeline() {
@@ -623,7 +623,7 @@ void CreateGraphicsPipeline() {
 		.pSetLayouts = &bz::descriptorSetLayout
 	};
 
-	VkCheck(vkCreatePipelineLayout(bz::device, &pipelineLayoutInfo, nullptr, &bz::pipelineLayout), "Failed to create pipeline layout.");
+	VkCheck(vkCreatePipelineLayout(bz::device, &pipelineLayoutInfo, nullptr, &bz::pipelineLayout), "Failed to create pipeline layout");
 
 	VkGraphicsPipelineCreateInfo pipelineInfo = {
 		.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
@@ -642,7 +642,7 @@ void CreateGraphicsPipeline() {
 		.subpass = 0
 	};
 
-	VkCheck(vkCreateGraphicsPipelines(bz::device, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &bz::graphicsPipeline), "Failed to create graphics pipeline.");
+	VkCheck(vkCreateGraphicsPipelines(bz::device, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &bz::graphicsPipeline), "Failed to create graphics pipeline");
 
 	vkDestroyShaderModule(bz::device, vertShaderModule, nullptr);
 	vkDestroyShaderModule(bz::device, fragShaderModule, nullptr);
@@ -666,7 +666,7 @@ void CreateFramebuffers() {
 			.layers = 1
 		};
 
-		VkCheck(vkCreateFramebuffer(bz::device, &framebufferInfo, nullptr, &bz::swapchainFramebuffers[i]), "Failed to create framebuffer.");
+		VkCheck(vkCreateFramebuffer(bz::device, &framebufferInfo, nullptr, &bz::swapchainFramebuffers[i]), "Failed to create framebuffer");
 	}
 }
 
@@ -677,7 +677,7 @@ void CreateCommandPool() {
 		.queueFamilyIndex = GetQueueFamily()
 	};
 
-	VkCheck(vkCreateCommandPool(bz::device, &poolInfo, nullptr, &bz::commandPool), "Failed to create command pool.");
+	VkCheck(vkCreateCommandPool(bz::device, &poolInfo, nullptr, &bz::commandPool), "Failed to create command pool");
 }
 
 void CreateDescriptorPool() {
@@ -699,7 +699,7 @@ void CreateDescriptorPool() {
 		.pPoolSizes = poolSizes
 	};
 
-	VkCheck(vkCreateDescriptorPool(bz::device, &poolInfo, nullptr, &bz::descriptorPool), "Failed to create descriptor pool.");
+	VkCheck(vkCreateDescriptorPool(bz::device, &poolInfo, nullptr, &bz::descriptorPool), "Failed to create descriptor pool");
 }
 
 u32 FindMemoryType(u32 typeFilter, VkMemoryPropertyFlags properties) {
@@ -712,7 +712,7 @@ u32 FindMemoryType(u32 typeFilter, VkMemoryPropertyFlags properties) {
 		}
 	}
 
-	Check(false, "Failed to find suitable memory type.");
+	Check(false, "Failed to find suitable memory type");
 }
 
 void CreateBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkBuffer& buffer, VkDeviceMemory& bufferMemory) {
@@ -734,8 +734,8 @@ void CreateBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyF
 		.memoryTypeIndex = FindMemoryType(memRequirements.memoryTypeBits, properties)
 	};
 
-	VkCheck(vkAllocateMemory(bz::device, &allocInfo, nullptr, &bufferMemory), "Failed to allocate vertex buffer memory.");
-	VkCheck(vkBindBufferMemory(bz::device, buffer, bufferMemory, 0), "Failed to bind DeviceMemory to VkBuffer.");
+	VkCheck(vkAllocateMemory(bz::device, &allocInfo, nullptr, &bufferMemory), "Failed to allocate vertex buffer memory");
+	VkCheck(vkBindBufferMemory(bz::device, buffer, bufferMemory, 0), "Failed to bind DeviceMemory to VkBuffer");
 }
 
 // TODO: should allocate a separate command pool for these kinds of short-lived buffers.
@@ -749,20 +749,20 @@ VkCommandBuffer BeginSingleTimeCommands() {
 	};
 
 	VkCommandBuffer commandBuffer;
-	VkCheck(vkAllocateCommandBuffers(bz::device, &allocInfo, &commandBuffer), "Failed to allocate command buffer.");
+	VkCheck(vkAllocateCommandBuffers(bz::device, &allocInfo, &commandBuffer), "Failed to allocate command buffer");
 
 	VkCommandBufferBeginInfo beginInfo = {
 		.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
 		.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT
 	};
 
-	VkCheck(vkBeginCommandBuffer(commandBuffer, &beginInfo), "Failed to begin command buffer.");
+	VkCheck(vkBeginCommandBuffer(commandBuffer, &beginInfo), "Failed to begin command buffer");
 
 	return commandBuffer;
 }
 
 void EndSingleTimeCommands(VkCommandBuffer commandBuffer) {
-	VkCheck(vkEndCommandBuffer(commandBuffer), "Failed to end command buffer.");
+	VkCheck(vkEndCommandBuffer(commandBuffer), "Failed to end command buffer");
 
 	VkSubmitInfo submitInfo = {
 		.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
@@ -770,8 +770,8 @@ void EndSingleTimeCommands(VkCommandBuffer commandBuffer) {
 		.pCommandBuffers = &commandBuffer
 	};
 
-	VkCheck(vkQueueSubmit(bz::queue, 1, &submitInfo, VK_NULL_HANDLE), "Failed to submit command buffer to queue.");
-	VkCheck(vkQueueWaitIdle(bz::queue), "QueueWaitIdle failed.");
+	VkCheck(vkQueueSubmit(bz::queue, 1, &submitInfo, VK_NULL_HANDLE), "Failed to submit command buffer to queue");
+	VkCheck(vkQueueWaitIdle(bz::queue), "QueueWaitIdle failed");
 
 	vkFreeCommandBuffers(bz::device, bz::commandPool, 1, &commandBuffer);
 }
@@ -826,7 +826,7 @@ void TransitionImageLayout(VkCommandBuffer commandBuffer, VkImage image, VkForma
 		destinationStage = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
 	}
 	else {
-		Check(false, "Unsupported layout transition.");
+		Check(false, "Unsupported layout transition");
 	}
 
 	vkCmdPipelineBarrier(commandBuffer, sourceStage, destinationStage, 0, 0, nullptr, 0, nullptr, 1, &barrier);
@@ -879,7 +879,7 @@ void CreateImage(u32 width, u32 height, VkFormat format, VkImageTiling tiling, V
 		.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED
 	};
 
-	VkCheck(vkCreateImage(bz::device, &imageInfo, nullptr, &image), "Failed to create image.");
+	VkCheck(vkCreateImage(bz::device, &imageInfo, nullptr, &image), "Failed to create image");
 
 	VkMemoryRequirements memRequirements;
 	vkGetImageMemoryRequirements(bz::device, image, &memRequirements);
@@ -890,8 +890,8 @@ void CreateImage(u32 width, u32 height, VkFormat format, VkImageTiling tiling, V
 		.memoryTypeIndex = FindMemoryType(memRequirements.memoryTypeBits, properties)
 	};
 
-	VkCheck(vkAllocateMemory(bz::device, &allocInfo, nullptr, &imageMemory), "Failed to allocate image memory.");
-	VkCheck(vkBindImageMemory(bz::device, image, imageMemory, 0), "Failed to bind VkDeviceMemory to VkImage.");
+	VkCheck(vkAllocateMemory(bz::device, &allocInfo, nullptr, &imageMemory), "Failed to allocate image memory");
+	VkCheck(vkBindImageMemory(bz::device, image, imageMemory, 0), "Failed to bind VkDeviceMemory to VkImage");
 }
 
 void CreateTextureImage() {
@@ -963,7 +963,7 @@ void CreateTextureSampler() {
 		.unnormalizedCoordinates = VK_FALSE
 	};
 
-	VkCheck(vkCreateSampler(bz::device, &samplerInfo, nullptr, &bz::textureSampler), "Failed to create texture sampler.");
+	VkCheck(vkCreateSampler(bz::device, &samplerInfo, nullptr, &bz::textureSampler), "Failed to create texture sampler");
 }
 
 void CreateVertexBuffer() {
@@ -977,7 +977,7 @@ void CreateVertexBuffer() {
 		stagingBuffer, stagingBufferMemory);
 
 	void* data;
-	VkCheck(vkMapMemory(bz::device, stagingBufferMemory, 0, bufferSize, 0, &data), "Failed to map memory.");
+	VkCheck(vkMapMemory(bz::device, stagingBufferMemory, 0, bufferSize, 0, &data), "Failed to map memory");
 	memcpy(data, vertices.data(), bufferSize);
 	vkUnmapMemory(bz::device, stagingBufferMemory);
 
@@ -1003,7 +1003,7 @@ void CreateIndexBuffer() {
 		stagingBuffer, stagingBufferMemory);
 	
 	void* data;
-	VkCheck(vkMapMemory(bz::device, stagingBufferMemory, 0, bufferSize, 0, &data), "Failed to map memory.");
+	VkCheck(vkMapMemory(bz::device, stagingBufferMemory, 0, bufferSize, 0, &data), "Failed to map memory");
 	memcpy(data, indices.data(), bufferSize);
 	vkUnmapMemory(bz::device, stagingBufferMemory);
 
@@ -1027,7 +1027,7 @@ void CreateUniformBuffers() {
 			VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, 
 			bz::uniformBuffers[i], bz::uniformBuffersMemory[i]);
 
-		VkCheck(vkMapMemory(bz::device, bz::uniformBuffersMemory[i], 0, bufferSize, 0, &bz::uniformBuffersMapped[i]), "Failed to map memory.");
+		VkCheck(vkMapMemory(bz::device, bz::uniformBuffersMemory[i], 0, bufferSize, 0, &bz::uniformBuffersMapped[i]), "Failed to map memory");
 	}
 }
 
@@ -1042,7 +1042,7 @@ void CreateDescriptorSets() {
 		.pSetLayouts = layouts
 	};
 
-	VkCheck(vkAllocateDescriptorSets(bz::device, &allocInfo, bz::descriptorSets), "Failed to allocate descriptor sets.");
+	VkCheck(vkAllocateDescriptorSets(bz::device, &allocInfo, bz::descriptorSets), "Failed to allocate descriptor sets");
 
 	for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
 		VkDescriptorBufferInfo bufferInfo = {
@@ -1090,7 +1090,7 @@ void CreateCommandBuffers() {
 		.commandBufferCount = sizeof(bz::commandBuffers) / sizeof(bz::commandBuffers[0])
 	};
 
-	VkCheck(vkAllocateCommandBuffers(bz::device, &allocInfo, bz::commandBuffers), "Failed to allocate command buffers.");
+	VkCheck(vkAllocateCommandBuffers(bz::device, &allocInfo, bz::commandBuffers), "Failed to allocate command buffers");
 }
 
 void RecordCommandBuffer(VkCommandBuffer commandBuffer, u32 imageIndex) {
@@ -1144,7 +1144,7 @@ void RecordCommandBuffer(VkCommandBuffer commandBuffer, u32 imageIndex) {
 
 	vkCmdEndRenderPass(commandBuffer);
 
-	VkCheck(vkEndCommandBuffer(commandBuffer), "Failed to record command buffer.");
+	VkCheck(vkEndCommandBuffer(commandBuffer), "Failed to record command buffer");
 }
 
 void CreateSyncObjects() {
@@ -1158,14 +1158,14 @@ void CreateSyncObjects() {
 	};
 
 	for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
-		VkCheck(vkCreateSemaphore(bz::device, &semaphoreInfo, nullptr, &bz::imageAvailableSemaphores[i]), "Failed to create imageAvailable semaphore.");
-		VkCheck(vkCreateSemaphore(bz::device, &semaphoreInfo, nullptr, &bz::renderFinishedSemaphores[i]), "Failed to create renderFinished semaphore.");
-		VkCheck(vkCreateFence(bz::device, &fenceInfo, nullptr, &bz::inFlightFences[i]), "Failed to create inFlight fence.");
+		VkCheck(vkCreateSemaphore(bz::device, &semaphoreInfo, nullptr, &bz::imageAvailableSemaphores[i]), "Failed to create imageAvailable semaphore");
+		VkCheck(vkCreateSemaphore(bz::device, &semaphoreInfo, nullptr, &bz::renderFinishedSemaphores[i]), "Failed to create renderFinished semaphore");
+		VkCheck(vkCreateFence(bz::device, &fenceInfo, nullptr, &bz::inFlightFences[i]), "Failed to create inFlight fence");
 	}
 }
 
 void InitVulkan() {
-	VkCheck(volkInitialize(), "Failed to initialzie volk.");
+	VkCheck(volkInitialize(), "Failed to initialzie volk");
 
 	CreateInstance();
 
@@ -1296,7 +1296,7 @@ void UpdateUniformBuffer(u32 currentImage) {
 }
 
 void DrawFrame() {
-	VkCheck(vkWaitForFences(bz::device, 1, &bz::inFlightFences[currentFrame], VK_TRUE, UINT64_MAX), "Wait for inFlight fence failed.");
+	VkCheck(vkWaitForFences(bz::device, 1, &bz::inFlightFences[currentFrame], VK_TRUE, UINT64_MAX), "Wait for inFlight fence failed");
 
 	u32 imageIndex;
 	VkResult result = vkAcquireNextImageKHR(bz::device, bz::swapchain, UINT64_MAX, bz::imageAvailableSemaphores[currentFrame], VK_NULL_HANDLE, &imageIndex);
@@ -1311,7 +1311,7 @@ void DrawFrame() {
 	UpdateUniformBuffer(currentFrame);
 
 	// Only reset the fence if we swapchain was valid and we are actually submitting work.
-	VkCheck(vkResetFences(bz::device, 1, &bz::inFlightFences[currentFrame]), "Failed to reset inFlight fence.");
+	VkCheck(vkResetFences(bz::device, 1, &bz::inFlightFences[currentFrame]), "Failed to reset inFlight fence");
 
 	// This reset happens implicitly on vkBeginCommandBuffer, as it was allocated from a commandPool with VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT set.
 	// VkCheck(vkResetCommandBuffer(bz::commandBuffers[currentFrame], 0), "Failed to reset command buffer"); 
@@ -1340,7 +1340,7 @@ void DrawFrame() {
 		.pImageIndices = &imageIndex
 	};
 
-	VkCheck(vkQueueSubmit(bz::queue, 1, &submitInfo, bz::inFlightFences[currentFrame]), "Failed to submit draw command buffer.");
+	VkCheck(vkQueueSubmit(bz::queue, 1, &submitInfo, bz::inFlightFences[currentFrame]), "Failed to submit draw command buffer");
 	result = vkQueuePresentKHR(bz::queue, &presentInfo);
 
 	if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR || bz::framebufferResized) {
@@ -1348,7 +1348,7 @@ void DrawFrame() {
 		RecreateSwapchain();
 	}
 	else if (result != VK_SUCCESS) {
-		VkCheck(result, "Failed to present swapchain image.");
+		VkCheck(result, "Failed to present swapchain image");
 	}
 
 	currentFrame = (currentFrame + 1) % MAX_FRAMES_IN_FLIGHT;
