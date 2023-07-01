@@ -24,6 +24,7 @@ typedef int64_t	i64;
 #include <GLFW/glfw3.h>
 
 #define GLM_FORCE_RADIANS
+#define GLM_FORCE_DEPTH_ZERO_TO_ONE
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 
@@ -38,7 +39,7 @@ typedef int64_t	i64;
 #define CLAMP(v, lo, hi) (MAX(MIN((v), (hi)), (lo)))
 
 struct Vertex {
-	glm::vec2 pos;
+	glm::vec3 pos;
 	glm::vec3 color;
 	glm::vec2 texCoord;
 	
@@ -57,7 +58,7 @@ struct Vertex {
 			{	// Position attribute
 				.location = 0,
 				.binding = 0,
-				.format = VK_FORMAT_R32G32_SFLOAT,
+				.format = VK_FORMAT_R32G32B32_SFLOAT,
 				.offset = offsetof(Vertex, pos)
 			},
 			{	// Color attribute
@@ -79,14 +80,20 @@ struct Vertex {
 };
 
 const std::vector<Vertex> vertices = {
-	{{-0.5f, -0.5f}, {1.0f, 0.0f, 0.0f}, {1.0f, 0.0f}},
-	{{ 0.5f, -0.5f}, {0.0f, 1.0f, 0.0f}, {0.0f, 0.0f}},
-	{{ 0.5f,  0.5f}, {0.0f, 0.0f, 1.0f}, {0.0f, 1.0f}},
-	{{-0.5f,  0.5f}, {1.0f, 1.0f, 1.0f}, {1.0f, 1.0f}}
+	{{-0.5f, -0.5f, 0.0f}, {1.0f, 0.0f, 0.0f}, {1.0f, 0.0f}},
+	{{ 0.5f, -0.5f, 0.0f}, {0.0f, 1.0f, 0.0f}, {0.0f, 0.0f}},
+	{{ 0.5f,  0.5f, 0.0f}, {0.0f, 0.0f, 1.0f}, {0.0f, 1.0f}},
+	{{-0.5f,  0.5f, 0.0f}, {1.0f, 1.0f, 1.0f}, {1.0f, 1.0f}},
+
+	{{-0.5f, -0.5f, -0.5f}, {1.0f, 0.0f, 0.0f}, {0.0f, 0.0f}},
+	{{ 0.5f, -0.5f, -0.5f}, {0.0f, 1.0f, 0.0f}, {1.0f, 0.0f}},
+	{{ 0.5f,  0.5f, -0.5f}, {0.0f, 0.0f, 1.0f}, {1.0f, 1.0f}},
+	{{-0.5f,  0.5f, -0.5f}, {1.0f, 1.0f, 1.0f}, {0.0f, 1.0f}}
 };
 
 const std::vector<u16> indices = {
-	0, 1, 2, 2, 3, 0
+	0, 1, 2, 2, 3, 0,
+	4, 5, 6, 6, 7, 4
 };
 
 struct UniformBufferObject {
@@ -135,6 +142,10 @@ namespace bz {
 	VkDeviceMemory textureImageMemory;
 	VkImageView textureImageView;
 	VkSampler textureSampler;
+
+	VkImage depthImage;
+	VkDeviceMemory depthImageMemory;
+	VkImageView depthImageView;
 
 	VkBuffer vertexBuffer;
 	VkDeviceMemory vertexBufferMemory;
@@ -403,14 +414,14 @@ void CreateSwapchain() {
 	bz::swapchainExtent = extent;
 }
 
-VkImageView CreateImageView(VkImage image, VkFormat format) {
+VkImageView CreateImageView(VkImage image, VkFormat format, VkImageAspectFlags aspectFlags) {
 	VkImageViewCreateInfo viewInfo = {
 			.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
 			.image = image,
 			.viewType = VK_IMAGE_VIEW_TYPE_2D,
 			.format = format,
 			.subresourceRange = {
-				.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+				.aspectMask = aspectFlags,
 				.baseMipLevel = 0,
 				.levelCount = 1,
 				.baseArrayLayer = 0,
@@ -428,7 +439,7 @@ void CreateImageViews() {
 	bz::swapchainImageViews.resize(bz::swapchainImages.size());
 
 	for (int i = 0; i < bz::swapchainImages.size(); i++) {
-		bz::swapchainImageViews[i] = CreateImageView(bz::swapchainImages[i], bz::swapchainImageFormat);
+		bz::swapchainImageViews[i] = CreateImageView(bz::swapchainImages[i], bz::swapchainImageFormat, VK_IMAGE_ASPECT_COLOR_BIT);
 	}
 }
 
@@ -474,32 +485,48 @@ void CreateRenderPass() {
 		.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR
 	};
 
+	VkAttachmentDescription depthAttachment = {
+		.format = VK_FORMAT_D32_SFLOAT,
+		.samples = VK_SAMPLE_COUNT_1_BIT,
+		.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
+		.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
+		.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+		.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
+		.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+		.finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL
+	};
+
 	VkAttachmentReference colorAttachmentRef = {
 		.attachment = 0,
 		.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL
 	};
 
+	VkAttachmentReference depthAttachmentRef = {
+		.attachment = 1,
+		.layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL
+	};
+
 	VkSubpassDescription subpass = {
 		.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS,
 		.colorAttachmentCount = 1,
-		.pColorAttachments = &colorAttachmentRef
+		.pColorAttachments = &colorAttachmentRef,
+		.pDepthStencilAttachment = &depthAttachmentRef
 	};
 
-	// Subpass dependency to synchronize our renderpass w/ the acquisition of swapchain images
-	// This could alternatively have been accomplished by waitStages if of imageAvailableSemaphore to VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT.
 	VkSubpassDependency dependency = {
 		.srcSubpass = VK_SUBPASS_EXTERNAL,		// implicit subpass before the renderpass
 		.dstSubpass = 0,						// our subpass
-		.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,	// wait until the color ouput stage (swapchain has finished reading)
-		.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,	// operations that should wait on this are in the color output stage
+		.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT,
+		.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT,
 		.srcAccessMask = 0,
-		.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT			// operations that should wait on this are writing to the framebuffer
+		.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT
 	};
 
+	VkAttachmentDescription attachments[] = { colorAttachment, depthAttachment };
 	VkRenderPassCreateInfo renderPassInfo = {
 		.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO,
-		.attachmentCount = 1,
-		.pAttachments = &colorAttachment,
+		.attachmentCount = sizeof(attachments) / sizeof(attachments[0]),
+		.pAttachments = attachments,
 		.subpassCount = 1,
 		.pSubpasses = &subpass,
 		.dependencyCount = 1,
@@ -605,6 +632,17 @@ void CreateGraphicsPipeline() {
 		.sampleShadingEnable = VK_FALSE
 	};
 
+	VkPipelineDepthStencilStateCreateInfo depthStencilInfo = {
+		.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO,
+		.depthTestEnable = VK_TRUE,
+		.depthWriteEnable = VK_TRUE,
+		.depthCompareOp = VK_COMPARE_OP_LESS,
+		.depthBoundsTestEnable = VK_FALSE,
+		.stencilTestEnable = VK_FALSE,
+		.minDepthBounds = 0.0f,
+		.maxDepthBounds = 1.0f
+	};
+
 	VkPipelineColorBlendAttachmentState colorBlendAttachment = {
 		.blendEnable = VK_FALSE,
 		.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT
@@ -634,7 +672,7 @@ void CreateGraphicsPipeline() {
 		.pViewportState = &viewportStateInfo,
 		.pRasterizationState = &rasterizationInfo,
 		.pMultisampleState = &multisampeInfo,
-		.pDepthStencilState = nullptr,
+		.pDepthStencilState = &depthStencilInfo,
 		.pColorBlendState = &colorBlendStateInfo,
 		.pDynamicState = &dynamicStateInfo,
 		.layout = bz::pipelineLayout,
@@ -648,18 +686,78 @@ void CreateGraphicsPipeline() {
 	vkDestroyShaderModule(bz::device, fragShaderModule, nullptr);
 }
 
+u32 FindMemoryType(u32 typeFilter, VkMemoryPropertyFlags properties) {
+	VkPhysicalDeviceMemoryProperties memProperties;
+	vkGetPhysicalDeviceMemoryProperties(bz::physicalDevice, &memProperties);
+
+	for (u32 i = 0; i < memProperties.memoryTypeCount; i++) {
+		if ((typeFilter & (1 << i)) && (memProperties.memoryTypes[i].propertyFlags & properties) == properties) {
+			return i;
+		}
+	}
+
+	Check(false, "Failed to find suitable memory type");
+}
+
+void CreateImage(u32 width, u32 height, VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage, VkMemoryPropertyFlags properties, VkImage& image, VkDeviceMemory& imageMemory) {
+	VkImageCreateInfo imageInfo = {
+		.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
+		.imageType = VK_IMAGE_TYPE_2D,
+		.format = format,
+		.extent = {
+			.width = width,
+			.height = height,
+			.depth = 1
+		},
+		.mipLevels = 1,
+		.arrayLayers = 1,
+		.samples = VK_SAMPLE_COUNT_1_BIT,
+		.tiling = tiling,
+		.usage = usage,
+		.sharingMode = VK_SHARING_MODE_EXCLUSIVE,
+		.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED
+	};
+
+	VkCheck(vkCreateImage(bz::device, &imageInfo, nullptr, &image), "Failed to create image");
+
+	VkMemoryRequirements memRequirements;
+	vkGetImageMemoryRequirements(bz::device, image, &memRequirements);
+
+	VkMemoryAllocateInfo allocInfo = {
+		.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
+		.allocationSize = memRequirements.size,
+		.memoryTypeIndex = FindMemoryType(memRequirements.memoryTypeBits, properties)
+	};
+
+	VkCheck(vkAllocateMemory(bz::device, &allocInfo, nullptr, &imageMemory), "Failed to allocate image memory");
+	VkCheck(vkBindImageMemory(bz::device, image, imageMemory, 0), "Failed to bind VkDeviceMemory to VkImage");
+}
+
+void CreateDepthResources() {
+	// TODO: should query supported formats and select from them.
+
+	CreateImage(bz::swapchainExtent.width, bz::swapchainExtent.height,
+		VK_FORMAT_D32_SFLOAT,
+		VK_IMAGE_TILING_OPTIMAL,
+		VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
+		VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+		bz::depthImage, bz::depthImageMemory);
+	bz::depthImageView = CreateImageView(bz::depthImage, VK_FORMAT_D32_SFLOAT, VK_IMAGE_ASPECT_DEPTH_BIT);
+}
+
 void CreateFramebuffers() {
 	bz::swapchainFramebuffers.resize(bz::swapchainImageViews.size());
 
 	for (int i = 0; i < bz::swapchainImageViews.size(); i++) {
 		VkImageView attachments[] = {
-			bz::swapchainImageViews[i]
+			bz::swapchainImageViews[i],
+			bz::depthImageView
 		};
 
 		VkFramebufferCreateInfo framebufferInfo = {
 			.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
 			.renderPass = bz::renderPass,
-			.attachmentCount = 1,
+			.attachmentCount = sizeof(attachments) / sizeof(attachments[0]),
 			.pAttachments = attachments,
 			.width = bz::swapchainExtent.width,
 			.height = bz::swapchainExtent.height,
@@ -700,19 +798,6 @@ void CreateDescriptorPool() {
 	};
 
 	VkCheck(vkCreateDescriptorPool(bz::device, &poolInfo, nullptr, &bz::descriptorPool), "Failed to create descriptor pool");
-}
-
-u32 FindMemoryType(u32 typeFilter, VkMemoryPropertyFlags properties) {
-	VkPhysicalDeviceMemoryProperties memProperties;
-	vkGetPhysicalDeviceMemoryProperties(bz::physicalDevice, &memProperties);
-
-	for (u32 i = 0; i < memProperties.memoryTypeCount; i++) {
-		if ((typeFilter & (1 << i)) && (memProperties.memoryTypes[i].propertyFlags & properties) == properties) {
-			return i;
-		}
-	}
-
-	Check(false, "Failed to find suitable memory type");
 }
 
 void CreateBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkBuffer& buffer, VkDeviceMemory& bufferMemory) {
@@ -860,40 +945,6 @@ void CopyBufferToImage(VkCommandBuffer commandBuffer, VkBuffer buffer, VkImage i
 	//EndSingleTimeCommands(commandBuffer);
 }
 
-void CreateImage(u32 width, u32 height, VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage, VkMemoryPropertyFlags properties, VkImage& image, VkDeviceMemory& imageMemory) {
-	VkImageCreateInfo imageInfo = {
-		.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
-		.imageType = VK_IMAGE_TYPE_2D,
-		.format = format,
-		.extent = {
-			.width = width,
-			.height = height,
-			.depth = 1
-		},
-		.mipLevels = 1,
-		.arrayLayers = 1,
-		.samples = VK_SAMPLE_COUNT_1_BIT,
-		.tiling = tiling,
-		.usage = usage,
-		.sharingMode = VK_SHARING_MODE_EXCLUSIVE,
-		.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED
-	};
-
-	VkCheck(vkCreateImage(bz::device, &imageInfo, nullptr, &image), "Failed to create image");
-
-	VkMemoryRequirements memRequirements;
-	vkGetImageMemoryRequirements(bz::device, image, &memRequirements);
-
-	VkMemoryAllocateInfo allocInfo = {
-		.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
-		.allocationSize = memRequirements.size,
-		.memoryTypeIndex = FindMemoryType(memRequirements.memoryTypeBits, properties)
-	};
-
-	VkCheck(vkAllocateMemory(bz::device, &allocInfo, nullptr, &imageMemory), "Failed to allocate image memory");
-	VkCheck(vkBindImageMemory(bz::device, image, imageMemory, 0), "Failed to bind VkDeviceMemory to VkImage");
-}
-
 void CreateTextureImage() {
 	int width, height, channels;
 	stbi_uc* pixels = stbi_load("textures/texture.jpg", &width, &height, &channels, STBI_rgb_alpha);
@@ -937,7 +988,7 @@ void CreateTextureImage() {
 }
 
 void CreateTextureImageView() {
-	bz::textureImageView = CreateImageView(bz::textureImage, VK_FORMAT_R8G8B8A8_SRGB);
+	bz::textureImageView = CreateImageView(bz::textureImage, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_ASPECT_COLOR_BIT);
 }
 
 void CreateTextureSampler() {
@@ -1100,7 +1151,11 @@ void RecordCommandBuffer(VkCommandBuffer commandBuffer, u32 imageIndex) {
 
 	VkCheck(vkBeginCommandBuffer(commandBuffer, &beginInfo), "Failed to begin recording command buffer!");
 
-	VkClearValue clearColor = { {{0.0f, 0.0f, 0.0f}} };
+	// Order of clearvalues should be identical to the order of attachments!
+	VkClearValue clearColors[] = {
+		{{0.0f, 0.0f, 0.0f}},	// clear color to black
+		{1.0f, 0.0f}			// clear depth to far (1.0f)
+	};
 	VkRenderPassBeginInfo renderPassInfo = {
 		.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
 		.renderPass = bz::renderPass,
@@ -1109,8 +1164,8 @@ void RecordCommandBuffer(VkCommandBuffer commandBuffer, u32 imageIndex) {
 			.offset = {0, 0},
 			.extent = bz::swapchainExtent
 		},
-		.clearValueCount = 1,
-		.pClearValues = &clearColor
+		.clearValueCount = sizeof(clearColors) / sizeof(clearColors[0]),
+		.pClearValues = clearColors
 	};
 
 	vkCmdBeginRenderPass(commandBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
@@ -1184,6 +1239,8 @@ void InitVulkan() {
 	CreateRenderPass();
 	CreateDescriptorSetLayout();
 	CreateGraphicsPipeline();
+
+	CreateDepthResources();
 	CreateFramebuffers();
 
 	CreateCommandPool();
@@ -1204,6 +1261,10 @@ void InitVulkan() {
 }
 
 void CleanupSwapchain() {
+	vkDestroyImageView(bz::device, bz::depthImageView, nullptr);
+	vkDestroyImage(bz::device, bz::depthImage, nullptr);
+	vkFreeMemory(bz::device, bz::depthImageMemory, nullptr);
+
 	for (auto framebuffer : bz::swapchainFramebuffers) {
 		vkDestroyFramebuffer(bz::device, framebuffer, nullptr);
 	}
@@ -1219,8 +1280,7 @@ void CleanupSwapchain() {
 // for example if the window was moved between an sdr and hdr display.
 // We dont handle those changes.
 void RecreateSwapchain() {
-	int width, height;
-	glfwGetFramebufferSize(window, &width, &height);
+	int width = 0, height = 0;
 	while (width == 0 || height == 0) {
 		glfwGetFramebufferSize(window, &width, &height);
 		glfwWaitEvents();
@@ -1232,6 +1292,7 @@ void RecreateSwapchain() {
 
 	CreateSwapchain();
 	CreateImageViews();
+	CreateDepthResources();
 	CreateFramebuffers();
 }
 
