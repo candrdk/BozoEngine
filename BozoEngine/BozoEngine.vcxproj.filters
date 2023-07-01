@@ -9,10 +9,6 @@
       <UniqueIdentifier>{93995380-89BD-4b04-88EB-625FBE52EBFB}</UniqueIdentifier>
       <Extensions>h;hh;hpp;hxx;h++;hm;inl;inc;ipp;xsd</Extensions>
     </Filter>
-    <Filter Include="Resource Files">
-      <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
-      <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
-    </Filter>
     <Filter Include="glfw">
       <UniqueIdentifier>{8ca37cce-89dd-4c38-82a0-dbee24a71ba7}</UniqueIdentifier>
     </Filter>
@@ -24,6 +20,9 @@
     </Filter>
     <Filter Include="stb">
       <UniqueIdentifier>{d64c5770-3eb5-45b5-8653-f64077042eb0}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="fast_obj">
+      <UniqueIdentifier>{14d26764-09f1-4ed9-b685-d0e549a82769}</UniqueIdentifier>
     </Filter>
   </ItemGroup>
   <ItemGroup>
@@ -133,6 +132,9 @@
     </ClInclude>
     <ClInclude Include="..\Extern\stb\stb_image.h">
       <Filter>stb</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Extern\fast_obj\fast_obj.h">
+      <Filter>fast_obj</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

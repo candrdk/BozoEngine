@@ -31,6 +31,9 @@ typedef int64_t	i64;
 #define STB_IMAGE_IMPLEMENTATION
 #include <stb_image.h>
 
+#define FAST_OBJ_IMPLEMENTATION
+#include <fast_obj.h>
+
 #include "Logging.h"
 
 // Note that stuff like min(a++, b++) wont work w/ these macros.
