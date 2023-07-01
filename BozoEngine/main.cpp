@@ -1,6 +1,7 @@
 // Stuff TODO in the future: 
 //	- At some point VMA should be integrated instead of making individual allocations for every buffer.
 //	- Read up on driver developer recommendations (fx. suballocating vertex/index buffers inside the same VkBuffer)
+//	- Add meshoptimizer
 
 #include <assert.h>
 #include <stdio.h>
@@ -41,6 +42,11 @@ typedef int64_t	i64;
 #define MAX(a, b) (((a) > (b)) ? (a) : (b))
 #define CLAMP(v, lo, hi) (MAX(MIN((v), (hi)), (lo)))
 
+constexpr u32 WIDTH = 800;
+constexpr u32 HEIGHT = 600;
+constexpr const char* MODEL_PATH = "models/viking_room.obj";
+constexpr const char* TEXTURE_PATH = "textures/viking_room.png";
+
 struct Vertex {
 	glm::vec3 pos;
 	glm::vec3 color;
@@ -80,23 +86,6 @@ struct Vertex {
 
 		return attributeDescriptions;
 	}
-};
-
-const std::vector<Vertex> vertices = {
-	{{-0.5f, -0.5f, 0.0f}, {1.0f, 0.0f, 0.0f}, {1.0f, 0.0f}},
-	{{ 0.5f, -0.5f, 0.0f}, {0.0f, 1.0f, 0.0f}, {0.0f, 0.0f}},
-	{{ 0.5f,  0.5f, 0.0f}, {0.0f, 0.0f, 1.0f}, {0.0f, 1.0f}},
-	{{-0.5f,  0.5f, 0.0f}, {1.0f, 1.0f, 1.0f}, {1.0f, 1.0f}},
-
-	{{-0.5f, -0.5f, -0.5f}, {1.0f, 0.0f, 0.0f}, {0.0f, 0.0f}},
-	{{ 0.5f, -0.5f, -0.5f}, {0.0f, 1.0f, 0.0f}, {1.0f, 0.0f}},
-	{{ 0.5f,  0.5f, -0.5f}, {0.0f, 0.0f, 1.0f}, {1.0f, 1.0f}},
-	{{-0.5f,  0.5f, -0.5f}, {1.0f, 1.0f, 1.0f}, {0.0f, 1.0f}}
-};
-
-const std::vector<u16> indices = {
-	0, 1, 2, 2, 3, 0,
-	4, 5, 6, 6, 7, 4
 };
 
 struct UniformBufferObject {
@@ -150,9 +139,11 @@ namespace bz {
 	VkDeviceMemory depthImageMemory;
 	VkImageView depthImageView;
 
+	std::vector<Vertex> vertices;
 	VkBuffer vertexBuffer;
 	VkDeviceMemory vertexBufferMemory;
 
+	std::vector<u32> indices;
 	VkBuffer indexBuffer;
 	VkDeviceMemory indexBufferMemory;
 
@@ -950,8 +941,8 @@ void CopyBufferToImage(VkCommandBuffer commandBuffer, VkBuffer buffer, VkImage i
 
 void CreateTextureImage() {
 	int width, height, channels;
-	stbi_uc* pixels = stbi_load("textures/texture.jpg", &width, &height, &channels, STBI_rgb_alpha);
-	Check(pixels != nullptr, "Failed to load: `textures/texture.jpg`");
+	stbi_uc* pixels = stbi_load(TEXTURE_PATH, &width, &height, &channels, STBI_rgb_alpha);
+	Check(pixels != nullptr, "Failed to load: `%s`", TEXTURE_PATH);
 
 	VkDeviceSize size = width * height * STBI_rgb_alpha;
 
@@ -1020,8 +1011,34 @@ void CreateTextureSampler() {
 	VkCheck(vkCreateSampler(bz::device, &samplerInfo, nullptr, &bz::textureSampler), "Failed to create texture sampler");
 }
 
+void LoadModel() {
+	fastObjMesh* mesh = fast_obj_read(MODEL_PATH);
+	Check(mesh != nullptr, "Failed to load obj file: `%s`", MODEL_PATH);
+
+	bz::vertices.reserve(mesh->index_count);
+	bz::indices.reserve(mesh->index_count);
+	for (u32 i = 0; i < mesh->index_count; i++) {
+		fastObjIndex index = mesh->indices[i];
+		bz::indices.push_back(i);
+		bz::vertices.push_back({
+			.pos = {
+				mesh->positions[3 * index.p + 0],
+				mesh->positions[3 * index.p + 1],
+				mesh->positions[3 * index.p + 2]
+			},
+			.color = { 1.0f, 1.0f, 1.0f },
+			.texCoord = {
+				mesh->texcoords[2 * index.t + 0],
+				1.0f - mesh->texcoords[2 * index.t + 1]
+			}
+		});
+	}
+
+	fast_obj_destroy(mesh);
+}
+
 void CreateVertexBuffer() {
-	VkDeviceSize bufferSize = sizeof(vertices[0]) * vertices.size();
+	VkDeviceSize bufferSize = sizeof(bz::vertices[0]) * bz::vertices.size();
 
 	VkBuffer stagingBuffer;
 	VkDeviceMemory stagingBufferMemory;
@@ -1032,7 +1049,7 @@ void CreateVertexBuffer() {
 
 	void* data;
 	VkCheck(vkMapMemory(bz::device, stagingBufferMemory, 0, bufferSize, 0, &data), "Failed to map memory");
-	memcpy(data, vertices.data(), bufferSize);
+	memcpy(data, bz::vertices.data(), bufferSize);
 	vkUnmapMemory(bz::device, stagingBufferMemory);
 
 	CreateBuffer(bufferSize, 
@@ -1047,7 +1064,7 @@ void CreateVertexBuffer() {
 }
 
 void CreateIndexBuffer() {
-	VkDeviceSize bufferSize = sizeof(indices[0]) * indices.size();
+	VkDeviceSize bufferSize = sizeof(bz::indices[0]) * bz::indices.size();
 
 	VkBuffer stagingBuffer;
 	VkDeviceMemory stagingBufferMemory;
@@ -1058,7 +1075,7 @@ void CreateIndexBuffer() {
 	
 	void* data;
 	VkCheck(vkMapMemory(bz::device, stagingBufferMemory, 0, bufferSize, 0, &data), "Failed to map memory");
-	memcpy(data, indices.data(), bufferSize);
+	memcpy(data, bz::indices.data(), bufferSize);
 	vkUnmapMemory(bz::device, stagingBufferMemory);
 
 	CreateBuffer(bufferSize, 
@@ -1194,11 +1211,11 @@ void RecordCommandBuffer(VkCommandBuffer commandBuffer, u32 imageIndex) {
 	VkBuffer vertexBuffers[] = { bz::vertexBuffer };
 	VkDeviceSize offsets[] = { 0 };
 	vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets);
-	vkCmdBindIndexBuffer(commandBuffer, bz::indexBuffer, 0, VK_INDEX_TYPE_UINT16);
+	vkCmdBindIndexBuffer(commandBuffer, bz::indexBuffer, 0, VK_INDEX_TYPE_UINT32);
 
 	vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, bz::pipelineLayout, 0, 1, &bz::descriptorSets[currentFrame], 0, nullptr);
 
-	vkCmdDrawIndexed(commandBuffer, (u32)indices.size(), 1, 0, 0, 0);
+	vkCmdDrawIndexed(commandBuffer, (u32)bz::indices.size(), 1, 0, 0, 0);
 
 	vkCmdEndRenderPass(commandBuffer);
 
@@ -1253,6 +1270,7 @@ void InitVulkan() {
 	CreateTextureImageView();
 	CreateTextureSampler();
 
+	LoadModel();
 	CreateVertexBuffer();
 	CreateIndexBuffer();
 	CreateUniformBuffers();
@@ -1419,7 +1437,7 @@ void DrawFrame() {
 }
 
 int main(int argc, char* argv[]) {
-	InitWindow(800, 600);
+	InitWindow(WIDTH, HEIGHT);
 	InitVulkan();
 
 	while (!glfwWindowShouldClose(window)) {
