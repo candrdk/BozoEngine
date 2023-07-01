@@ -2,6 +2,7 @@
 //	- At some point VMA should be integrated instead of making individual allocations for every buffer.
 //	- Read up on driver developer recommendations (fx. suballocating vertex/index buffers inside the same VkBuffer)
 //	- Add meshoptimizer
+//	- Implement loading multiple mip levels from a file instead of creating them at runtime.
 
 #include <assert.h>
 #include <stdio.h>
@@ -36,11 +37,6 @@ typedef int64_t	i64;
 #include <fast_obj.h>
 
 #include "Logging.h"
-
-// Note that stuff like min(a++, b++) wont work w/ these macros.
-#define MIN(a, b) (((a) < (b)) ? (a) : (b))
-#define MAX(a, b) (((a) > (b)) ? (a) : (b))
-#define CLAMP(v, lo, hi) (MAX(MIN((v), (hi)), (lo)))
 
 constexpr u32 WIDTH = 800;
 constexpr u32 HEIGHT = 600;
@@ -130,6 +126,7 @@ namespace bz {
 	VkSemaphore renderFinishedSemaphores[MAX_FRAMES_IN_FLIGHT];
 	VkFence inFlightFences[MAX_FRAMES_IN_FLIGHT];
 
+	u32 textureMipLevels;
 	VkImage textureImage;
 	VkDeviceMemory textureImageMemory;
 	VkImageView textureImageView;
@@ -365,9 +362,9 @@ VkExtent2D GetSwapchainExtent(const VkSurfaceCapabilitiesKHR& capabilities) {
 	int width, height;
 	glfwGetFramebufferSize(window, &width, &height);
 
-	VkExtent2D extent = { 
-		.width  = CLAMP((u32)width, capabilities.minImageExtent.width, capabilities.maxImageExtent.width),
-		.height = CLAMP((u32)height, capabilities.minImageExtent.height, capabilities.maxImageExtent.height)
+	VkExtent2D extent = {
+		.width = std::clamp((u32)width, capabilities.minImageExtent.width, capabilities.maxImageExtent.width),
+		.height = std::clamp((u32)height, capabilities.minImageExtent.height, capabilities.maxImageExtent.height),
 	};
 
 	return extent;
@@ -378,7 +375,7 @@ void CreateSwapchain() {
 
 	VkSurfaceFormatKHR surfaceFormat = GetSwapchainFormat(support.formats);
 	VkExtent2D extent = GetSwapchainExtent(support.capabilities);
-	u32 imageCount = CLAMP(2, support.capabilities.minImageCount, support.capabilities.maxImageCount);
+	u32 imageCount = std::clamp(2u, support.capabilities.minImageCount, support.capabilities.maxImageCount);
 
 	VkSwapchainCreateInfoKHR createInfo = {
 		.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR,
@@ -408,7 +405,7 @@ void CreateSwapchain() {
 	bz::swapchainExtent = extent;
 }
 
-VkImageView CreateImageView(VkImage image, VkFormat format, VkImageAspectFlags aspectFlags) {
+VkImageView CreateImageView(VkImage image, VkFormat format, VkImageAspectFlags aspectFlags, u32 mipLevels) {
 	VkImageViewCreateInfo viewInfo = {
 			.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
 			.image = image,
@@ -417,7 +414,7 @@ VkImageView CreateImageView(VkImage image, VkFormat format, VkImageAspectFlags a
 			.subresourceRange = {
 				.aspectMask = aspectFlags,
 				.baseMipLevel = 0,
-				.levelCount = 1,
+				.levelCount = mipLevels,
 				.baseArrayLayer = 0,
 				.layerCount = 1
 			}
@@ -433,7 +430,7 @@ void CreateImageViews() {
 	bz::swapchainImageViews.resize(bz::swapchainImages.size());
 
 	for (int i = 0; i < bz::swapchainImages.size(); i++) {
-		bz::swapchainImageViews[i] = CreateImageView(bz::swapchainImages[i], bz::swapchainImageFormat, VK_IMAGE_ASPECT_COLOR_BIT);
+		bz::swapchainImageViews[i] = CreateImageView(bz::swapchainImages[i], bz::swapchainImageFormat, VK_IMAGE_ASPECT_COLOR_BIT, 1);
 	}
 }
 
@@ -693,7 +690,7 @@ u32 FindMemoryType(u32 typeFilter, VkMemoryPropertyFlags properties) {
 	Check(false, "Failed to find suitable memory type");
 }
 
-void CreateImage(u32 width, u32 height, VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage, VkMemoryPropertyFlags properties, VkImage& image, VkDeviceMemory& imageMemory) {
+void CreateImage(u32 width, u32 height, u32 mipLevels, VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage, VkMemoryPropertyFlags properties, VkImage& image, VkDeviceMemory& imageMemory) {
 	VkImageCreateInfo imageInfo = {
 		.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
 		.imageType = VK_IMAGE_TYPE_2D,
@@ -703,7 +700,7 @@ void CreateImage(u32 width, u32 height, VkFormat format, VkImageTiling tiling, V
 			.height = height,
 			.depth = 1
 		},
-		.mipLevels = 1,
+		.mipLevels = mipLevels,
 		.arrayLayers = 1,
 		.samples = VK_SAMPLE_COUNT_1_BIT,
 		.tiling = tiling,
@@ -730,13 +727,13 @@ void CreateImage(u32 width, u32 height, VkFormat format, VkImageTiling tiling, V
 void CreateDepthResources() {
 	// TODO: should query supported formats and select from them.
 
-	CreateImage(bz::swapchainExtent.width, bz::swapchainExtent.height,
+	CreateImage(bz::swapchainExtent.width, bz::swapchainExtent.height, 1,
 		VK_FORMAT_D32_SFLOAT,
 		VK_IMAGE_TILING_OPTIMAL,
 		VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
 		VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
 		bz::depthImage, bz::depthImageMemory);
-	bz::depthImageView = CreateImageView(bz::depthImage, VK_FORMAT_D32_SFLOAT, VK_IMAGE_ASPECT_DEPTH_BIT);
+	bz::depthImageView = CreateImageView(bz::depthImage, VK_FORMAT_D32_SFLOAT, VK_IMAGE_ASPECT_DEPTH_BIT, 1);
 }
 
 void CreateFramebuffers() {
@@ -868,7 +865,7 @@ void CopyBuffer(VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize size) {
 	EndSingleTimeCommands(commandBuffer);
 }
 
-void TransitionImageLayout(VkCommandBuffer commandBuffer, VkImage image, VkFormat format, VkImageLayout oldLayout, VkImageLayout newLayout) {
+void TransitionImageLayout(VkCommandBuffer commandBuffer, VkImage image, VkFormat format, VkImageLayout oldLayout, VkImageLayout newLayout, u32 mipLevels) {
 	//VkCommandBuffer commandBuffer = BeginSingleTimeCommands();
 
 	VkImageMemoryBarrier barrier = {
@@ -881,7 +878,7 @@ void TransitionImageLayout(VkCommandBuffer commandBuffer, VkImage image, VkForma
 		.subresourceRange = {
 			.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
 			.baseMipLevel = 0,
-			.levelCount = 1,
+			.levelCount = mipLevels,
 			.baseArrayLayer = 0,
 			.layerCount = 1
 		}
@@ -939,11 +936,98 @@ void CopyBufferToImage(VkCommandBuffer commandBuffer, VkBuffer buffer, VkImage i
 	//EndSingleTimeCommands(commandBuffer);
 }
 
+void GenerateMipmaps(VkCommandBuffer commandBuffer, VkImage image, VkFormat imageFormat, i32 width, i32 height, u32 mipLevels) {
+	VkFormatProperties formatProperties;
+	vkGetPhysicalDeviceFormatProperties(bz::physicalDevice, imageFormat, &formatProperties);
+	Check(formatProperties.optimalTilingFeatures & VK_FORMAT_FEATURE_SAMPLED_IMAGE_FILTER_LINEAR_BIT, "Texture image does not support linear blitting");
+
+	VkImageMemoryBarrier barrier = {
+		.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+		.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+		.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+		.image = image,
+		.subresourceRange = {
+			.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+			.levelCount = 1,
+			.baseArrayLayer = 0,
+			.layerCount = 1,
+		}
+	};
+
+	i32 mipWidth = width;
+	i32 mipHeight = height;
+	for (u32 i = 1; i < mipLevels; i++) {
+		barrier.subresourceRange.baseMipLevel = i - 1;
+		barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+		barrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+		barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+		barrier.dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
+
+		vkCmdPipelineBarrier(commandBuffer, 
+			VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 0, 
+			0, nullptr, 
+			0, nullptr, 
+			1, &barrier);
+
+		VkImageBlit blit = {
+			.srcSubresource = {
+				.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+				.mipLevel = i - 1,
+				.baseArrayLayer = 0,
+				.layerCount = 1
+			},
+			.srcOffsets = {
+				{ 0, 0, 0 },
+				{ mipWidth, mipHeight, 1 }
+			},
+			.dstSubresource = {
+				.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+				.mipLevel = i,
+				.baseArrayLayer = 0,
+				.layerCount = 1
+			},
+			.dstOffsets = { 
+				{ 0, 0, 0 },
+				{ mipWidth > 1 ? mipWidth / 2 : 1, mipHeight > 1 ? mipHeight / 2 : 1, 1 }
+			}
+		};
+
+		vkCmdBlitImage(commandBuffer, image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &blit, VK_FILTER_LINEAR);
+
+		barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+		barrier.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+		barrier.srcAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
+		barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+
+		vkCmdPipelineBarrier(commandBuffer,
+			VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, 0,
+			0, nullptr,
+			0, nullptr,
+			1, &barrier);
+
+		if (mipWidth  > 1)	mipWidth /= 2;
+		if (mipHeight > 1)	mipHeight /= 2;
+	}
+
+	barrier.subresourceRange.baseMipLevel = mipLevels - 1;
+	barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+	barrier.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+	barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+	barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+
+	vkCmdPipelineBarrier(commandBuffer,
+		VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, 0,
+		0, nullptr,
+		0, nullptr,
+		1, &barrier);
+}
+
 void CreateTextureImage() {
-	int width, height, channels;
+	i32 width, height, channels;
 	stbi_uc* pixels = stbi_load(TEXTURE_PATH, &width, &height, &channels, STBI_rgb_alpha);
 	Check(pixels != nullptr, "Failed to load: `%s`", TEXTURE_PATH);
 
+	bz::textureMipLevels = (u32)(std::floor(std::log2(std::max(width, height))) + 1);
 	VkDeviceSize size = width * height * STBI_rgb_alpha;
 
 	VkBuffer stagingBuffer;
@@ -960,10 +1044,10 @@ void CreateTextureImage() {
 
 	stbi_image_free(pixels);
 
-	CreateImage(width, height, 
+	CreateImage(width, height, bz::textureMipLevels,
 		VK_FORMAT_R8G8B8A8_SRGB, 
 		VK_IMAGE_TILING_OPTIMAL, 
-		VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, 
+		VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
 		VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, 
 		bz::textureImage, bz::textureImageMemory);
 
@@ -971,9 +1055,10 @@ void CreateTextureImage() {
 	// If stuff breaks, revert to calling BeginSingleTimeCommands inside every helper function.
 	VkCommandBuffer setupCommandBuffer = BeginSingleTimeCommands();
 
-	TransitionImageLayout(setupCommandBuffer, bz::textureImage, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+	TransitionImageLayout(setupCommandBuffer, bz::textureImage, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, bz::textureMipLevels);
 	CopyBufferToImage(setupCommandBuffer, stagingBuffer, bz::textureImage, width, height);
-	TransitionImageLayout(setupCommandBuffer, bz::textureImage, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+	//TransitionImageLayout(setupCommandBuffer, bz::textureImage, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, bz::textureMipLevels);
+	GenerateMipmaps(setupCommandBuffer, bz::textureImage, VK_FORMAT_R8G8B8A8_SRGB, width, height, bz::textureMipLevels);
 
 	EndSingleTimeCommands(setupCommandBuffer);
 
@@ -982,7 +1067,7 @@ void CreateTextureImage() {
 }
 
 void CreateTextureImageView() {
-	bz::textureImageView = CreateImageView(bz::textureImage, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_ASPECT_COLOR_BIT);
+	bz::textureImageView = CreateImageView(bz::textureImage, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_ASPECT_COLOR_BIT, bz::textureMipLevels);
 }
 
 void CreateTextureSampler() {
@@ -1003,7 +1088,7 @@ void CreateTextureSampler() {
 		.compareEnable = VK_FALSE,
 		.compareOp = VK_COMPARE_OP_ALWAYS,
 		.minLod = 0.0f,
-		.maxLod = 0.0f,
+		.maxLod = (float)bz::textureMipLevels,
 		.borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK,
 		.unnormalizedCoordinates = VK_FALSE
 	};
