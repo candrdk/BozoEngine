@@ -25,6 +25,9 @@ typedef int64_t	i64;
 #include <volk.h>
 #include <GLFW/glfw3.h>
 
+#include <backends/imgui_impl_glfw.h>
+#include <backends/imgui_impl_vulkan.h>
+
 #define GLM_FORCE_RADIANS
 #define GLM_FORCE_DEPTH_ZERO_TO_ONE
 #include <glm/glm.hpp>
@@ -211,6 +214,7 @@ void InitWindow(int width, int height) {
 
 	glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
 	glfwWindowHint(GLFW_RESIZABLE, GLFW_TRUE);
+	glfwWindowHint(GLFW_SRGB_CAPABLE, GLFW_TRUE);
 
 	window = glfwCreateWindow(width, height, "BozoEngine", nullptr, nullptr);
 
@@ -1410,6 +1414,8 @@ void RecordCommandBuffer(VkCommandBuffer commandBuffer, u32 imageIndex) {
 
 	vkCmdDrawIndexed(commandBuffer, (u32)bz::indices.size(), 1, 0, 0, 0);
 
+	ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), commandBuffer);
+
 	vkCmdEndRenderPass(commandBuffer);
 
 	VkCheck(vkEndCommandBuffer(commandBuffer), "Failed to record command buffer");
@@ -1634,9 +1640,86 @@ void DrawFrame() {
 	currentFrame = (currentFrame + 1) % MAX_FRAMES_IN_FLIGHT;
 }
 
+VkDescriptorPool imguiPool;
+void InitImGui() {
+	// Super oversized, just copied from imgui demo
+	VkDescriptorPoolSize poolSizes[] =
+	{
+		{ VK_DESCRIPTOR_TYPE_SAMPLER, 1000 },
+		{ VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1000 },
+		{ VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1000 },
+		{ VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1000 },
+		{ VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER, 1000 },
+		{ VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER, 1000 },
+		{ VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1000 },
+		{ VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1000 },
+		{ VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, 1000 },
+		{ VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC, 1000 },
+		{ VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, 1000 }
+	};
+
+	VkDescriptorPoolCreateInfo poolInfo = {
+		.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
+		.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT,
+		.maxSets = 1000,
+		.poolSizeCount = sizeof(poolSizes) / sizeof(poolSizes[0]),
+		.pPoolSizes = poolSizes,
+	};
+
+	VkCheck(vkCreateDescriptorPool(bz::device, &poolInfo, nullptr, &imguiPool), "Failed to create imgui descriptor pool");
+
+	IMGUI_CHECKVERSION();
+	ImGui::CreateContext();
+	ImGuiIO& io = ImGui::GetIO();
+	io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
+	io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;
+
+	ImGui::StyleColorsDark();
+
+	ImGui_ImplGlfw_InitForVulkan(window, true);
+
+	ImGui_ImplVulkan_InitInfo initInfo = {
+		.Instance = bz::instance,
+		.PhysicalDevice = bz::physicalDevice,
+		.Device = bz::device,
+		.Queue = bz::queue,
+		.DescriptorPool = imguiPool,
+		.MinImageCount = MAX_FRAMES_IN_FLIGHT,
+		.ImageCount = MAX_FRAMES_IN_FLIGHT,
+		.MSAASamples = bz::msaaSamples
+	};
+
+	ImGui_ImplVulkan_LoadFunctions([](const char* function_name, void* vulkan_instance) {
+		return vkGetInstanceProcAddr(*(reinterpret_cast<VkInstance*>(vulkan_instance)), function_name);
+		}, &bz::instance);
+	ImGui_ImplVulkan_Init(&initInfo, bz::renderPass);
+	
+	VkCommandBuffer buffer = BeginSingleTimeCommands();
+	ImGui_ImplVulkan_CreateFontsTexture(buffer);
+	EndSingleTimeCommands(buffer);
+
+	ImGui_ImplVulkan_DestroyFontUploadObjects();
+}
+
+void CleanupImGui() {
+	ImGui_ImplVulkan_Shutdown();
+	ImGui_ImplGlfw_Shutdown();
+	vkDestroyDescriptorPool(bz::device, imguiPool, nullptr);
+}
+
+void UpdateImGuiFrame() {
+	ImGui_ImplVulkan_NewFrame();
+	ImGui_ImplGlfw_NewFrame();
+	ImGui::NewFrame();
+	ImGui::ShowDemoWindow();
+	ImGui::Render();
+}
+
 int main(int argc, char* argv[]) {
 	InitWindow(WIDTH, HEIGHT);
 	InitVulkan();
+
+	InitImGui();
 
 	float lastFrame = 0.0f;
 
@@ -1646,6 +1729,8 @@ int main(int argc, char* argv[]) {
 		lastFrame = currentFrame;
 
 		bz::camera.Update(deltaTime);
+
+		UpdateImGuiFrame();
 		
 		DrawFrame();
 
@@ -1654,6 +1739,8 @@ int main(int argc, char* argv[]) {
 
 	// Wait untill all commandbuffers are done so we can safely clean up semaphores they might potentially be using.
 	vkDeviceWaitIdle(bz::device);
+
+	CleanupImGui();
 
 	CleanupVulkan();
 	CleanupWindow();

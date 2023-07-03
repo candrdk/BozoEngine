@@ -10,3 +10,4 @@ BozoEngine uses the following 3rd party libraries:
 - volk
 - stb (stb_image.h)
 - fast_obj
+- Dear ImGui

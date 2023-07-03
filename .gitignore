@@ -10,6 +10,9 @@
 *.userosscache
 *.sln.docstates
 
+# imgui ini file
+imgui.ini
+
 # SPIR-V files
 *.spv
 

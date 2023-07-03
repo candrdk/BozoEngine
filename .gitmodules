@@ -13,3 +13,6 @@
 [submodule "Extern/fast_obj"]
 	path = Extern/fast_obj
 	url = git@github.com:thisistherk/fast_obj.git
+[submodule "Extern/imgui"]
+	path = Extern/imgui
+	url = git@github.com:ocornut/imgui.git

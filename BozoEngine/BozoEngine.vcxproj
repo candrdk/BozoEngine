@@ -102,9 +102,9 @@
     <ClCompile>
       <WarningLevel>Level3</WarningLevel>
       <SDLCheck>true</SDLCheck>
-      <PreprocessorDefinitions>_DEBUG;_CONSOLE;%(PreprocessorDefinitions);_GLFW_WIN32;_CRT_SECURE_NO_WARNINGS;VK_USE_PLATFORM_WIN32_KHR;NOMINMAX;WIN32_LEAN_AND_MEAN</PreprocessorDefinitions>
+      <PreprocessorDefinitions>_DEBUG;_CONSOLE;%(PreprocessorDefinitions);_GLFW_WIN32;_CRT_SECURE_NO_WARNINGS;VK_USE_PLATFORM_WIN32_KHR;NOMINMAX;WIN32_LEAN_AND_MEAN;IMGUI_IMPL_VULKAN_NO_PROTOTYPES</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>..\Extern\fast_obj;..\Extern\stb;..\Extern\glm;..\Extern\glfw\include;..\Extern\volk;$(VULKAN_SDK)\Include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>..\Extern\imgui;..\Extern\fast_obj;..\Extern\stb;..\Extern\glm;..\Extern\glfw\include;..\Extern\volk;$(VULKAN_SDK)\Include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <LanguageStandard>stdcpp20</LanguageStandard>
       <ShowIncludes>false</ShowIncludes>
     </ClCompile>
@@ -133,9 +133,9 @@
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <SDLCheck>true</SDLCheck>
-      <PreprocessorDefinitions>NDEBUG;_CONSOLE;%(PreprocessorDefinitions);_GLFW_WIN32;_CRT_SECURE_NO_WARNINGS;VK_USE_PLATFORM_WIN32_KHR;NOMINMAX;WIN32_LEAN_AND_MEAN</PreprocessorDefinitions>
+      <PreprocessorDefinitions>NDEBUG;_CONSOLE;%(PreprocessorDefinitions);_GLFW_WIN32;_CRT_SECURE_NO_WARNINGS;VK_USE_PLATFORM_WIN32_KHR;NOMINMAX;WIN32_LEAN_AND_MEAN;IMGUI_IMPL_VULKAN_NO_PROTOTYPES</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>..\Extern\fast_obj;..\Extern\stb;..\Extern\glm;..\Extern\glfw\include;..\Extern\volk;$(VULKAN_SDK)\Include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>..\Extern\imgui;..\Extern\fast_obj;..\Extern\stb;..\Extern\glm;..\Extern\glfw\include;..\Extern\volk;$(VULKAN_SDK)\Include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <LanguageStandard>stdcpp20</LanguageStandard>
       <ShowIncludes>false</ShowIncludes>
     </ClCompile>
@@ -182,6 +182,13 @@
     <ClCompile Include="..\Extern\glfw\src\win32_time.c" />
     <ClCompile Include="..\Extern\glfw\src\win32_window.c" />
     <ClCompile Include="..\Extern\glfw\src\window.c" />
+    <ClCompile Include="..\Extern\imgui\backends\imgui_impl_glfw.cpp" />
+    <ClCompile Include="..\Extern\imgui\backends\imgui_impl_vulkan.cpp" />
+    <ClCompile Include="..\Extern\imgui\imgui.cpp" />
+    <ClCompile Include="..\Extern\imgui\imgui_demo.cpp" />
+    <ClCompile Include="..\Extern\imgui\imgui_draw.cpp" />
+    <ClCompile Include="..\Extern\imgui\imgui_tables.cpp" />
+    <ClCompile Include="..\Extern\imgui\imgui_widgets.cpp" />
     <ClCompile Include="..\Extern\volk\volk.c" />
     <ClCompile Include="Logging.cpp" />
     <ClCompile Include="main.cpp" />
@@ -196,6 +203,14 @@
     <ClInclude Include="..\Extern\glfw\src\win32_platform.h" />
     <ClInclude Include="..\Extern\glfw\src\win32_thread.h" />
     <ClInclude Include="..\Extern\glfw\src\win32_time.h" />
+    <ClInclude Include="..\Extern\imgui\backends\imgui_impl_glfw.h" />
+    <ClInclude Include="..\Extern\imgui\backends\imgui_impl_vulkan.h" />
+    <ClInclude Include="..\Extern\imgui\imconfig.h" />
+    <ClInclude Include="..\Extern\imgui\imgui.h" />
+    <ClInclude Include="..\Extern\imgui\imgui_internal.h" />
+    <ClInclude Include="..\Extern\imgui\imstb_rectpack.h" />
+    <ClInclude Include="..\Extern\imgui\imstb_textedit.h" />
+    <ClInclude Include="..\Extern\imgui\imstb_truetype.h" />
     <ClInclude Include="..\Extern\stb\stb_image.h" />
     <ClInclude Include="..\Extern\volk\volk.h" />
     <ClInclude Include="Camera.h" />
