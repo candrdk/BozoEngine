@@ -198,6 +198,7 @@
     <ClInclude Include="..\Extern\glfw\src\win32_time.h" />
     <ClInclude Include="..\Extern\stb\stb_image.h" />
     <ClInclude Include="..\Extern\volk\volk.h" />
+    <ClInclude Include="Camera.h" />
     <ClInclude Include="Logging.h" />
   </ItemGroup>
   <ItemGroup>

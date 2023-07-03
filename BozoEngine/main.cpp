@@ -30,13 +30,16 @@ typedef int64_t	i64;
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 
-#define STB_IMAGE_IMPLEMENTATION
-#include <stb_image.h>
+#pragma warning(disable : 26451 6262)
+	#define STB_IMAGE_IMPLEMENTATION
+	#include <stb_image.h>
 
-#define FAST_OBJ_IMPLEMENTATION
-#include <fast_obj.h>
+	#define FAST_OBJ_IMPLEMENTATION
+	#include <fast_obj.h>
+#pragma warning(default : 26451 6262)
 
 #include "Logging.h"
+#include "Camera.h"
 
 constexpr u32 WIDTH = 800;
 constexpr u32 HEIGHT = 600;
@@ -95,6 +98,8 @@ u32 currentFrame = 0;
 
 // Temporary namespace to contain globals
 namespace bz {
+	Camera camera(glm::vec3(-1.0f, 1.0f, -1.0f), 1.0f, 90.0f, (float)WIDTH / HEIGHT, 0.1f, 100.0f, -30.0f, 45.0f);
+
 	VkInstance instance;
 	VkDebugUtilsMessengerEXT debugMessenger;
 
@@ -156,8 +161,47 @@ namespace bz {
 	bool framebufferResized = false;
 }
 
-static void FramebufferResizeCallback(GLFWwindow* window, int width, int height) {
+void FramebufferSizeCallback(GLFWwindow* window, int width, int height) {
 	bz::framebufferResized = true;
+}
+
+void KeyCallback(GLFWwindow* window, int key, int scancode, int action, int mods) {
+	switch (key) {
+	case GLFW_KEY_ESCAPE:
+		glfwSetWindowShouldClose(window, true);
+		break;
+
+	case GLFW_KEY_SPACE:
+	case GLFW_KEY_LEFT_CONTROL:
+	case GLFW_KEY_W:
+	case GLFW_KEY_A:
+	case GLFW_KEY_S:
+	case GLFW_KEY_D:
+		bz::camera.ProcessKeyboard(key, action);
+		break;
+	}
+}
+
+double lastXpos = WIDTH / 2.0f;
+double lastYpos = WIDTH / 2.0f;
+void CursorPosCallback(GLFWwindow* window, double xpos, double ypos) {
+	if (glfwGetInputMode(window, GLFW_CURSOR) == GLFW_CURSOR_NORMAL)
+		return;
+
+	float xoffset = (xpos - lastXpos);
+	float yoffset = (lastYpos - ypos);
+	
+	lastXpos = xpos;
+	lastYpos = ypos;
+
+	bz::camera.ProcessMouseMovement(xoffset, yoffset);
+}
+
+void MouseButtonCallback(GLFWwindow* window, int button, int action, int mods) {
+	if (button == GLFW_MOUSE_BUTTON_RIGHT) {
+		glfwSetInputMode(window, GLFW_CURSOR, action == GLFW_PRESS ? GLFW_CURSOR_DISABLED : GLFW_CURSOR_NORMAL);
+		glfwGetCursorPos(window, &lastXpos, &lastYpos);
+	}
 }
 
 // Initialize glfw and create a window of width/height
@@ -169,7 +213,13 @@ void InitWindow(int width, int height) {
 	glfwWindowHint(GLFW_RESIZABLE, GLFW_TRUE);
 
 	window = glfwCreateWindow(width, height, "BozoEngine", nullptr, nullptr);
-	glfwSetFramebufferSizeCallback(window, FramebufferResizeCallback);
+
+	glfwSetInputMode(window, GLFW_RAW_MOUSE_MOTION, GLFW_TRUE);
+
+	glfwSetFramebufferSizeCallback(window, FramebufferSizeCallback);
+	glfwSetKeyCallback(window, KeyCallback);
+	glfwSetCursorPosCallback(window, CursorPosCallback);
+	glfwSetMouseButtonCallback(window, MouseButtonCallback);
 }
 
 void CleanupWindow() {
@@ -648,7 +698,7 @@ void CreateGraphicsPipeline() {
 		.rasterizerDiscardEnable = VK_FALSE,
 		.polygonMode = VK_POLYGON_MODE_FILL,
 		.cullMode = VK_CULL_MODE_BACK_BIT,
-		.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE, // counter clockwise due to the y-flip of the projection matrix
+		.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE,
 		.depthBiasEnable = VK_FALSE,
 		.lineWidth = 1.0f,
 	};
@@ -1152,12 +1202,22 @@ void LoadModel() {
 	bz::indices.reserve(mesh->index_count);
 	for (u32 i = 0; i < mesh->index_count; i++) {
 		fastObjIndex index = mesh->indices[i];
-		bz::indices.push_back(i);
+
+		// Model has z pointing upwards, so we swap y and z
+		// This means we also have to fix up indices:
+		if ((i + 1) % 3 == 0) {
+			bz::indices[i - 1] = i;
+			bz::indices.push_back(i - 1);
+		}
+		else {
+			bz::indices.push_back(i);
+		}
+
 		bz::vertices.push_back({
 			.pos = {
 				mesh->positions[3 * index.p + 0],
-				mesh->positions[3 * index.p + 1],
-				mesh->positions[3 * index.p + 2]
+				mesh->positions[3 * index.p + 2], // model has z pointing upwards,
+				mesh->positions[3 * index.p + 1]  // so we swap y and z here
 			},
 			.color = { 1.0f, 1.0f, 1.0f },
 			.texCoord = {
@@ -1507,12 +1567,10 @@ void UpdateUniformBuffer(u32 currentImage) {
 	float time = std::chrono::duration<float, std::chrono::seconds::period>(currentTime - startTime).count();
 
 	UniformBufferObject ubo = {
-		.model = glm::rotate(glm::mat4(1.0f), time * glm::radians(90.0f), glm::vec3(0.0f, 0.0f, 1.0f)),
-		.view = glm::lookAt(glm::vec3(2.0f, 2.0f, 2.0f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 0.0f, 1.0f)),
-		.proj = glm::perspective(glm::radians(45.0f), bz::swapchainExtent.width / (float)bz::swapchainExtent.height, 0.1f, 10.0f)
+		.model = glm::rotate(glm::mat4(1.0f), time * glm::radians(90.0f), glm::vec3(0.0f, 1.0f, 0.0f)),
+		.view = bz::camera.view,
+		.proj = bz::camera.projection
 	};
-
-	ubo.proj[1][1] *= -1; // flip scaling factor of Y axis to adhere to vulkan.
 
 	memcpy(bz::uniformBuffersMapped[currentImage], &ubo, sizeof(ubo));
 }
@@ -1580,9 +1638,18 @@ int main(int argc, char* argv[]) {
 	InitWindow(WIDTH, HEIGHT);
 	InitVulkan();
 
+	float lastFrame = 0.0f;
+
 	while (!glfwWindowShouldClose(window)) {
-		glfwPollEvents();
+		float currentFrame = glfwGetTime();
+		float deltaTime = currentFrame - lastFrame;
+		lastFrame = currentFrame;
+
+		bz::camera.Update(deltaTime);
+		
 		DrawFrame();
+
+		glfwPollEvents();
 	}
 
 	// Wait untill all commandbuffers are done so we can safely clean up semaphores they might potentially be using.
