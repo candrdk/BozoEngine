@@ -192,6 +192,7 @@
     <ClCompile Include="..\Extern\volk\volk.c" />
     <ClCompile Include="Logging.cpp" />
     <ClCompile Include="main.cpp" />
+    <ClCompile Include="Swapchain.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\Extern\fast_obj\fast_obj.h" />
@@ -215,6 +216,7 @@
     <ClInclude Include="..\Extern\volk\volk.h" />
     <ClInclude Include="Camera.h" />
     <ClInclude Include="Logging.h" />
+    <ClInclude Include="Swapchain.h" />
   </ItemGroup>
   <ItemGroup>
     <None Include="shaders\triangle.frag.glsl" />

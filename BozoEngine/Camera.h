@@ -56,12 +56,12 @@ public:
 		}
 	}
 
-	void ProcessMouseMovement(float xoffset, float yoffset) {
+	void ProcessMouseMovement(double xoffset, double yoffset) {
 		pitch += mouseSensitivity * yoffset;
 		yaw   += mouseSensitivity * xoffset;
 
-		if (pitch >  80.0f) pitch =  80.0f;
-		if (pitch < -80.0f) pitch = -80.0f;
+		if (pitch >  80.0) pitch =  80.0;
+		if (pitch < -80.0) pitch = -80.0;
 
 		UpdateDirection();
 	}
@@ -90,8 +90,8 @@ public:
 		moveFront = false,
 		moveBack  = false;
 
-	float mouseSensitivity = 0.1f;
-	float pitch, yaw;
+	double mouseSensitivity = 0.1f;
+	double pitch, yaw;
 
 	glm::vec3 position;
 	glm::vec3 direction;

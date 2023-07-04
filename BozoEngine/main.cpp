@@ -42,6 +42,7 @@ typedef int64_t	i64;
 #pragma warning(default : 26451 6262)
 
 #include "Logging.h"
+#include "Swapchain.h"
 #include "Camera.h"
 
 constexpr u32 WIDTH = 800;
@@ -111,12 +112,13 @@ namespace bz {
 	VkQueue queue;
 
 	VkSurfaceKHR surface;
-	VkSwapchainKHR swapchain;
-	std::vector<VkImage> swapchainImages;
-	std::vector<VkImageView> swapchainImageViews;
+	//VkSwapchainKHR swapchain;
+	//std::vector<VkImage> swapchainImages;
+	//std::vector<VkImageView> swapchainImageViews;
 	std::vector<VkFramebuffer> swapchainFramebuffers;
-	VkFormat swapchainImageFormat;
-	VkExtent2D swapchainExtent;
+	//VkFormat swapchainImageFormat;
+	//VkExtent2D swapchainExtent;
+	Swapchain swapchain;
 
 	VkRenderPass renderPass;
 
@@ -191,8 +193,8 @@ void CursorPosCallback(GLFWwindow* window, double xpos, double ypos) {
 	if (glfwGetInputMode(window, GLFW_CURSOR) == GLFW_CURSOR_NORMAL)
 		return;
 
-	float xoffset = (xpos - lastXpos);
-	float yoffset = (lastYpos - ypos);
+	double xoffset = (xpos - lastXpos);
+	double yoffset = (lastYpos - ypos);
 	
 	lastXpos = xpos;
 	lastYpos = ypos;
@@ -394,90 +396,6 @@ void CreateLogicalDevice() {
 	vkGetDeviceQueue(bz::device, queueFamilyIndex, 0, &bz::queue);
 }
 
-struct SwapchainSupport {
-	VkSurfaceCapabilitiesKHR capabilities;
-	std::vector<VkSurfaceFormatKHR> formats;
-	std::vector<VkPresentModeKHR> presentModes;
-};
-
-SwapchainSupport QuerySwapchainSupport() {
-	u32 formatCount, presentModeCount; 
-	VkCheck(vkGetPhysicalDeviceSurfaceFormatsKHR(bz::physicalDevice, bz::surface, &formatCount, nullptr));
-	VkCheck(vkGetPhysicalDeviceSurfacePresentModesKHR(bz::physicalDevice, bz::surface, &presentModeCount, nullptr));
-
-	SwapchainSupport support = {
-		.formats = std::vector<VkSurfaceFormatKHR>(formatCount),
-		.presentModes = std::vector<VkPresentModeKHR>(presentModeCount)
-	};
-
-	VkCheck(vkGetPhysicalDeviceSurfaceCapabilitiesKHR(bz::physicalDevice, bz::surface, &support.capabilities));
-	VkCheck(vkGetPhysicalDeviceSurfaceFormatsKHR(bz::physicalDevice, bz::surface, &formatCount, support.formats.data()));
-	VkCheck(vkGetPhysicalDeviceSurfacePresentModesKHR(bz::physicalDevice, bz::surface, &presentModeCount, support.presentModes.data()));
-
-	return support;
-}
-
-VkSurfaceFormatKHR GetSwapchainFormat(const std::vector<VkSurfaceFormatKHR>& formats) {
-	for (const auto& format : formats) {
-		if (format.format == VK_FORMAT_B8G8R8A8_SRGB && format.colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR) {
-			return format;
-		}
-	}
-
-	return formats[0];
-}
-
-VkExtent2D GetSwapchainExtent(const VkSurfaceCapabilitiesKHR& capabilities) {
-	if (capabilities.currentExtent.width != ~0u) {
-		return capabilities.currentExtent;
-	}
-	
-	int width, height;
-	glfwGetFramebufferSize(window, &width, &height);
-
-	VkExtent2D extent = {
-		.width = std::clamp((u32)width, capabilities.minImageExtent.width, capabilities.maxImageExtent.width),
-		.height = std::clamp((u32)height, capabilities.minImageExtent.height, capabilities.maxImageExtent.height),
-	};
-
-	return extent;
-}
-
-void CreateSwapchain() {
-	SwapchainSupport support = QuerySwapchainSupport();
-
-	VkSurfaceFormatKHR surfaceFormat = GetSwapchainFormat(support.formats);
-	VkExtent2D extent = GetSwapchainExtent(support.capabilities);
-	u32 imageCount = std::clamp(2u, support.capabilities.minImageCount, support.capabilities.maxImageCount);
-
-	VkSwapchainCreateInfoKHR createInfo = {
-		.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR,
-		.surface = bz::surface,
-		.minImageCount = imageCount,
-		.imageFormat = surfaceFormat.format,
-		.imageColorSpace = surfaceFormat.colorSpace,
-		.imageExtent = extent,
-		.imageArrayLayers = 1,
-		.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
-		.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE,
-		.preTransform = support.capabilities.currentTransform,
-		.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR,
-		.presentMode = VK_PRESENT_MODE_FIFO_KHR,
-		.clipped = VK_TRUE,
-		.oldSwapchain = VK_NULL_HANDLE
-	};
-
-	VkCheck(vkCreateSwapchainKHR(bz::device, &createInfo, nullptr, &bz::swapchain), "Failed to create swapchain");
-
-	// We only specified the minimum number of images we want, so we have to check how many were actually created
-	vkGetSwapchainImagesKHR(bz::device, bz::swapchain, &imageCount, nullptr); 
-	bz::swapchainImages.resize(imageCount);
-	vkGetSwapchainImagesKHR(bz::device, bz::swapchain, &imageCount, bz::swapchainImages.data());
-
-	bz::swapchainImageFormat = surfaceFormat.format;
-	bz::swapchainExtent = extent;
-}
-
 VkImageView CreateImageView(VkImage image, VkFormat format, VkImageAspectFlags aspectFlags, u32 mipLevels) {
 	VkImageViewCreateInfo viewInfo = {
 			.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
@@ -497,14 +415,6 @@ VkImageView CreateImageView(VkImage image, VkFormat format, VkImageAspectFlags a
 	VkCheck(vkCreateImageView(bz::device, &viewInfo, nullptr, &imageView), "Failed to create image view");
 
 	return imageView;
-}
-
-void CreateImageViews() {
-	bz::swapchainImageViews.resize(bz::swapchainImages.size());
-
-	for (int i = 0; i < bz::swapchainImages.size(); i++) {
-		bz::swapchainImageViews[i] = CreateImageView(bz::swapchainImages[i], bz::swapchainImageFormat, VK_IMAGE_ASPECT_COLOR_BIT, 1);
-	}
 }
 
 VkShaderModule CreateShaderModule(const char* path) {
@@ -539,7 +449,7 @@ VkShaderModule CreateShaderModule(const char* path) {
 
 void CreateRenderPass() {
 	VkAttachmentDescription colorAttachment = {
-		.format = bz::swapchainImageFormat,
+		.format = bz::swapchain.format,
 		.samples = bz::msaaSamples,
 		.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
 		.storeOp = VK_ATTACHMENT_STORE_OP_STORE,
@@ -561,7 +471,7 @@ void CreateRenderPass() {
 	};
 
 	VkAttachmentDescription colorAttachmentResolve = {
-		.format = bz::swapchainImageFormat,
+		.format = bz::swapchain.format,
 		.samples = VK_SAMPLE_COUNT_1_BIT,
 		.loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
 		.storeOp = VK_ATTACHMENT_STORE_OP_STORE,
@@ -815,9 +725,9 @@ void CreateImage(u32 width, u32 height, u32 mipLevels, VkSampleCountFlagBits sam
 }
 
 void CreateColorResources() {
-	VkFormat colorFormat = bz::swapchainImageFormat;
+	VkFormat colorFormat = bz::swapchain.format;
 
-	CreateImage(bz::swapchainExtent.width, bz::swapchainExtent.height, 1, bz::msaaSamples, colorFormat,
+	CreateImage(bz::swapchain.extent.width, bz::swapchain.extent.height, 1, bz::msaaSamples, colorFormat,
 		VK_IMAGE_TILING_OPTIMAL,
 		VK_IMAGE_USAGE_TRANSIENT_ATTACHMENT_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
 		VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
@@ -828,7 +738,7 @@ void CreateColorResources() {
 void CreateDepthResources() {
 	// TODO: should query supported formats and select from them.
 
-	CreateImage(bz::swapchainExtent.width, bz::swapchainExtent.height, 1, bz::msaaSamples,
+	CreateImage(bz::swapchain.extent.width, bz::swapchain.extent.height, 1, bz::msaaSamples,
 		VK_FORMAT_D32_SFLOAT,
 		VK_IMAGE_TILING_OPTIMAL,
 		VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
@@ -838,13 +748,13 @@ void CreateDepthResources() {
 }
 
 void CreateFramebuffers() {
-	bz::swapchainFramebuffers.resize(bz::swapchainImageViews.size());
+	bz::swapchainFramebuffers.resize(bz::swapchain.imageViews.size());
 
-	for (int i = 0; i < bz::swapchainImageViews.size(); i++) {
+	for (int i = 0; i < bz::swapchain.imageViews.size(); i++) {
 		VkImageView attachments[] = {
 			bz::colorImageView,
 			bz::depthImageView,
-			bz::swapchainImageViews[i]
+			bz::swapchain.imageViews[i]
 		};
 
 		VkFramebufferCreateInfo framebufferInfo = {
@@ -852,8 +762,8 @@ void CreateFramebuffers() {
 			.renderPass = bz::renderPass,
 			.attachmentCount = sizeof(attachments) / sizeof(attachments[0]),
 			.pAttachments = attachments,
-			.width = bz::swapchainExtent.width,
-			.height = bz::swapchainExtent.height,
+			.width = bz::swapchain.extent.width,
+			.height = bz::swapchain.extent.height,
 			.layers = 1
 		};
 
@@ -1379,7 +1289,7 @@ void RecordCommandBuffer(VkCommandBuffer commandBuffer, u32 imageIndex) {
 		.framebuffer = bz::swapchainFramebuffers[imageIndex],
 		.renderArea = {
 			.offset = {0, 0},
-			.extent = bz::swapchainExtent
+			.extent = bz::swapchain.extent
 		},
 		.clearValueCount = sizeof(clearColors) / sizeof(clearColors[0]),
 		.pClearValues = clearColors
@@ -1392,8 +1302,8 @@ void RecordCommandBuffer(VkCommandBuffer commandBuffer, u32 imageIndex) {
 	VkViewport viewport = {
 		.x = 0.0f,
 		.y = 0.0f,
-		.width = (float)bz::swapchainExtent.width,
-		.height = (float)bz::swapchainExtent.height,
+		.width = (float)bz::swapchain.extent.width,
+		.height = (float)bz::swapchain.extent.height,
 		.minDepth = 0.0f,
 		.maxDepth = 1.0f
 	};
@@ -1401,7 +1311,7 @@ void RecordCommandBuffer(VkCommandBuffer commandBuffer, u32 imageIndex) {
 
 	VkRect2D scissor = {
 		.offset = { 0, 0 },
-		.extent = bz::swapchainExtent
+		.extent = bz::swapchain.extent
 	};
 	vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
 
@@ -1452,8 +1362,7 @@ void InitVulkan() {
 	CreatePhysicalDevice();
 	CreateLogicalDevice();
 
-	CreateSwapchain();
-	CreateImageViews();
+	bz::swapchain = CreateSwapchain(window, { bz::surface, bz::device, bz::physicalDevice }, { .enableVSync = true, .prefferedImageCount = 2, .oldSwapchain = VK_NULL_HANDLE });
 
 	CreateRenderPass();
 	CreateDescriptorSetLayout();
@@ -1494,11 +1403,7 @@ void CleanupSwapchain() {
 		vkDestroyFramebuffer(bz::device, framebuffer, nullptr);
 	}
 
-	for (auto imageView : bz::swapchainImageViews) {
-		vkDestroyImageView(bz::device, imageView, nullptr);
-	}
-
-	vkDestroySwapchainKHR(bz::device, bz::swapchain, nullptr);
+	DestroySwapchain({ bz::surface, bz::device, bz::physicalDevice }, bz::swapchain);
 }
 
 // In theory the swap chain image could change during the applications lifetime,
@@ -1514,9 +1419,8 @@ void RecreateSwapchain() {
 	vkDeviceWaitIdle(bz::device);
 
 	CleanupSwapchain();
-	CreateSwapchain();
+	bz::swapchain = CreateSwapchain(window, { bz::surface, bz::device, bz::physicalDevice }, { .enableVSync = true, .prefferedImageCount = 2, .oldSwapchain = VK_NULL_HANDLE });
 
-	CreateImageViews();
 	CreateColorResources();
 	CreateDepthResources();
 
@@ -1585,7 +1489,7 @@ void DrawFrame() {
 	VkCheck(vkWaitForFences(bz::device, 1, &bz::inFlightFences[currentFrame], VK_TRUE, UINT64_MAX), "Wait for inFlight fence failed");
 
 	u32 imageIndex;
-	VkResult result = vkAcquireNextImageKHR(bz::device, bz::swapchain, UINT64_MAX, bz::imageAvailableSemaphores[currentFrame], VK_NULL_HANDLE, &imageIndex);
+	VkResult result = vkAcquireNextImageKHR(bz::device, bz::swapchain.swapchain, UINT64_MAX, bz::imageAvailableSemaphores[currentFrame], VK_NULL_HANDLE, &imageIndex);
 	if (result == VK_ERROR_OUT_OF_DATE_KHR) {
 		RecreateSwapchain();
 		return;
@@ -1622,7 +1526,7 @@ void DrawFrame() {
 		.waitSemaphoreCount = 1,
 		.pWaitSemaphores = signalSemaphores,
 		.swapchainCount = 1,
-		.pSwapchains = &bz::swapchain,
+		.pSwapchains = &bz::swapchain.swapchain,
 		.pImageIndices = &imageIndex
 	};
 
@@ -1721,11 +1625,11 @@ int main(int argc, char* argv[]) {
 
 	InitImGui();
 
-	float lastFrame = 0.0f;
+	double lastFrame = 0.0f;
 
 	while (!glfwWindowShouldClose(window)) {
-		float currentFrame = glfwGetTime();
-		float deltaTime = currentFrame - lastFrame;
+		double currentFrame = glfwGetTime();
+		float deltaTime = float(currentFrame - lastFrame);
 		lastFrame = currentFrame;
 
 		bz::camera.Update(deltaTime);
@@ -1737,7 +1641,7 @@ int main(int argc, char* argv[]) {
 		glfwPollEvents();
 	}
 
-	// Wait untill all commandbuffers are done so we can safely clean up semaphores they might potentially be using.
+	// Wait until all commandbuffers are done so we can safely clean up semaphores they might potentially be using.
 	vkDeviceWaitIdle(bz::device);
 
 	CleanupImGui();
