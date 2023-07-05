@@ -1,7 +1,5 @@
 #pragma once
 
-typedef unsigned int u32; // temporary
-
 struct Queue {
 	VkQueue queue = VK_NULL_HANDLE;
 	u32 index = UINT32_MAX;

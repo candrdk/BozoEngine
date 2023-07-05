@@ -1,7 +1,4 @@
-#include <volk.h>			// vulkan
-#include <GLFW/glfw3.h>		// GLFWwindow*
-#include <vector>			// std::vector
-#include <glm/common.hpp>	// clamp
+#include "Common.h"
 
 #include "Logging.h"
 #include "Device.h"

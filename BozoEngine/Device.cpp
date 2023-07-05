@@ -1,7 +1,4 @@
-#include <volk.h>
-#include <GLFW/glfw3.h>
-
-#include <vector>
+#include "Common.h"
 
 #include "Logging.h"
 #include "Device.h"
@@ -34,10 +31,10 @@ static VkInstance CreateInstance() {
 #endif
 		.pApplicationInfo = &appInfo,
 #ifdef _DEBUG
-		.enabledLayerCount = sizeof(validationLayers) / sizeof(char*),
+		.enabledLayerCount = arraysize(validationLayers),
 		.ppEnabledLayerNames = validationLayers,
 #endif
-		.enabledExtensionCount = sizeof(extensions) / sizeof(char*),
+		.enabledExtensionCount = arraysize(extensions),
 		.ppEnabledExtensionNames = extensions,
 	};
 
@@ -146,7 +143,7 @@ static VkDevice CreateDevice(VkPhysicalDevice physicalDevice, u32 queueFamilyInd
 		.pNext = &features,
 		.queueCreateInfoCount = 1,
 		.pQueueCreateInfos = &queueCreateInfo,
-		.enabledExtensionCount = sizeof(extensions) / sizeof(extensions[0]),
+		.enabledExtensionCount = arraysize(extensions),
 		.ppEnabledExtensionNames = extensions
 	};
 

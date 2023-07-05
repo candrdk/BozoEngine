@@ -1,7 +1,5 @@
 #pragma once
 
-typedef unsigned int u32;	// temporary
-
 struct SwapchainDesc {
 	bool enableVSync = true;
 	u32 prefferedImageCount = 2;

@@ -4,34 +4,14 @@
 //	- Add meshoptimizer
 //	- Implement loading multiple mip levels from a file instead of creating them at runtime.
 
-#include <assert.h>
-#include <stdio.h>
-#include <stdint.h>
-#include <vector>
+#include "Common.h"
 
 #include <chrono> // ugh
-
-typedef uint8_t	 u8;
-typedef uint16_t u16;
-typedef uint32_t u32;
-typedef uint64_t u64;
-
-typedef int8_t	i8;
-typedef int16_t	i16;
-typedef int32_t	i32;
-typedef int64_t	i64;
-
-#include <Windows.h>
-#include <volk.h>
-#include <GLFW/glfw3.h>
 
 #include <backends/imgui_impl_glfw.h>
 #include <backends/imgui_impl_vulkan.h>
 
-#define GLM_FORCE_RADIANS
-#define GLM_FORCE_DEPTH_ZERO_TO_ONE
-#include <glm/glm.hpp>
-#include <glm/gtc/matrix_transform.hpp>
+#include <glm/gtc/matrix_transform.hpp>		// glm::rotate
 
 #pragma warning(disable : 26451 6262)
 	#define STB_IMAGE_IMPLEMENTATION
@@ -370,7 +350,7 @@ void CreateRenderPass() {
 	VkAttachmentDescription attachments[] = { colorAttachment, depthAttachment, colorAttachmentResolve };
 	VkRenderPassCreateInfo renderPassInfo = {
 		.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO,
-		.attachmentCount = sizeof(attachments) / sizeof(attachments[0]),
+		.attachmentCount = arraysize(attachments),
 		.pAttachments = attachments,
 		.subpassCount = 1,
 		.pSubpasses = &subpass,
@@ -401,7 +381,7 @@ void CreateDescriptorSetLayout() {
 
 	VkDescriptorSetLayoutCreateInfo layoutInfo = {
 		.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
-		.bindingCount = sizeof(bindings) / sizeof(bindings[0]),
+		.bindingCount = arraysize(bindings),
 		.pBindings = bindings
 	};
 
@@ -434,7 +414,7 @@ void CreateGraphicsPipeline() {
 
 	VkPipelineDynamicStateCreateInfo dynamicStateInfo = {
 		.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO,
-		.dynamicStateCount = sizeof(dynamicState) / sizeof(dynamicState[0]),
+		.dynamicStateCount = arraysize(dynamicState),
 		.pDynamicStates = dynamicState
 	};
 
@@ -614,7 +594,7 @@ void CreateFramebuffers() {
 		VkFramebufferCreateInfo framebufferInfo = {
 			.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
 			.renderPass = bz::renderPass,
-			.attachmentCount = sizeof(attachments) / sizeof(attachments[0]),
+			.attachmentCount = arraysize(attachments),
 			.pAttachments = attachments,
 			.width = bz::swapchain.extent.width,
 			.height = bz::swapchain.extent.height,
@@ -640,7 +620,7 @@ void CreateDescriptorPool() {
 	VkDescriptorPoolCreateInfo poolInfo = {
 		.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
 		.maxSets = MAX_FRAMES_IN_FLIGHT,
-		.poolSizeCount = sizeof(poolSizes) / sizeof(poolSizes[0]),
+		.poolSizeCount = arraysize(poolSizes),
 		.pPoolSizes = poolSizes
 	};
 
@@ -1100,7 +1080,7 @@ void CreateDescriptorSets() {
 			}
 		};
 
-		vkUpdateDescriptorSets(bz::device.device, sizeof(descriptorWrites) / sizeof(descriptorWrites[0]), descriptorWrites, 0, nullptr);
+		vkUpdateDescriptorSets(bz::device.device, arraysize(descriptorWrites), descriptorWrites, 0, nullptr);
 	}
 }
 
@@ -1109,7 +1089,7 @@ void CreateCommandBuffers() {
 		.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
 		.commandPool = bz::device.commandPool,
 		.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
-		.commandBufferCount = sizeof(bz::commandBuffers) / sizeof(bz::commandBuffers[0])
+		.commandBufferCount = arraysize(bz::commandBuffers)
 	};
 
 	VkCheck(vkAllocateCommandBuffers(bz::device.device, &allocInfo, bz::commandBuffers), "Failed to allocate command buffers");
@@ -1135,7 +1115,7 @@ void RecordCommandBuffer(VkCommandBuffer commandBuffer, u32 imageIndex) {
 			.offset = {0, 0},
 			.extent = bz::swapchain.extent
 		},
-		.clearValueCount = sizeof(clearColors) / sizeof(clearColors[0]),
+		.clearValueCount = arraysize(clearColors),
 		.pClearValues = clearColors
 	};
 
@@ -1390,7 +1370,7 @@ void InitImGui() {
 		.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
 		.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT,
 		.maxSets = 1000,
-		.poolSizeCount = sizeof(poolSizes) / sizeof(poolSizes[0]),
+		.poolSizeCount = arraysize(poolSizes),
 		.pPoolSizes = poolSizes,
 	};
 

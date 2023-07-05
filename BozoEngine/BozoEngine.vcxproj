@@ -216,6 +216,7 @@
     <ClInclude Include="..\Extern\stb\stb_image.h" />
     <ClInclude Include="..\Extern\volk\volk.h" />
     <ClInclude Include="Camera.h" />
+    <ClInclude Include="Common.h" />
     <ClInclude Include="Device.h" />
     <ClInclude Include="Logging.h" />
     <ClInclude Include="Swapchain.h" />
