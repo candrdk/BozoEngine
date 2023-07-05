@@ -2,7 +2,9 @@
 #include <GLFW/glfw3.h>		// GLFWwindow*
 #include <vector>			// std::vector
 #include <glm/common.hpp>	// clamp
+
 #include "Logging.h"
+#include "Device.h"
 #include "Swapchain.h"
 
 static VkSurfaceFormatKHR ChooseSwapchainSurfaceFormat(VkSurfaceKHR surface, VkPhysicalDevice physicalDevice) {

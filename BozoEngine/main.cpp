@@ -42,6 +42,7 @@ typedef int64_t	i64;
 #pragma warning(default : 26451 6262)
 
 #include "Logging.h"
+#include "Device.h"
 #include "Swapchain.h"
 #include "Camera.h"
 
@@ -102,23 +103,12 @@ u32 currentFrame = 0;
 
 // Temporary namespace to contain globals
 namespace bz {
-	Camera camera(glm::vec3(-1.0f, 1.0f, -1.0f), 1.0f, 90.0f, (float)WIDTH / HEIGHT, 0.1f, 100.0f, -30.0f, 45.0f);
+	Camera camera(glm::vec3(1.0f, 1.0f, 1.0f), 1.0f, 90.0f, (float)WIDTH / HEIGHT, 0.1f, 100.0f, -30.0f, -135.0f);
 
-	VkInstance instance;
-	VkDebugUtilsMessengerEXT debugMessenger;
-
-	VkPhysicalDevice physicalDevice = VK_NULL_HANDLE;
-	VkDevice device;
-	VkQueue queue;
-
-	VkSurfaceKHR surface;
-	//VkSwapchainKHR swapchain;
-	//std::vector<VkImage> swapchainImages;
-	//std::vector<VkImageView> swapchainImageViews;
-	std::vector<VkFramebuffer> swapchainFramebuffers;
-	//VkFormat swapchainImageFormat;
-	//VkExtent2D swapchainExtent;
+	Device device;
 	Swapchain swapchain;
+
+	std::vector<VkFramebuffer> swapchainFramebuffers;
 
 	VkRenderPass renderPass;
 
@@ -129,7 +119,6 @@ namespace bz {
 	VkPipelineLayout pipelineLayout;
 	VkPipeline graphicsPipeline;
 
-	VkCommandPool commandPool;
 	VkCommandBuffer commandBuffers[MAX_FRAMES_IN_FLIGHT];
 
 	VkSemaphore imageAvailableSemaphores[MAX_FRAMES_IN_FLIGHT];
@@ -246,56 +235,10 @@ void PrintAvailableVulkanExtensions() {
 	}
 }
 
-void CreateInstance() {
-	VkApplicationInfo appInfo = {
-		.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO,
-		.pApplicationName = "Hello Triangle",
-		.applicationVersion = VK_API_VERSION_1_3,
-		.pEngineName = "Bozo Engine",
-		.engineVersion = VK_API_VERSION_1_3,
-		.apiVersion = VK_API_VERSION_1_3
-	};
-
-	const char* validationLayers[] = {
-		"VK_LAYER_KHRONOS_validation"
-	};
-	const char* extensions[] = {
-		VK_KHR_SURFACE_EXTENSION_NAME,
-		VK_KHR_WIN32_SURFACE_EXTENSION_NAME,
-		VK_EXT_DEBUG_UTILS_EXTENSION_NAME
-	};
-
-	VkDebugUtilsMessengerCreateInfoEXT debugMessengerCreateInfo = GetDebugMessengerCreateInfo();
-
-	VkInstanceCreateInfo createInfo = {
-		.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO,
-#ifdef _DEBUG
-		.pNext = &debugMessengerCreateInfo,
-#endif
-		.pApplicationInfo = &appInfo,
-#ifdef _DEBUG
-		.enabledLayerCount = sizeof(validationLayers) / sizeof(char*),
-		.ppEnabledLayerNames = validationLayers,
-#endif
-		.enabledExtensionCount = sizeof(extensions) / sizeof(char*),
-		.ppEnabledExtensionNames = extensions,
-	};
-
-	VkCheck(vkCreateInstance(&createInfo, nullptr, &bz::instance), "Failed to create instance");
-	volkLoadInstance(bz::instance);
-}
-
-void CreateSurface() {
-	VkCheck(glfwCreateWindowSurface(bz::instance, window, nullptr, &bz::surface), "Failed to create window surface");
-}
-
-void CreateDebugMessenger() {
-	VkDebugUtilsMessengerCreateInfoEXT createInfo = GetDebugMessengerCreateInfo();
-	VkCheck(vkCreateDebugUtilsMessengerEXT(bz::instance, &createInfo, nullptr, &bz::debugMessenger), "Failed to create debug messenger");
-}
-
-VkSampleCountFlagBits GetMaxUsableSampleCount(VkSampleCountFlags colorSampleCounts, VkSampleCountFlags depthSampleCounts) {
-	VkSampleCountFlags counts = colorSampleCounts & depthSampleCounts;
+VkSampleCountFlagBits GetMaxUsableSampleCount(VkPhysicalDevice physicalDevice) {
+	VkPhysicalDeviceProperties properties;
+	vkGetPhysicalDeviceProperties(physicalDevice, &properties);
+	VkSampleCountFlags counts = properties.limits.framebufferColorSampleCounts & properties.limits.framebufferDepthSampleCounts;
 
 	if (counts & VK_SAMPLE_COUNT_64_BIT) { return VK_SAMPLE_COUNT_64_BIT; }
 	if (counts & VK_SAMPLE_COUNT_32_BIT) { return VK_SAMPLE_COUNT_32_BIT; }
@@ -305,95 +248,6 @@ VkSampleCountFlagBits GetMaxUsableSampleCount(VkSampleCountFlags colorSampleCoun
 	if (counts & VK_SAMPLE_COUNT_2_BIT)  { return VK_SAMPLE_COUNT_2_BIT;  }
 
 	return VK_SAMPLE_COUNT_1_BIT;
-}
-
-// Verifying that the device is suitable is not rigorous atm.
-void CreatePhysicalDevice() {
-	u32 deviceCount = 8;
-	VkPhysicalDevice devices[8];
-	VkCheck(vkEnumeratePhysicalDevices(bz::instance, &deviceCount, devices));
-	Check(deviceCount > 0, "Failed to find GPUs with Vulkan support");
-
-	for (u32 i = 0; i < deviceCount; i++) {
-		VkPhysicalDeviceProperties properties;
-		vkGetPhysicalDeviceProperties(devices[i], &properties);
-		VkPhysicalDeviceFeatures features;
-		vkGetPhysicalDeviceFeatures(devices[i], &features);
-
-		if (properties.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU && features.samplerAnisotropy) {
-			bz::physicalDevice = devices[i];
-			bz::msaaSamples = GetMaxUsableSampleCount(properties.limits.framebufferColorSampleCounts, properties.limits.framebufferDepthSampleCounts);
-			printf(SGR_SET_BG_GRAY "[INFO]" SGR_SET_DEFAULT "    Found suitable GPU: `%s`. Max MSAA samples: %u\n", properties.deviceName, 1 << (31 - __lzcnt(bz::msaaSamples)));
-			break;
-		}
-	}
-
-	Check(bz::physicalDevice != VK_NULL_HANDLE, "Failed to find a suitable GPU");
-}
-
-u32 GetQueueFamily() {
-	u32 queueCount = 8;
-	VkQueueFamilyProperties queues[8];
-	vkGetPhysicalDeviceQueueFamilyProperties(bz::physicalDevice, &queueCount, queues);
-
-	for (u32 i = 0; i < queueCount; i++) {
-		VkBool32 presentSupport = false;
-		VkCheck(vkGetPhysicalDeviceSurfaceSupportKHR(bz::physicalDevice, i, bz::surface, &presentSupport));
-
-		if (presentSupport && (queues[i].queueFlags & VK_QUEUE_GRAPHICS_BIT)) {
-			return i;
-		}
-	}
-
-	Check(false, "No queue family supporting graphics + present found");
-}
-
-void CreateLogicalDevice() {
-	u32 queueFamilyIndex = GetQueueFamily();
-	float queuePriority[] = { 1.0f };
-	VkDeviceQueueCreateInfo queueCreateInfo = {
-		.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO,
-		.queueFamilyIndex = queueFamilyIndex,
-		.queueCount = 1,
-		.pQueuePriorities = queuePriority
-	};
-
-	const char* extensions[] = {
-		VK_KHR_SWAPCHAIN_EXTENSION_NAME
-	};
-
-	// TODO: fill these out later as needed
-	VkPhysicalDeviceVulkan13Features features13 = {
-		.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES
-	};
-	VkPhysicalDeviceVulkan12Features features12 = {
-		.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES,
-		.pNext = &features13
-	};
-	VkPhysicalDeviceVulkan11Features features11 = {
-		.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_FEATURES,
-		.pNext = &features12
-	};
-	VkPhysicalDeviceFeatures2 features = {
-		.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2,
-		.pNext = &features11,
-		.features = {
-			.samplerAnisotropy = VK_TRUE
-		}
-	};
-
-	VkDeviceCreateInfo deviceCreateInfo = {
-		.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO,
-		.pNext = &features,
-		.queueCreateInfoCount = 1,
-		.pQueueCreateInfos = &queueCreateInfo,
-		.enabledExtensionCount = sizeof(extensions) / sizeof(extensions[0]),
-		.ppEnabledExtensionNames = extensions
-	};
-
-	VkCheck(vkCreateDevice(bz::physicalDevice, &deviceCreateInfo, nullptr, &bz::device), "Failed to create logical device");
-	volkLoadDevice(bz::device);
-	vkGetDeviceQueue(bz::device, queueFamilyIndex, 0, &bz::queue);
 }
 
 VkImageView CreateImageView(VkImage image, VkFormat format, VkImageAspectFlags aspectFlags, u32 mipLevels) {
@@ -412,7 +266,7 @@ VkImageView CreateImageView(VkImage image, VkFormat format, VkImageAspectFlags a
 	};
 
 	VkImageView imageView;
-	VkCheck(vkCreateImageView(bz::device, &viewInfo, nullptr, &imageView), "Failed to create image view");
+	VkCheck(vkCreateImageView(bz::device.device, &viewInfo, nullptr, &imageView), "Failed to create image view");
 
 	return imageView;
 }
@@ -440,7 +294,7 @@ VkShaderModule CreateShaderModule(const char* path) {
 	};
 
 	VkShaderModule shaderModule;
-	VkCheck(vkCreateShaderModule(bz::device, &createInfo, nullptr, &shaderModule), "Failed to create shader module");
+	VkCheck(vkCreateShaderModule(bz::device.device, &createInfo, nullptr, &shaderModule), "Failed to create shader module");
 
 	delete[] buffer;
 
@@ -524,7 +378,7 @@ void CreateRenderPass() {
 		.pDependencies = &dependency
 	};
 
-	VkCheck(vkCreateRenderPass(bz::device, &renderPassInfo, nullptr, &bz::renderPass), "Failed to create render pass");
+	VkCheck(vkCreateRenderPass(bz::device.device, &renderPassInfo, nullptr, &bz::renderPass), "Failed to create render pass");
 }
 
 void CreateDescriptorSetLayout() {
@@ -551,7 +405,7 @@ void CreateDescriptorSetLayout() {
 		.pBindings = bindings
 	};
 
-	VkCheck(vkCreateDescriptorSetLayout(bz::device, &layoutInfo, nullptr, &bz::descriptorSetLayout), "Failed to create a descriptor set layout");
+	VkCheck(vkCreateDescriptorSetLayout(bz::device.device, &layoutInfo, nullptr, &bz::descriptorSetLayout), "Failed to create a descriptor set layout");
 }
 
 void CreateGraphicsPipeline() {
@@ -652,7 +506,7 @@ void CreateGraphicsPipeline() {
 		.pSetLayouts = &bz::descriptorSetLayout
 	};
 
-	VkCheck(vkCreatePipelineLayout(bz::device, &pipelineLayoutInfo, nullptr, &bz::pipelineLayout), "Failed to create pipeline layout");
+	VkCheck(vkCreatePipelineLayout(bz::device.device, &pipelineLayoutInfo, nullptr, &bz::pipelineLayout), "Failed to create pipeline layout");
 
 	VkGraphicsPipelineCreateInfo pipelineInfo = {
 		.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
@@ -671,15 +525,15 @@ void CreateGraphicsPipeline() {
 		.subpass = 0
 	};
 
-	VkCheck(vkCreateGraphicsPipelines(bz::device, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &bz::graphicsPipeline), "Failed to create graphics pipeline");
+	VkCheck(vkCreateGraphicsPipelines(bz::device.device, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &bz::graphicsPipeline), "Failed to create graphics pipeline");
 
-	vkDestroyShaderModule(bz::device, vertShaderModule, nullptr);
-	vkDestroyShaderModule(bz::device, fragShaderModule, nullptr);
+	vkDestroyShaderModule(bz::device.device, vertShaderModule, nullptr);
+	vkDestroyShaderModule(bz::device.device, fragShaderModule, nullptr);
 }
 
 u32 FindMemoryType(u32 typeFilter, VkMemoryPropertyFlags properties) {
 	VkPhysicalDeviceMemoryProperties memProperties;
-	vkGetPhysicalDeviceMemoryProperties(bz::physicalDevice, &memProperties);
+	vkGetPhysicalDeviceMemoryProperties(bz::device.physicalDevice, &memProperties);
 
 	for (u32 i = 0; i < memProperties.memoryTypeCount; i++) {
 		if ((typeFilter & (1 << i)) && (memProperties.memoryTypes[i].propertyFlags & properties) == properties) {
@@ -709,10 +563,10 @@ void CreateImage(u32 width, u32 height, u32 mipLevels, VkSampleCountFlagBits sam
 		.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED
 	};
 
-	VkCheck(vkCreateImage(bz::device, &imageInfo, nullptr, &image), "Failed to create image");
+	VkCheck(vkCreateImage(bz::device.device, &imageInfo, nullptr, &image), "Failed to create image");
 
 	VkMemoryRequirements memRequirements;
-	vkGetImageMemoryRequirements(bz::device, image, &memRequirements);
+	vkGetImageMemoryRequirements(bz::device.device, image, &memRequirements);
 
 	VkMemoryAllocateInfo allocInfo = {
 		.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
@@ -720,8 +574,8 @@ void CreateImage(u32 width, u32 height, u32 mipLevels, VkSampleCountFlagBits sam
 		.memoryTypeIndex = FindMemoryType(memRequirements.memoryTypeBits, properties)
 	};
 
-	VkCheck(vkAllocateMemory(bz::device, &allocInfo, nullptr, &imageMemory), "Failed to allocate image memory");
-	VkCheck(vkBindImageMemory(bz::device, image, imageMemory, 0), "Failed to bind VkDeviceMemory to VkImage");
+	VkCheck(vkAllocateMemory(bz::device.device, &allocInfo, nullptr, &imageMemory), "Failed to allocate image memory");
+	VkCheck(vkBindImageMemory(bz::device.device, image, imageMemory, 0), "Failed to bind VkDeviceMemory to VkImage");
 }
 
 void CreateColorResources() {
@@ -767,18 +621,8 @@ void CreateFramebuffers() {
 			.layers = 1
 		};
 
-		VkCheck(vkCreateFramebuffer(bz::device, &framebufferInfo, nullptr, &bz::swapchainFramebuffers[i]), "Failed to create framebuffer");
+		VkCheck(vkCreateFramebuffer(bz::device.device, &framebufferInfo, nullptr, &bz::swapchainFramebuffers[i]), "Failed to create framebuffer");
 	}
-}
-
-void CreateCommandPool() {
-	VkCommandPoolCreateInfo poolInfo = {
-		.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
-		.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT,
-		.queueFamilyIndex = GetQueueFamily()
-	};
-
-	VkCheck(vkCreateCommandPool(bz::device, &poolInfo, nullptr, &bz::commandPool), "Failed to create command pool");
 }
 
 void CreateDescriptorPool() {
@@ -800,7 +644,7 @@ void CreateDescriptorPool() {
 		.pPoolSizes = poolSizes
 	};
 
-	VkCheck(vkCreateDescriptorPool(bz::device, &poolInfo, nullptr, &bz::descriptorPool), "Failed to create descriptor pool");
+	VkCheck(vkCreateDescriptorPool(bz::device.device, &poolInfo, nullptr, &bz::descriptorPool), "Failed to create descriptor pool");
 }
 
 void CreateBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkBuffer& buffer, VkDeviceMemory& bufferMemory) {
@@ -811,10 +655,10 @@ void CreateBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyF
 		.sharingMode = VK_SHARING_MODE_EXCLUSIVE
 	};
 
-	VkCheck(vkCreateBuffer(bz::device, &bufferInfo, nullptr, &buffer), "Failed to create buffer");
+	VkCheck(vkCreateBuffer(bz::device.device, &bufferInfo, nullptr, &buffer), "Failed to create buffer");
 
 	VkMemoryRequirements memRequirements;
-	vkGetBufferMemoryRequirements(bz::device, buffer, &memRequirements);
+	vkGetBufferMemoryRequirements(bz::device.device, buffer, &memRequirements);
 
 	VkMemoryAllocateInfo allocInfo = {
 		.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
@@ -822,8 +666,8 @@ void CreateBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyF
 		.memoryTypeIndex = FindMemoryType(memRequirements.memoryTypeBits, properties)
 	};
 
-	VkCheck(vkAllocateMemory(bz::device, &allocInfo, nullptr, &bufferMemory), "Failed to allocate vertex buffer memory");
-	VkCheck(vkBindBufferMemory(bz::device, buffer, bufferMemory, 0), "Failed to bind DeviceMemory to VkBuffer");
+	VkCheck(vkAllocateMemory(bz::device.device, &allocInfo, nullptr, &bufferMemory), "Failed to allocate vertex buffer memory");
+	VkCheck(vkBindBufferMemory(bz::device.device, buffer, bufferMemory, 0), "Failed to bind DeviceMemory to VkBuffer");
 }
 
 // TODO: should allocate a separate command pool for these kinds of short-lived buffers.
@@ -831,13 +675,13 @@ void CreateBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyF
 VkCommandBuffer BeginSingleTimeCommands() {
 	VkCommandBufferAllocateInfo allocInfo = {
 		.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
-		.commandPool = bz::commandPool,
+		.commandPool = bz::device.commandPool,
 		.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
 		.commandBufferCount = 1
 	};
 
 	VkCommandBuffer commandBuffer;
-	VkCheck(vkAllocateCommandBuffers(bz::device, &allocInfo, &commandBuffer), "Failed to allocate command buffer");
+	VkCheck(vkAllocateCommandBuffers(bz::device.device, &allocInfo, &commandBuffer), "Failed to allocate command buffer");
 
 	VkCommandBufferBeginInfo beginInfo = {
 		.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
@@ -858,10 +702,10 @@ void EndSingleTimeCommands(VkCommandBuffer commandBuffer) {
 		.pCommandBuffers = &commandBuffer
 	};
 
-	VkCheck(vkQueueSubmit(bz::queue, 1, &submitInfo, VK_NULL_HANDLE), "Failed to submit command buffer to queue");
-	VkCheck(vkQueueWaitIdle(bz::queue), "QueueWaitIdle failed");
+	VkCheck(vkQueueSubmit(bz::device.graphicsQueue.queue, 1, &submitInfo, VK_NULL_HANDLE), "Failed to submit command buffer to queue");
+	VkCheck(vkQueueWaitIdle(bz::device.graphicsQueue.queue), "QueueWaitIdle failed");
 
-	vkFreeCommandBuffers(bz::device, bz::commandPool, 1, &commandBuffer);
+	vkFreeCommandBuffers(bz::device.device, bz::device.commandPool, 1, &commandBuffer);
 }
 
 void CopyBuffer(VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize size) {
@@ -950,7 +794,7 @@ void CopyBufferToImage(VkCommandBuffer commandBuffer, VkBuffer buffer, VkImage i
 
 void GenerateMipmaps(VkCommandBuffer commandBuffer, VkImage image, VkFormat imageFormat, i32 width, i32 height, u32 mipLevels) {
 	VkFormatProperties formatProperties;
-	vkGetPhysicalDeviceFormatProperties(bz::physicalDevice, imageFormat, &formatProperties);
+	vkGetPhysicalDeviceFormatProperties(bz::device.physicalDevice, imageFormat, &formatProperties);
 	Check(formatProperties.optimalTilingFeatures & VK_FORMAT_FEATURE_SAMPLED_IMAGE_FILTER_LINEAR_BIT, "Texture image does not support linear blitting");
 
 	VkImageMemoryBarrier barrier = {
@@ -1050,9 +894,9 @@ void CreateTextureImage() {
 		stagingBuffer, stagingBufferMemory);
 
 	void* data;
-	vkMapMemory(bz::device, stagingBufferMemory, 0, size, 0, &data);
+	vkMapMemory(bz::device.device, stagingBufferMemory, 0, size, 0, &data);
 	memcpy(data, pixels, size);
-	vkUnmapMemory(bz::device, stagingBufferMemory);
+	vkUnmapMemory(bz::device.device, stagingBufferMemory);
 
 	stbi_image_free(pixels);
 
@@ -1074,8 +918,8 @@ void CreateTextureImage() {
 
 	EndSingleTimeCommands(setupCommandBuffer);
 
-	vkDestroyBuffer(bz::device, stagingBuffer, nullptr);
-	vkFreeMemory(bz::device, stagingBufferMemory, nullptr);
+	vkDestroyBuffer(bz::device.device, stagingBuffer, nullptr);
+	vkFreeMemory(bz::device.device, stagingBufferMemory, nullptr);
 }
 
 void CreateTextureImageView() {
@@ -1084,7 +928,7 @@ void CreateTextureImageView() {
 
 void CreateTextureSampler() {
 	VkPhysicalDeviceProperties properties;
-	vkGetPhysicalDeviceProperties(bz::physicalDevice, &properties);
+	vkGetPhysicalDeviceProperties(bz::device.physicalDevice, &properties);
 
 	VkSamplerCreateInfo samplerInfo = {
 		.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
@@ -1105,7 +949,7 @@ void CreateTextureSampler() {
 		.unnormalizedCoordinates = VK_FALSE
 	};
 
-	VkCheck(vkCreateSampler(bz::device, &samplerInfo, nullptr, &bz::textureSampler), "Failed to create texture sampler");
+	VkCheck(vkCreateSampler(bz::device.device, &samplerInfo, nullptr, &bz::textureSampler), "Failed to create texture sampler");
 }
 
 void LoadModel() {
@@ -1155,9 +999,9 @@ void CreateVertexBuffer() {
 		stagingBuffer, stagingBufferMemory);
 
 	void* data;
-	VkCheck(vkMapMemory(bz::device, stagingBufferMemory, 0, bufferSize, 0, &data), "Failed to map memory");
+	VkCheck(vkMapMemory(bz::device.device, stagingBufferMemory, 0, bufferSize, 0, &data), "Failed to map memory");
 	memcpy(data, bz::vertices.data(), bufferSize);
-	vkUnmapMemory(bz::device, stagingBufferMemory);
+	vkUnmapMemory(bz::device.device, stagingBufferMemory);
 
 	CreateBuffer(bufferSize, 
 		VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, 
@@ -1166,8 +1010,8 @@ void CreateVertexBuffer() {
 
 	CopyBuffer(stagingBuffer, bz::vertexBuffer, bufferSize);
 
-	vkDestroyBuffer(bz::device, stagingBuffer, nullptr);
-	vkFreeMemory(bz::device, stagingBufferMemory, nullptr);
+	vkDestroyBuffer(bz::device.device, stagingBuffer, nullptr);
+	vkFreeMemory(bz::device.device, stagingBufferMemory, nullptr);
 }
 
 void CreateIndexBuffer() {
@@ -1181,9 +1025,9 @@ void CreateIndexBuffer() {
 		stagingBuffer, stagingBufferMemory);
 	
 	void* data;
-	VkCheck(vkMapMemory(bz::device, stagingBufferMemory, 0, bufferSize, 0, &data), "Failed to map memory");
+	VkCheck(vkMapMemory(bz::device.device, stagingBufferMemory, 0, bufferSize, 0, &data), "Failed to map memory");
 	memcpy(data, bz::indices.data(), bufferSize);
-	vkUnmapMemory(bz::device, stagingBufferMemory);
+	vkUnmapMemory(bz::device.device, stagingBufferMemory);
 
 	CreateBuffer(bufferSize, 
 		VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT, 
@@ -1192,8 +1036,8 @@ void CreateIndexBuffer() {
 
 	CopyBuffer(stagingBuffer, bz::indexBuffer, bufferSize);
 
-	vkDestroyBuffer(bz::device, stagingBuffer, nullptr);
-	vkFreeMemory(bz::device, stagingBufferMemory, nullptr);
+	vkDestroyBuffer(bz::device.device, stagingBuffer, nullptr);
+	vkFreeMemory(bz::device.device, stagingBufferMemory, nullptr);
 }
 
 void CreateUniformBuffers() {
@@ -1205,7 +1049,7 @@ void CreateUniformBuffers() {
 			VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, 
 			bz::uniformBuffers[i], bz::uniformBuffersMemory[i]);
 
-		VkCheck(vkMapMemory(bz::device, bz::uniformBuffersMemory[i], 0, bufferSize, 0, &bz::uniformBuffersMapped[i]), "Failed to map memory");
+		VkCheck(vkMapMemory(bz::device.device, bz::uniformBuffersMemory[i], 0, bufferSize, 0, &bz::uniformBuffersMapped[i]), "Failed to map memory");
 	}
 }
 
@@ -1220,7 +1064,7 @@ void CreateDescriptorSets() {
 		.pSetLayouts = layouts
 	};
 
-	VkCheck(vkAllocateDescriptorSets(bz::device, &allocInfo, bz::descriptorSets), "Failed to allocate descriptor sets");
+	VkCheck(vkAllocateDescriptorSets(bz::device.device, &allocInfo, bz::descriptorSets), "Failed to allocate descriptor sets");
 
 	for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
 		VkDescriptorBufferInfo bufferInfo = {
@@ -1256,19 +1100,19 @@ void CreateDescriptorSets() {
 			}
 		};
 
-		vkUpdateDescriptorSets(bz::device, sizeof(descriptorWrites) / sizeof(descriptorWrites[0]), descriptorWrites, 0, nullptr);
+		vkUpdateDescriptorSets(bz::device.device, sizeof(descriptorWrites) / sizeof(descriptorWrites[0]), descriptorWrites, 0, nullptr);
 	}
 }
 
 void CreateCommandBuffers() {
 	VkCommandBufferAllocateInfo allocInfo = {
 		.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
-		.commandPool = bz::commandPool,
+		.commandPool = bz::device.commandPool,
 		.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
 		.commandBufferCount = sizeof(bz::commandBuffers) / sizeof(bz::commandBuffers[0])
 	};
 
-	VkCheck(vkAllocateCommandBuffers(bz::device, &allocInfo, bz::commandBuffers), "Failed to allocate command buffers");
+	VkCheck(vkAllocateCommandBuffers(bz::device.device, &allocInfo, bz::commandBuffers), "Failed to allocate command buffers");
 }
 
 void RecordCommandBuffer(VkCommandBuffer commandBuffer, u32 imageIndex) {
@@ -1342,27 +1186,16 @@ void CreateSyncObjects() {
 	};
 
 	for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
-		VkCheck(vkCreateSemaphore(bz::device, &semaphoreInfo, nullptr, &bz::imageAvailableSemaphores[i]), "Failed to create imageAvailable semaphore");
-		VkCheck(vkCreateSemaphore(bz::device, &semaphoreInfo, nullptr, &bz::renderFinishedSemaphores[i]), "Failed to create renderFinished semaphore");
-		VkCheck(vkCreateFence(bz::device, &fenceInfo, nullptr, &bz::inFlightFences[i]), "Failed to create inFlight fence");
+		VkCheck(vkCreateSemaphore(bz::device.device, &semaphoreInfo, nullptr, &bz::imageAvailableSemaphores[i]), "Failed to create imageAvailable semaphore");
+		VkCheck(vkCreateSemaphore(bz::device.device, &semaphoreInfo, nullptr, &bz::renderFinishedSemaphores[i]), "Failed to create renderFinished semaphore");
+		VkCheck(vkCreateFence(bz::device.device, &fenceInfo, nullptr, &bz::inFlightFences[i]), "Failed to create inFlight fence");
 	}
 }
 
 void InitVulkan() {
-	VkCheck(volkInitialize(), "Failed to initialzie volk");
-
-	CreateInstance();
-
-#if _DEBUG
-	CreateDebugMessenger();
-#endif
-
-	CreateSurface();
-
-	CreatePhysicalDevice();
-	CreateLogicalDevice();
-
-	bz::swapchain = CreateSwapchain(window, { bz::surface, bz::device, bz::physicalDevice }, { .enableVSync = true, .prefferedImageCount = 2, .oldSwapchain = VK_NULL_HANDLE });
+	bz::device = CreateDevice(window);
+	bz::msaaSamples = GetMaxUsableSampleCount(bz::device.physicalDevice);
+	bz::swapchain = CreateSwapchain(window, bz::device, { .enableVSync = true, .prefferedImageCount = 2, .oldSwapchain = VK_NULL_HANDLE });
 
 	CreateRenderPass();
 	CreateDescriptorSetLayout();
@@ -1372,7 +1205,6 @@ void InitVulkan() {
 	CreateDepthResources();
 	CreateFramebuffers();
 
-	CreateCommandPool();
 	CreateDescriptorPool();
 
 	CreateTextureImage();
@@ -1391,19 +1223,19 @@ void InitVulkan() {
 }
 
 void CleanupSwapchain() {
-	vkDestroyImageView(bz::device, bz::colorImageView, nullptr);
-	vkDestroyImage(bz::device, bz::colorImage, nullptr);
-	vkFreeMemory(bz::device, bz::colorImageMemory, nullptr);
+	vkDestroyImageView(bz::device.device, bz::colorImageView, nullptr);
+	vkDestroyImage(bz::device.device, bz::colorImage, nullptr);
+	vkFreeMemory(bz::device.device, bz::colorImageMemory, nullptr);
 
-	vkDestroyImageView(bz::device, bz::depthImageView, nullptr);
-	vkDestroyImage(bz::device, bz::depthImage, nullptr);
-	vkFreeMemory(bz::device, bz::depthImageMemory, nullptr);
+	vkDestroyImageView(bz::device.device, bz::depthImageView, nullptr);
+	vkDestroyImage(bz::device.device, bz::depthImage, nullptr);
+	vkFreeMemory(bz::device.device, bz::depthImageMemory, nullptr);
 
 	for (auto framebuffer : bz::swapchainFramebuffers) {
-		vkDestroyFramebuffer(bz::device, framebuffer, nullptr);
+		vkDestroyFramebuffer(bz::device.device, framebuffer, nullptr);
 	}
 
-	DestroySwapchain({ bz::surface, bz::device, bz::physicalDevice }, bz::swapchain);
+	DestroySwapchain(bz::device, bz::swapchain);
 }
 
 // In theory the swap chain image could change during the applications lifetime,
@@ -1416,10 +1248,10 @@ void RecreateSwapchain() {
 		glfwWaitEvents();
 	}
 
-	vkDeviceWaitIdle(bz::device);
+	vkDeviceWaitIdle(bz::device.device);
 
 	CleanupSwapchain();
-	bz::swapchain = CreateSwapchain(window, { bz::surface, bz::device, bz::physicalDevice }, { .enableVSync = true, .prefferedImageCount = 2, .oldSwapchain = VK_NULL_HANDLE });
+	bz::swapchain = CreateSwapchain(window, bz::device, { .enableVSync = true, .prefferedImageCount = 2, .oldSwapchain = VK_NULL_HANDLE });
 
 	CreateColorResources();
 	CreateDepthResources();
@@ -1430,45 +1262,37 @@ void RecreateSwapchain() {
 void CleanupVulkan() {
 	CleanupSwapchain();
 
-	vkDestroySampler(bz::device, bz::textureSampler, nullptr);
-	vkDestroyImageView(bz::device, bz::textureImageView, nullptr);
-	vkDestroyImage(bz::device, bz::textureImage, nullptr);
-	vkFreeMemory(bz::device, bz::textureImageMemory, nullptr);
+	vkDestroySampler(bz::device.device, bz::textureSampler, nullptr);
+	vkDestroyImageView(bz::device.device, bz::textureImageView, nullptr);
+	vkDestroyImage(bz::device.device, bz::textureImage, nullptr);
+	vkFreeMemory(bz::device.device, bz::textureImageMemory, nullptr);
 
 	for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
-		vkDestroyBuffer(bz::device, bz::uniformBuffers[i], nullptr);
-		vkFreeMemory(bz::device, bz::uniformBuffersMemory[i], nullptr);
+		vkDestroyBuffer(bz::device.device, bz::uniformBuffers[i], nullptr);
+		vkFreeMemory(bz::device.device, bz::uniformBuffersMemory[i], nullptr);
 	}
 
-	vkDestroyDescriptorPool(bz::device, bz::descriptorPool, nullptr);
-	vkDestroyDescriptorSetLayout(bz::device, bz::descriptorSetLayout, nullptr);
+	vkDestroyDescriptorPool(bz::device.device, bz::descriptorPool, nullptr);
+	vkDestroyDescriptorSetLayout(bz::device.device, bz::descriptorSetLayout, nullptr);
 
-	vkDestroyBuffer(bz::device, bz::indexBuffer, nullptr);
-	vkFreeMemory(bz::device, bz::indexBufferMemory, nullptr);
+	vkDestroyBuffer(bz::device.device, bz::indexBuffer, nullptr);
+	vkFreeMemory(bz::device.device, bz::indexBufferMemory, nullptr);
 
-	vkDestroyBuffer(bz::device, bz::vertexBuffer, nullptr);
-	vkFreeMemory(bz::device, bz::vertexBufferMemory, nullptr);
+	vkDestroyBuffer(bz::device.device, bz::vertexBuffer, nullptr);
+	vkFreeMemory(bz::device.device, bz::vertexBufferMemory, nullptr);
 
-	vkDestroyPipeline(bz::device, bz::graphicsPipeline, nullptr);
-	vkDestroyPipelineLayout(bz::device, bz::pipelineLayout, nullptr);
+	vkDestroyPipeline(bz::device.device, bz::graphicsPipeline, nullptr);
+	vkDestroyPipelineLayout(bz::device.device, bz::pipelineLayout, nullptr);
 
-	vkDestroyRenderPass(bz::device, bz::renderPass, nullptr);
+	vkDestroyRenderPass(bz::device.device, bz::renderPass, nullptr);
 
 	for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
-		vkDestroySemaphore(bz::device, bz::imageAvailableSemaphores[i], nullptr);
-		vkDestroySemaphore(bz::device, bz::renderFinishedSemaphores[i], nullptr);
-		vkDestroyFence(bz::device, bz::inFlightFences[i], nullptr);
+		vkDestroySemaphore(bz::device.device, bz::imageAvailableSemaphores[i], nullptr);
+		vkDestroySemaphore(bz::device.device, bz::renderFinishedSemaphores[i], nullptr);
+		vkDestroyFence(bz::device.device, bz::inFlightFences[i], nullptr);
 	}
 
-	vkDestroyCommandPool(bz::device, bz::commandPool, nullptr);
-	vkDestroyDevice(bz::device, nullptr);
-
-#if _DEBUG
-	vkDestroyDebugUtilsMessengerEXT(bz::instance, bz::debugMessenger, nullptr);
-#endif
-
-	vkDestroySurfaceKHR(bz::instance, bz::surface, nullptr);
-	vkDestroyInstance(bz::instance, nullptr);
+	DestroyDevice(bz::device);
 }
 
 void UpdateUniformBuffer(u32 currentImage) {
@@ -1486,10 +1310,10 @@ void UpdateUniformBuffer(u32 currentImage) {
 }
 
 void DrawFrame() {
-	VkCheck(vkWaitForFences(bz::device, 1, &bz::inFlightFences[currentFrame], VK_TRUE, UINT64_MAX), "Wait for inFlight fence failed");
+	VkCheck(vkWaitForFences(bz::device.device, 1, &bz::inFlightFences[currentFrame], VK_TRUE, UINT64_MAX), "Wait for inFlight fence failed");
 
 	u32 imageIndex;
-	VkResult result = vkAcquireNextImageKHR(bz::device, bz::swapchain.swapchain, UINT64_MAX, bz::imageAvailableSemaphores[currentFrame], VK_NULL_HANDLE, &imageIndex);
+	VkResult result = vkAcquireNextImageKHR(bz::device.device, bz::swapchain.swapchain, UINT64_MAX, bz::imageAvailableSemaphores[currentFrame], VK_NULL_HANDLE, &imageIndex);
 	if (result == VK_ERROR_OUT_OF_DATE_KHR) {
 		RecreateSwapchain();
 		return;
@@ -1501,7 +1325,7 @@ void DrawFrame() {
 	UpdateUniformBuffer(currentFrame);
 
 	// Only reset the fence if we swapchain was valid and we are actually submitting work.
-	VkCheck(vkResetFences(bz::device, 1, &bz::inFlightFences[currentFrame]), "Failed to reset inFlight fence");
+	VkCheck(vkResetFences(bz::device.device, 1, &bz::inFlightFences[currentFrame]), "Failed to reset inFlight fence");
 
 	// This reset happens implicitly on vkBeginCommandBuffer, as it was allocated from a commandPool with VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT set.
 	// VkCheck(vkResetCommandBuffer(bz::commandBuffers[currentFrame], 0), "Failed to reset command buffer"); 
@@ -1530,8 +1354,8 @@ void DrawFrame() {
 		.pImageIndices = &imageIndex
 	};
 
-	VkCheck(vkQueueSubmit(bz::queue, 1, &submitInfo, bz::inFlightFences[currentFrame]), "Failed to submit draw command buffer");
-	result = vkQueuePresentKHR(bz::queue, &presentInfo);
+	VkCheck(vkQueueSubmit(bz::device.graphicsQueue.queue, 1, &submitInfo, bz::inFlightFences[currentFrame]), "Failed to submit draw command buffer");
+	result = vkQueuePresentKHR(bz::device.graphicsQueue.queue, &presentInfo);
 
 	if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR || bz::framebufferResized) {
 		bz::framebufferResized = false;
@@ -1570,7 +1394,7 @@ void InitImGui() {
 		.pPoolSizes = poolSizes,
 	};
 
-	VkCheck(vkCreateDescriptorPool(bz::device, &poolInfo, nullptr, &imguiPool), "Failed to create imgui descriptor pool");
+	VkCheck(vkCreateDescriptorPool(bz::device.device, &poolInfo, nullptr, &imguiPool), "Failed to create imgui descriptor pool");
 
 	IMGUI_CHECKVERSION();
 	ImGui::CreateContext();
@@ -1583,10 +1407,10 @@ void InitImGui() {
 	ImGui_ImplGlfw_InitForVulkan(window, true);
 
 	ImGui_ImplVulkan_InitInfo initInfo = {
-		.Instance = bz::instance,
-		.PhysicalDevice = bz::physicalDevice,
-		.Device = bz::device,
-		.Queue = bz::queue,
+		.Instance = bz::device.instance,
+		.PhysicalDevice = bz::device.physicalDevice,
+		.Device = bz::device.device,
+		.Queue = bz::device.graphicsQueue.queue,
 		.DescriptorPool = imguiPool,
 		.MinImageCount = MAX_FRAMES_IN_FLIGHT,
 		.ImageCount = MAX_FRAMES_IN_FLIGHT,
@@ -1595,7 +1419,7 @@ void InitImGui() {
 
 	ImGui_ImplVulkan_LoadFunctions([](const char* function_name, void* vulkan_instance) {
 		return vkGetInstanceProcAddr(*(reinterpret_cast<VkInstance*>(vulkan_instance)), function_name);
-		}, &bz::instance);
+		}, &bz::device.instance);
 	ImGui_ImplVulkan_Init(&initInfo, bz::renderPass);
 	
 	VkCommandBuffer buffer = BeginSingleTimeCommands();
@@ -1608,7 +1432,7 @@ void InitImGui() {
 void CleanupImGui() {
 	ImGui_ImplVulkan_Shutdown();
 	ImGui_ImplGlfw_Shutdown();
-	vkDestroyDescriptorPool(bz::device, imguiPool, nullptr);
+	vkDestroyDescriptorPool(bz::device.device, imguiPool, nullptr);
 }
 
 void UpdateImGuiFrame() {
@@ -1642,7 +1466,7 @@ int main(int argc, char* argv[]) {
 	}
 
 	// Wait until all commandbuffers are done so we can safely clean up semaphores they might potentially be using.
-	vkDeviceWaitIdle(bz::device);
+	vkDeviceWaitIdle(bz::device.device);
 
 	CleanupImGui();
 

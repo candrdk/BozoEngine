@@ -190,6 +190,7 @@
     <ClCompile Include="..\Extern\imgui\imgui_tables.cpp" />
     <ClCompile Include="..\Extern\imgui\imgui_widgets.cpp" />
     <ClCompile Include="..\Extern\volk\volk.c" />
+    <ClCompile Include="Device.cpp" />
     <ClCompile Include="Logging.cpp" />
     <ClCompile Include="main.cpp" />
     <ClCompile Include="Swapchain.cpp" />
@@ -215,6 +216,7 @@
     <ClInclude Include="..\Extern\stb\stb_image.h" />
     <ClInclude Include="..\Extern\volk\volk.h" />
     <ClInclude Include="Camera.h" />
+    <ClInclude Include="Device.h" />
     <ClInclude Include="Logging.h" />
     <ClInclude Include="Swapchain.h" />
   </ItemGroup>
