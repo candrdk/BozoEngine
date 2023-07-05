@@ -960,7 +960,7 @@ void LoadModel() {
 			.color = { 1.0f, 1.0f, 1.0f },
 			.texCoord = {
 				mesh->texcoords[2 * index.t + 0],
-				1.0f - mesh->texcoords[2 * index.t + 1]
+				mesh->texcoords[2 * index.t + 1]
 			}
 		});
 	}
@@ -1424,6 +1424,8 @@ void UpdateImGuiFrame() {
 }
 
 int main(int argc, char* argv[]) {
+	stbi_set_flip_vertically_on_load(true);
+
 	InitWindow(WIDTH, HEIGHT);
 	InitVulkan();
 
