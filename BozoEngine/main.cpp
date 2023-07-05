@@ -294,7 +294,7 @@ void CreateRenderPass() {
 	};
 
 	VkAttachmentDescription depthAttachment = {
-		.format = VK_FORMAT_D32_SFLOAT,
+		.format = VK_FORMAT_D24_UNORM_S8_UINT,
 		.samples = bz::msaaSamples,
 		.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
 		.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
@@ -573,12 +573,12 @@ void CreateDepthResources() {
 	// TODO: should query supported formats and select from them.
 
 	CreateImage(bz::swapchain.extent.width, bz::swapchain.extent.height, 1, bz::msaaSamples,
-		VK_FORMAT_D32_SFLOAT,
+		VK_FORMAT_D24_UNORM_S8_UINT,
 		VK_IMAGE_TILING_OPTIMAL,
 		VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
 		VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
 		bz::depthImage, bz::depthImageMemory);
-	bz::depthImageView = CreateImageView(bz::depthImage, VK_FORMAT_D32_SFLOAT, VK_IMAGE_ASPECT_DEPTH_BIT, 1);
+	bz::depthImageView = CreateImageView(bz::depthImage, VK_FORMAT_D24_UNORM_S8_UINT, VK_IMAGE_ASPECT_DEPTH_BIT, 1);
 }
 
 void CreateFramebuffers() {
