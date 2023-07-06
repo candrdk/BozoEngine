@@ -183,6 +183,12 @@ Device CreateDevice(GLFWwindow* window) {
 	VkQueue queue = CreateQueue(device, queueFamilyIndex);
 	VkCommandPool commandPool = CreateCommandPool(device, queueFamilyIndex);
 
+	VkPhysicalDeviceFeatures enabledFeatures = { .samplerAnisotropy = VK_TRUE };
+	VkPhysicalDeviceProperties properties;
+	vkGetPhysicalDeviceProperties(physicalDevice, &properties);
+	VkPhysicalDeviceMemoryProperties memoryProperties;
+	vkGetPhysicalDeviceMemoryProperties(physicalDevice, &memoryProperties);
+
 	return {
 		.instance = instance,
 		.debugMessenger = debugMessenger,
@@ -193,7 +199,10 @@ Device CreateDevice(GLFWwindow* window) {
 			.queue = queue,
 			.index = queueFamilyIndex
 		},
-		.commandPool = commandPool
+		.commandPool = commandPool,
+		.enabledFeatures = enabledFeatures,
+		.properties = properties,
+		.memoryProperties = memoryProperties
 	};
 }
 

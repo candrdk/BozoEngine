@@ -14,9 +14,6 @@
 #include <glm/gtc/matrix_transform.hpp>		// glm::rotate
 
 #pragma warning(disable : 26451 6262)
-	#define STB_IMAGE_IMPLEMENTATION
-	#include <stb_image.h>
-
 	#define FAST_OBJ_IMPLEMENTATION
 	#include <fast_obj.h>
 #pragma warning(default : 26451 6262)
@@ -24,6 +21,7 @@
 #include "Logging.h"
 #include "Device.h"
 #include "Swapchain.h"
+#include "Texture.h"
 #include "Camera.h"
 
 constexpr u32 WIDTH = 800;
@@ -105,11 +103,7 @@ namespace bz {
 	VkSemaphore renderFinishedSemaphores[MAX_FRAMES_IN_FLIGHT];
 	VkFence inFlightFences[MAX_FRAMES_IN_FLIGHT];
 
-	u32 textureMipLevels;
-	VkImage textureImage;
-	VkDeviceMemory textureImageMemory;
-	VkImageView textureImageView;
-	VkSampler textureSampler;
+	Texture texture;
 
 	VkImage depthImage;
 	VkDeviceMemory depthImageMemory;
@@ -701,237 +695,6 @@ void CopyBuffer(VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize size) {
 	EndSingleTimeCommands(commandBuffer);
 }
 
-void TransitionImageLayout(VkCommandBuffer commandBuffer, VkImage image, VkFormat format, VkImageLayout oldLayout, VkImageLayout newLayout, u32 mipLevels) {
-	//VkCommandBuffer commandBuffer = BeginSingleTimeCommands();
-
-	VkImageMemoryBarrier barrier = {
-		.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
-		.oldLayout = oldLayout,
-		.newLayout = newLayout,
-		.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-		.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-		.image = image,
-		.subresourceRange = {
-			.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-			.baseMipLevel = 0,
-			.levelCount = mipLevels,
-			.baseArrayLayer = 0,
-			.layerCount = 1
-		}
-	};
-
-	VkPipelineStageFlags sourceStage;
-	VkPipelineStageFlags destinationStage;
-
-	if (oldLayout == VK_IMAGE_LAYOUT_UNDEFINED && newLayout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL) {
-		barrier.srcAccessMask = 0;
-		barrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-
-		sourceStage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
-		destinationStage = VK_PIPELINE_STAGE_TRANSFER_BIT;
-	}
-	else if (oldLayout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL && newLayout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL) {
-		barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-		barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
-
-		sourceStage = VK_PIPELINE_STAGE_TRANSFER_BIT;
-		destinationStage = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
-	}
-	else {
-		Check(false, "Unsupported layout transition");
-	}
-
-	vkCmdPipelineBarrier(commandBuffer, sourceStage, destinationStage, 0, 0, nullptr, 0, nullptr, 1, &barrier);
-
-	//EndSingleTimeCommands(commandBuffer);
-}
-
-void CopyBufferToImage(VkCommandBuffer commandBuffer, VkBuffer buffer, VkImage image, u32 width, u32 height) {
-	//VkCommandBuffer commandBuffer = BeginSingleTimeCommands();
-
-	VkBufferImageCopy region = {
-		.bufferOffset = 0,
-		.bufferRowLength = 0,
-		.bufferImageHeight = 0,
-		.imageSubresource = {
-			.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-			.mipLevel = 0,
-			.baseArrayLayer = 0,
-			.layerCount = 1
-		},
-		.imageOffset = { 0, 0, 0},
-		.imageExtent = {
-			.width = width,
-			.height = height,
-			.depth = 1
-		}
-	};
-
-	vkCmdCopyBufferToImage(commandBuffer, buffer, image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
-
-	//EndSingleTimeCommands(commandBuffer);
-}
-
-void GenerateMipmaps(VkCommandBuffer commandBuffer, VkImage image, VkFormat imageFormat, i32 width, i32 height, u32 mipLevels) {
-	VkFormatProperties formatProperties;
-	vkGetPhysicalDeviceFormatProperties(bz::device.physicalDevice, imageFormat, &formatProperties);
-	Check(formatProperties.optimalTilingFeatures & VK_FORMAT_FEATURE_SAMPLED_IMAGE_FILTER_LINEAR_BIT, "Texture image does not support linear blitting");
-
-	VkImageMemoryBarrier barrier = {
-		.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
-		.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-		.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-		.image = image,
-		.subresourceRange = {
-			.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-			.levelCount = 1,
-			.baseArrayLayer = 0,
-			.layerCount = 1,
-		}
-	};
-
-	i32 mipWidth = width;
-	i32 mipHeight = height;
-	for (u32 i = 1; i < mipLevels; i++) {
-		barrier.subresourceRange.baseMipLevel = i - 1;
-		barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-		barrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
-		barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-		barrier.dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
-
-		vkCmdPipelineBarrier(commandBuffer, 
-			VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 0, 
-			0, nullptr, 
-			0, nullptr, 
-			1, &barrier);
-
-		VkImageBlit blit = {
-			.srcSubresource = {
-				.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-				.mipLevel = i - 1,
-				.baseArrayLayer = 0,
-				.layerCount = 1
-			},
-			.srcOffsets = {
-				{ 0, 0, 0 },
-				{ mipWidth, mipHeight, 1 }
-			},
-			.dstSubresource = {
-				.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-				.mipLevel = i,
-				.baseArrayLayer = 0,
-				.layerCount = 1
-			},
-			.dstOffsets = { 
-				{ 0, 0, 0 },
-				{ mipWidth > 1 ? mipWidth / 2 : 1, mipHeight > 1 ? mipHeight / 2 : 1, 1 }
-			}
-		};
-
-		vkCmdBlitImage(commandBuffer, image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &blit, VK_FILTER_LINEAR);
-
-		barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
-		barrier.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-		barrier.srcAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
-		barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
-
-		vkCmdPipelineBarrier(commandBuffer,
-			VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, 0,
-			0, nullptr,
-			0, nullptr,
-			1, &barrier);
-
-		if (mipWidth  > 1)	mipWidth /= 2;
-		if (mipHeight > 1)	mipHeight /= 2;
-	}
-
-	barrier.subresourceRange.baseMipLevel = mipLevels - 1;
-	barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-	barrier.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-	barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-	barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
-
-	vkCmdPipelineBarrier(commandBuffer,
-		VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, 0,
-		0, nullptr,
-		0, nullptr,
-		1, &barrier);
-}
-
-void CreateTextureImage() {
-	i32 width, height, channels;
-	stbi_uc* pixels = stbi_load(TEXTURE_PATH, &width, &height, &channels, STBI_rgb_alpha);
-	Check(pixels != nullptr, "Failed to load: `%s`", TEXTURE_PATH);
-
-	bz::textureMipLevels = (u32)(std::floor(std::log2(std::max(width, height))) + 1);
-	VkDeviceSize size = width * height * STBI_rgb_alpha;
-
-	VkBuffer stagingBuffer;
-	VkDeviceMemory stagingBufferMemory;
-	CreateBuffer(size,
-		VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
-		VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-		stagingBuffer, stagingBufferMemory);
-
-	void* data;
-	vkMapMemory(bz::device.device, stagingBufferMemory, 0, size, 0, &data);
-	memcpy(data, pixels, size);
-	vkUnmapMemory(bz::device.device, stagingBufferMemory);
-
-	stbi_image_free(pixels);
-
-	CreateImage(width, height, bz::textureMipLevels, VK_SAMPLE_COUNT_1_BIT,
-		VK_FORMAT_R8G8B8A8_SRGB, 
-		VK_IMAGE_TILING_OPTIMAL, 
-		VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
-		VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, 
-		bz::textureImage, bz::textureImageMemory);
-
-	// Combine transition/copies into a single command buffer
-	// If stuff breaks, revert to calling BeginSingleTimeCommands inside every helper function.
-	VkCommandBuffer setupCommandBuffer = BeginSingleTimeCommands();
-
-	TransitionImageLayout(setupCommandBuffer, bz::textureImage, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, bz::textureMipLevels);
-	CopyBufferToImage(setupCommandBuffer, stagingBuffer, bz::textureImage, width, height);
-	//TransitionImageLayout(setupCommandBuffer, bz::textureImage, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, bz::textureMipLevels);
-	GenerateMipmaps(setupCommandBuffer, bz::textureImage, VK_FORMAT_R8G8B8A8_SRGB, width, height, bz::textureMipLevels);
-
-	EndSingleTimeCommands(setupCommandBuffer);
-
-	vkDestroyBuffer(bz::device.device, stagingBuffer, nullptr);
-	vkFreeMemory(bz::device.device, stagingBufferMemory, nullptr);
-}
-
-void CreateTextureImageView() {
-	bz::textureImageView = CreateImageView(bz::textureImage, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_ASPECT_COLOR_BIT, bz::textureMipLevels);
-}
-
-void CreateTextureSampler() {
-	VkPhysicalDeviceProperties properties;
-	vkGetPhysicalDeviceProperties(bz::device.physicalDevice, &properties);
-
-	VkSamplerCreateInfo samplerInfo = {
-		.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
-		.magFilter = VK_FILTER_LINEAR,
-		.minFilter = VK_FILTER_LINEAR,
-		.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR,
-		.addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT,
-		.addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT,
-		.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT,
-		.mipLodBias = 0.0f,
-		.anisotropyEnable = VK_TRUE,
-		.maxAnisotropy = properties.limits.maxSamplerAnisotropy,
-		.compareEnable = VK_FALSE,
-		.compareOp = VK_COMPARE_OP_ALWAYS,
-		.minLod = 0.0f,
-		.maxLod = (float)bz::textureMipLevels,
-		.borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK,
-		.unnormalizedCoordinates = VK_FALSE
-	};
-
-	VkCheck(vkCreateSampler(bz::device.device, &samplerInfo, nullptr, &bz::textureSampler), "Failed to create texture sampler");
-}
-
 void LoadModel() {
 	fastObjMesh* mesh = fast_obj_read(MODEL_PATH);
 	Check(mesh != nullptr, "Failed to load obj file: `%s`", MODEL_PATH);
@@ -1053,12 +816,6 @@ void CreateDescriptorSets() {
 			.range = sizeof(UniformBufferObject)
 		};
 
-		VkDescriptorImageInfo imageInfo = {
-			.sampler = bz::textureSampler,
-			.imageView = bz::textureImageView,
-			.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
-		};
-
 		VkWriteDescriptorSet descriptorWrites[] = {
 			{
 				.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
@@ -1076,7 +833,7 @@ void CreateDescriptorSets() {
 				.dstArrayElement = 0,
 				.descriptorCount = 1,
 				.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-				.pImageInfo = &imageInfo
+				.pImageInfo = &bz::texture.descriptor
 			}
 		};
 
@@ -1187,9 +944,7 @@ void InitVulkan() {
 
 	CreateDescriptorPool();
 
-	CreateTextureImage();
-	CreateTextureImageView();
-	CreateTextureSampler();
+	bz::texture.LoadFromFile(TEXTURE_PATH, bz::device, bz::device.graphicsQueue.queue, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_USAGE_SAMPLED_BIT, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 
 	LoadModel();
 	CreateVertexBuffer();
@@ -1242,10 +997,7 @@ void RecreateSwapchain() {
 void CleanupVulkan() {
 	CleanupSwapchain();
 
-	vkDestroySampler(bz::device.device, bz::textureSampler, nullptr);
-	vkDestroyImageView(bz::device.device, bz::textureImageView, nullptr);
-	vkDestroyImage(bz::device.device, bz::textureImage, nullptr);
-	vkFreeMemory(bz::device.device, bz::textureImageMemory, nullptr);
+	bz::texture.Destroy(bz::device);
 
 	for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
 		vkDestroyBuffer(bz::device.device, bz::uniformBuffers[i], nullptr);
@@ -1424,8 +1176,6 @@ void UpdateImGuiFrame() {
 }
 
 int main(int argc, char* argv[]) {
-	stbi_set_flip_vertically_on_load(true);
-
 	InitWindow(WIDTH, HEIGHT);
 	InitVulkan();
 
