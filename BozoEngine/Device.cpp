@@ -209,16 +209,16 @@ void Device::CreateDevice(GLFWwindow* window) {
 		.transfer = GetQueueFamilyIndex(VK_QUEUE_TRANSFER_BIT)
 	};
 
-	device = CreateLogicalDevice(physicalDevice, queueIndex.graphics);
-	volkLoadDevice(device);
-	graphicsQueue = CreateQueue(device, queueIndex.graphics);
+	logicalDevice = CreateLogicalDevice(physicalDevice, queueIndex.graphics);
+	volkLoadDevice(logicalDevice);
+	graphicsQueue = CreateQueue(logicalDevice, queueIndex.graphics);
 
-	commandPool = CreateCommandPool(device, queueIndex.graphics);
+	commandPool = CreateCommandPool(logicalDevice, queueIndex.graphics);
 }
 
 void Device::DestroyDevice() {
-	vkDestroyCommandPool(device, commandPool, nullptr);
-	vkDestroyDevice(device, nullptr);
+	vkDestroyCommandPool(logicalDevice, commandPool, nullptr);
+	vkDestroyDevice(logicalDevice, nullptr);
 
 #if _DEBUG
 	vkDestroyDebugUtilsMessengerEXT(instance, debugMessenger, nullptr);
@@ -237,7 +237,7 @@ VkCommandBuffer Device::CreateCommandBuffer(VkCommandBufferLevel level, VkComman
 	};
 
 	VkCommandBuffer commandBuffer;
-	VkCheck(vkAllocateCommandBuffers(device, &allocInfo, &commandBuffer), "Failed to allocate command buffer");
+	VkCheck(vkAllocateCommandBuffers(logicalDevice, &allocInfo, &commandBuffer), "Failed to allocate command buffer");
 
 	VkCommandBufferBeginInfo beginInfo = {
 		.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
@@ -267,15 +267,15 @@ void Device::FlushCommandBuffer(VkCommandBuffer commandBuffer, VkQueue queue) co
 	// Create fence to ensure the command buffer has finished executing
 	VkFenceCreateInfo fenceInfo = { .sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO };
 	VkFence fence;
-	VkCheck(vkCreateFence(device, &fenceInfo, nullptr, &fence), "Failed to create fence");
+	VkCheck(vkCreateFence(logicalDevice, &fenceInfo, nullptr, &fence), "Failed to create fence");
 
 	VkCheck(vkQueueSubmit(queue, 1, &submitInfo, fence), "Failed to submit command buffer to queue");
 
 	// Wait for the fence to signal that the command buffer has finished executing
-	VkCheck(vkWaitForFences(device, 1, &fence, VK_TRUE, 1ull << 32), "Wait for fence failed");	// TODO: define a default timeout macro. For now, 1 << 32 ~ 5 seconds.
+	VkCheck(vkWaitForFences(logicalDevice, 1, &fence, VK_TRUE, 1ull << 32), "Wait for fence failed");	// TODO: define a default timeout macro. For now, 1 << 32 ~ 5 seconds.
 
-	vkDestroyFence(device, fence, nullptr);
-	vkFreeCommandBuffers(device, commandPool, 1, &commandBuffer);
+	vkDestroyFence(logicalDevice, fence, nullptr);
+	vkFreeCommandBuffers(logicalDevice, commandPool, 1, &commandBuffer);
 }
 
 u32 Device::GetMemoryType(u32 memoryTypeBits, VkMemoryPropertyFlags properties) const {

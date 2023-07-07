@@ -195,6 +195,8 @@
     <ClCompile Include="main.cpp" />
     <ClCompile Include="Swapchain.cpp" />
     <ClCompile Include="Texture.cpp" />
+    <ClCompile Include="Tools.cpp" />
+    <ClCompile Include="UIOverlay.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\Extern\fast_obj\fast_obj.h" />
@@ -222,6 +224,8 @@
     <ClInclude Include="Logging.h" />
     <ClInclude Include="Swapchain.h" />
     <ClInclude Include="Texture.h" />
+    <ClInclude Include="Tools.h" />
+    <ClInclude Include="UIOverlay.h" />
   </ItemGroup>
   <ItemGroup>
     <None Include="shaders\triangle.frag.glsl" />

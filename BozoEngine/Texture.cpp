@@ -8,42 +8,6 @@
 	#include <stb_image.h>
 #pragma warning(default : 26451 6262)
 
-// TODO: move this later - probably to some vulkan::utility header?
-void SetImageLayout(VkCommandBuffer commandBuffer, VkImage image, VkImageLayout oldLayout, VkImageLayout newLayout, VkImageSubresourceRange subresourceRange) {
-	VkImageMemoryBarrier barrier = {
-		.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
-		.oldLayout = oldLayout,
-		.newLayout = newLayout,
-		.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-		.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-		.image = image,
-		.subresourceRange = subresourceRange
-	};
-
-	VkPipelineStageFlags sourceStage;
-	VkPipelineStageFlags destinationStage;
-
-	if (oldLayout == VK_IMAGE_LAYOUT_UNDEFINED && newLayout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL) {
-		barrier.srcAccessMask = 0;
-		barrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-
-		sourceStage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
-		destinationStage = VK_PIPELINE_STAGE_TRANSFER_BIT;
-	}
-	else if (oldLayout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL && newLayout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL) {
-		barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-		barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
-
-		sourceStage = VK_PIPELINE_STAGE_TRANSFER_BIT;
-		destinationStage = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
-	}
-	else {
-		Check(false, "Unsupported layout transition");
-	}
-
-	vkCmdPipelineBarrier(commandBuffer, sourceStage, destinationStage, 0, 0, nullptr, 0, nullptr, 1, &barrier);
-}
-
 static void GenerateMipmaps(VkCommandBuffer commandBuffer, const Device& device, VkImage image, VkFormat imageFormat, i32 width, i32 height, u32 mipLevels) {
 	VkFormatProperties formatProperties;
 	vkGetPhysicalDeviceFormatProperties(device.physicalDevice, imageFormat, &formatProperties);
@@ -131,10 +95,10 @@ static void GenerateMipmaps(VkCommandBuffer commandBuffer, const Device& device,
 }
 
 void Texture::Destroy(const Device& device) {
-	vkDestroyImageView(device.device, view, nullptr);
-	vkDestroyImage(device.device, image, nullptr);
-	vkDestroySampler(device.device, sampler, nullptr);
-	vkFreeMemory(device.device, deviceMemory, nullptr);
+	vkDestroyImageView(device.logicalDevice, view, nullptr);
+	vkDestroyImage(device.logicalDevice, image, nullptr);
+	vkDestroySampler(device.logicalDevice, sampler, nullptr);
+	vkFreeMemory(device.logicalDevice, deviceMemory, nullptr);
 }
 
 void Texture::LoadFromFile(const char* path, const Device& device, VkQueue copyQueue, VkFormat format, VkImageUsageFlags usage, VkImageLayout requestedImageLayout) {
@@ -158,9 +122,9 @@ void Texture::LoadFromFile(const char* path, const Device& device, VkQueue copyQ
 		.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
 		.sharingMode = VK_SHARING_MODE_EXCLUSIVE
 	};
-	VkCheck(vkCreateBuffer(device.device, &stagingBufferCreateInfo, nullptr, &stagingBuffer), "Failed to create staging buffer");
+	VkCheck(vkCreateBuffer(device.logicalDevice, &stagingBufferCreateInfo, nullptr, &stagingBuffer), "Failed to create staging buffer");
 
-	vkGetBufferMemoryRequirements(device.device, stagingBuffer, &memRequirements);
+	vkGetBufferMemoryRequirements(device.logicalDevice, stagingBuffer, &memRequirements);
 
 	VkMemoryAllocateInfo allocInfo = {
 		.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
@@ -168,14 +132,14 @@ void Texture::LoadFromFile(const char* path, const Device& device, VkQueue copyQ
 		.memoryTypeIndex = device.GetMemoryType(memRequirements.memoryTypeBits, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT)
 	};
 
-	VkCheck(vkAllocateMemory(device.device, &allocInfo, nullptr, &stagingBufferMemory), "Failed to allocate vertex buffer memory");
-	VkCheck(vkBindBufferMemory(device.device, stagingBuffer, stagingBufferMemory, 0), "Failed to bind DeviceMemory to VkBuffer");
+	VkCheck(vkAllocateMemory(device.logicalDevice, &allocInfo, nullptr, &stagingBufferMemory), "Failed to allocate vertex buffer memory");
+	VkCheck(vkBindBufferMemory(device.logicalDevice, stagingBuffer, stagingBufferMemory, 0), "Failed to bind DeviceMemory to VkBuffer");
 
 	// Copy texture data into the staging buffer
 	void* data;
-	VkCheck(vkMapMemory(device.device, stagingBufferMemory, 0, memRequirements.size, 0, &data), "Failed to map staging buffer memory");
+	VkCheck(vkMapMemory(device.logicalDevice, stagingBufferMemory, 0, memRequirements.size, 0, &data), "Failed to map staging buffer memory");
 	memcpy(data, pixels, size);
-	vkUnmapMemory(device.device, stagingBufferMemory);
+	vkUnmapMemory(device.logicalDevice, stagingBufferMemory);
 
 	// Setup buffer copy regions for each mip level.
 	// (We don't use this yet, so mipLevels is always 1)
@@ -209,15 +173,15 @@ void Texture::LoadFromFile(const char* path, const Device& device, VkQueue copyQ
 
 	CreateImage(device, format, usage);
 
-	vkGetImageMemoryRequirements(device.device, image, &memRequirements);
+	vkGetImageMemoryRequirements(device.logicalDevice, image, &memRequirements);
 
 	allocInfo = {
 		.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
 		.allocationSize = memRequirements.size,
 		.memoryTypeIndex = device.GetMemoryType(memRequirements.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT)
 	};
-	VkCheck(vkAllocateMemory(device.device, &allocInfo, nullptr, &deviceMemory), "Failed to allocate image memory");
-	VkCheck(vkBindImageMemory(device.device, image, deviceMemory, 0), "Failed to bind VkDeviceMemory to VkImage");
+	VkCheck(vkAllocateMemory(device.logicalDevice, &allocInfo, nullptr, &deviceMemory), "Failed to allocate image memory");
+	VkCheck(vkBindImageMemory(device.logicalDevice, image, deviceMemory, 0), "Failed to bind VkDeviceMemory to VkImage");
 
 	VkImageSubresourceRange subResourceRange = {
 		.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
@@ -229,7 +193,7 @@ void Texture::LoadFromFile(const char* path, const Device& device, VkQueue copyQ
 	VkCommandBuffer copyCmd = device.CreateCommandBuffer(VK_COMMAND_BUFFER_LEVEL_PRIMARY);
 
 	// Image barrier
-	SetImageLayout(copyCmd, image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, subResourceRange);
+	SetImageLayout2(copyCmd, image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, subResourceRange);
 
 	// Copy mip levels from staging buffer to device local memory
 	vkCmdCopyBufferToImage(copyCmd, stagingBuffer, image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, (u32)bufferCopyRegions.size(), bufferCopyRegions.data());
@@ -241,14 +205,14 @@ void Texture::LoadFromFile(const char* path, const Device& device, VkQueue copyQ
 		GenerateMipmaps(copyCmd, device, image, format, width, height, mipLevels);
 	}
 	else {
-		SetImageLayout(copyCmd, image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, layout, subResourceRange);
+		SetImageLayout2(copyCmd, image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, layout, subResourceRange);
 	}
 
 	device.FlushCommandBuffer(copyCmd, copyQueue);
 
 	// Clean up staging resources
-	vkDestroyBuffer(device.device, stagingBuffer, nullptr);
-	vkFreeMemory(device.device, stagingBufferMemory, nullptr);
+	vkDestroyBuffer(device.logicalDevice, stagingBuffer, nullptr);
+	vkFreeMemory(device.logicalDevice, stagingBufferMemory, nullptr);
 	stbi_image_free(pixels);
 
 	// Create a default sampler
@@ -281,10 +245,10 @@ void Texture::CreateFromBuffer(void* buffer, VkDeviceSize bufferSize, const Devi
 		.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
 		.sharingMode = VK_SHARING_MODE_EXCLUSIVE
 	};
-	VkCheck(vkCreateBuffer(device.device, &stagingBufferCreateInfo, nullptr, &stagingBuffer), "Failed to create staging buffer");
+	VkCheck(vkCreateBuffer(device.logicalDevice, &stagingBufferCreateInfo, nullptr, &stagingBuffer), "Failed to create staging buffer");
 
 	VkMemoryRequirements memRequirements;
-	vkGetBufferMemoryRequirements(device.device, stagingBuffer, &memRequirements);
+	vkGetBufferMemoryRequirements(device.logicalDevice, stagingBuffer, &memRequirements);
 
 	VkMemoryAllocateInfo allocInfo = {
 		.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
@@ -292,14 +256,14 @@ void Texture::CreateFromBuffer(void* buffer, VkDeviceSize bufferSize, const Devi
 		.memoryTypeIndex = device.GetMemoryType(memRequirements.memoryTypeBits, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT)
 	};
 
-	VkCheck(vkAllocateMemory(device.device, &allocInfo, nullptr, &stagingBufferMemory), "Failed to allocate vertex buffer memory");
-	VkCheck(vkBindBufferMemory(device.device, stagingBuffer, stagingBufferMemory, 0), "Failed to bind DeviceMemory to VkBuffer");
+	VkCheck(vkAllocateMemory(device.logicalDevice, &allocInfo, nullptr, &stagingBufferMemory), "Failed to allocate vertex buffer memory");
+	VkCheck(vkBindBufferMemory(device.logicalDevice, stagingBuffer, stagingBufferMemory, 0), "Failed to bind DeviceMemory to VkBuffer");
 
 	// Copy texture data into the staging buffer
 	void* data;
-	VkCheck(vkMapMemory(device.device, stagingBufferMemory, 0, memRequirements.size, 0, &data), "Failed to map staging buffer memory");
+	VkCheck(vkMapMemory(device.logicalDevice, stagingBufferMemory, 0, memRequirements.size, 0, &data), "Failed to map staging buffer memory");
 	memcpy(data, buffer, bufferSize);
-	vkUnmapMemory(device.device, stagingBufferMemory);
+	vkUnmapMemory(device.logicalDevice, stagingBufferMemory);
 
 	VkBufferImageCopy bufferCopyRegion = {
 		.bufferOffset = 0,
@@ -325,15 +289,15 @@ void Texture::CreateFromBuffer(void* buffer, VkDeviceSize bufferSize, const Devi
 
 	CreateImage(device, format, usage);
 
-	vkGetImageMemoryRequirements(device.device, image, &memRequirements);
+	vkGetImageMemoryRequirements(device.logicalDevice, image, &memRequirements);
 
 	allocInfo = {
 		.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
 		.allocationSize = memRequirements.size,
 		.memoryTypeIndex = device.GetMemoryType(memRequirements.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT)
 	};
-	VkCheck(vkAllocateMemory(device.device, &allocInfo, nullptr, &deviceMemory), "Failed to allocate image memory");
-	VkCheck(vkBindImageMemory(device.device, image, deviceMemory, 0), "Failed to bind VkDeviceMemory to VkImage");
+	VkCheck(vkAllocateMemory(device.logicalDevice, &allocInfo, nullptr, &deviceMemory), "Failed to allocate image memory");
+	VkCheck(vkBindImageMemory(device.logicalDevice, image, deviceMemory, 0), "Failed to bind VkDeviceMemory to VkImage");
 
 	VkImageSubresourceRange subResourceRange = {
 		.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
@@ -345,7 +309,7 @@ void Texture::CreateFromBuffer(void* buffer, VkDeviceSize bufferSize, const Devi
 	VkCommandBuffer copyCmd = device.CreateCommandBuffer(VK_COMMAND_BUFFER_LEVEL_PRIMARY);
 
 	// Image barrier
-	SetImageLayout(copyCmd, image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, subResourceRange);
+	SetImageLayout2(copyCmd, image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, subResourceRange);
 
 	// Copy mip levels from staging buffer to device local memory
 	vkCmdCopyBufferToImage(copyCmd, stagingBuffer, image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &bufferCopyRegion);
@@ -357,14 +321,14 @@ void Texture::CreateFromBuffer(void* buffer, VkDeviceSize bufferSize, const Devi
 		GenerateMipmaps(copyCmd, device, image, format, width, height, mipLevels);
 	}
 	else {
-		SetImageLayout(copyCmd, image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, layout, subResourceRange);
+		SetImageLayout2(copyCmd, image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, layout, subResourceRange);
 	}
 
 	device.FlushCommandBuffer(copyCmd, copyQueue);
 
 	// Clean up staging resources
-	vkDestroyBuffer(device.device, stagingBuffer, nullptr);
-	vkFreeMemory(device.device, stagingBufferMemory, nullptr);
+	vkDestroyBuffer(device.logicalDevice, stagingBuffer, nullptr);
+	vkFreeMemory(device.logicalDevice, stagingBufferMemory, nullptr);
 
 	// Create a default sampler
 	CreateDefaultSampler(device);
@@ -399,7 +363,7 @@ void Texture::CreateImage(const Device& device, VkFormat format, VkImageUsageFla
 		.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED
 	};
 
-	VkCheck(vkCreateImage(device.device, &imageInfo, nullptr, &image), "Failed to create image");
+	VkCheck(vkCreateImage(device.logicalDevice, &imageInfo, nullptr, &image), "Failed to create image");
 }
 
 void Texture::CreateDefaultSampler(const Device& device) {
@@ -424,7 +388,7 @@ void Texture::CreateDefaultSampler(const Device& device) {
 		.borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK
 	};
 
-	VkCheck(vkCreateSampler(device.device, &samplerInfo, nullptr, &sampler), "Failed to create texture sampler");
+	VkCheck(vkCreateSampler(device.logicalDevice, &samplerInfo, nullptr, &sampler), "Failed to create texture sampler");
 }
 
 void Texture::CreateImageView(const Device& device, VkFormat format) {
@@ -442,5 +406,5 @@ void Texture::CreateImageView(const Device& device, VkFormat format) {
 		}
 	};
 
-	VkCheck(vkCreateImageView(device.device, &viewInfo, nullptr, &view), "Failed to create image view");
+	VkCheck(vkCreateImageView(device.logicalDevice, &viewInfo, nullptr, &view), "Failed to create image view");
 }

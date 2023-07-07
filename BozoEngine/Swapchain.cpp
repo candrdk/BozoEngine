@@ -88,13 +88,13 @@ void Swapchain::CreateSwapchain(GLFWwindow* window, const Device& device, Swapch
 		.oldSwapchain = desc.oldSwapchain
 	};
 
-	VkCheck(vkCreateSwapchainKHR(device.device, &createInfo, nullptr, &swapchain), "Failed to create swapchain");
+	VkCheck(vkCreateSwapchainKHR(device.logicalDevice, &createInfo, nullptr, &swapchain), "Failed to create swapchain");
 
 	// We only specified the minimum number of images we want, so we have to check how many were actually created
 	u32 imageCount = 0;
-	vkGetSwapchainImagesKHR(device.device, swapchain, &imageCount, nullptr);
+	vkGetSwapchainImagesKHR(device.logicalDevice, swapchain, &imageCount, nullptr);
 	images.resize(imageCount);
-	vkGetSwapchainImagesKHR(device.device, swapchain, &imageCount, images.data());
+	vkGetSwapchainImagesKHR(device.logicalDevice, swapchain, &imageCount, images.data());
 
 	imageViews.resize(imageCount);
 	for (u32 i = 0; i < imageCount; i++) {
@@ -112,16 +112,16 @@ void Swapchain::CreateSwapchain(GLFWwindow* window, const Device& device, Swapch
 			}
 		};
 
-		VkCheck(vkCreateImageView(device.device, &viewInfo, nullptr, &imageViews[i]), "Failed to create image view");
+		VkCheck(vkCreateImageView(device.logicalDevice, &viewInfo, nullptr, &imageViews[i]), "Failed to create image view");
 	}
 }
 
 void Swapchain::DestroySwapchain(const Device& device, Swapchain& swapchain) {
 	for (auto imageView : swapchain.imageViews) {
-		vkDestroyImageView(device.device, imageView, nullptr);
+		vkDestroyImageView(device.logicalDevice, imageView, nullptr);
 	}
 
-	vkDestroySwapchainKHR(device.device, swapchain.swapchain, nullptr);
+	vkDestroySwapchainKHR(device.logicalDevice, swapchain.swapchain, nullptr);
 
 	swapchain = {};
 }
