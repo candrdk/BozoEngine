@@ -933,7 +933,11 @@ void RecreateSwapchain() {
 	vkDeviceWaitIdle(bz::device.device);
 
 	CleanupSwapchain();
-	bz::swapchain.CreateSwapchain(window, bz::device, { .enableVSync = true, .prefferedImageCount = 2, .oldSwapchain = bz::swapchain.swapchain });
+	bz::swapchain.CreateSwapchain(window, bz::device, { 
+		.enableVSync = true, 
+		.prefferedImageCount = 2, 
+		.oldSwapchain = VK_NULL_HANDLE 
+	});
 
 	CreateColorResources();
 	CreateDepthResources();
