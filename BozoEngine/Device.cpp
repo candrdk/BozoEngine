@@ -81,22 +81,36 @@ static VkPhysicalDevice CreatePhysicalDevice(VkInstance instance) {
 	Check(false, "Failed to find a suitable GPU");
 }
 
-static u32 GetGraphicsQueueIndex(VkPhysicalDevice physicalDevice, VkSurfaceKHR surface) {
-	u32 queueCount = 0;
-	vkGetPhysicalDeviceQueueFamilyProperties(physicalDevice, &queueCount, nullptr);
-	std::vector<VkQueueFamilyProperties> queues(queueCount);
-	vkGetPhysicalDeviceQueueFamilyProperties(physicalDevice, &queueCount, queues.data());
+u32 Device::GetQueueFamilyIndex(VkQueueFlags queueFlags) const {
+	// Find dedicated queue for compute
+	if ((queueFlags & VK_QUEUE_COMPUTE_BIT) == queueFlags) {
+		for (u32 i = 0; i < queueFamilyProperties.size(); i++) {
+			VkQueueFlags flags = queueFamilyProperties[i].queueFlags;
+			if ((flags & VK_QUEUE_COMPUTE_BIT) && ((flags & VK_QUEUE_GRAPHICS_BIT) == 0)) {
+				return i;
+			}
+		}
+	}
 
-	for (u32 i = 0; i < queueCount; i++) {
-		VkBool32 presentSupport = false;
-		VkCheck(vkGetPhysicalDeviceSurfaceSupportKHR(physicalDevice, i, surface, &presentSupport));
+	// Find dedicated queue for transfer
+	if ((queueFlags & VK_QUEUE_TRANSFER_BIT) == queueFlags) {
+		for (u32 i = 0; i < queueFamilyProperties.size(); i++) {
+			VkQueueFlags flags = queueFamilyProperties[i].queueFlags;
+			if ((flags & VK_QUEUE_TRANSFER_BIT) && ((flags & VK_QUEUE_GRAPHICS_BIT) == 0) && ((flags & VK_QUEUE_COMPUTE_BIT) == 0)) {
+				return i;
+			}
+		}
+	}
 
-		if (presentSupport && (queues[i].queueFlags & VK_QUEUE_GRAPHICS_BIT)) {
+	// For other queue types or if no dedicated queue is found, return the first one to support the requested flag
+	for (u32 i = 0; i < queueFamilyProperties.size(); i++) {
+		VkQueueFlags flags = queueFamilyProperties[i].queueFlags;
+		if ((flags & queueFlags) == queueFlags) {
 			return i;
 		}
 	}
 
-	Check(false, "No queue family supporting graphics + present found");
+	Check(false, "Could not find a queue family with flags: %u", queueFlags);
 }
 
 static VkQueue CreateQueue(VkDevice device, u32 queueFamilyIndex) {
@@ -105,7 +119,7 @@ static VkQueue CreateQueue(VkDevice device, u32 queueFamilyIndex) {
 	return queue;
 }
 
-static VkDevice CreateDevice(VkPhysicalDevice physicalDevice, u32 queueFamilyIndex) {
+static VkDevice CreateLogicalDevice(VkPhysicalDevice physicalDevice, u32 queueFamilyIndex) {
 	float queuePriority[] = { 1.0f };
 	VkDeviceQueueCreateInfo queueCreateInfo = {
 		.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO,
@@ -166,54 +180,125 @@ static VkCommandPool CreateCommandPool(VkDevice device, u32 queueFamilyIndex) {
 	return commandPool;
 }
 
-Device CreateDevice(GLFWwindow* window) {
+void Device::CreateDevice(GLFWwindow* window) {
 	VkCheck(volkInitialize(), "Failed to initialize volk");
 
-	VkInstance instance = CreateInstance();
+	instance = CreateInstance();
 	volkLoadInstance(instance);
 
-	VkDebugUtilsMessengerEXT debugMessenger = CreateDebugMessenger(instance);
-	VkSurfaceKHR surface = CreateSurface(window, instance);
-	VkPhysicalDevice physicalDevice = CreatePhysicalDevice(instance);
-	u32 queueFamilyIndex = GetGraphicsQueueIndex(physicalDevice, surface);
+	debugMessenger = CreateDebugMessenger(instance);
 
-	VkDevice device = CreateDevice(physicalDevice, queueFamilyIndex);
-	volkLoadDevice(device);
+	surface = CreateSurface(window, instance);
+	physicalDevice = CreatePhysicalDevice(instance);
 
-	VkQueue queue = CreateQueue(device, queueFamilyIndex);
-	VkCommandPool commandPool = CreateCommandPool(device, queueFamilyIndex);
+	// Take this as a parameter, and validate that device supports them.
+	enabledFeatures = { .samplerAnisotropy = VK_TRUE };
 
-	VkPhysicalDeviceFeatures enabledFeatures = { .samplerAnisotropy = VK_TRUE };
-	VkPhysicalDeviceProperties properties;
 	vkGetPhysicalDeviceProperties(physicalDevice, &properties);
-	VkPhysicalDeviceMemoryProperties memoryProperties;
 	vkGetPhysicalDeviceMemoryProperties(physicalDevice, &memoryProperties);
 
-	return {
-		.instance = instance,
-		.debugMessenger = debugMessenger,
-		.surface = surface,
-		.physicalDevice = physicalDevice,
-		.device = device,
-		.graphicsQueue = {
-			.queue = queue,
-			.index = queueFamilyIndex
-		},
-		.commandPool = commandPool,
-		.enabledFeatures = enabledFeatures,
-		.properties = properties,
-		.memoryProperties = memoryProperties
+	u32 queueCount = 0;
+	vkGetPhysicalDeviceQueueFamilyProperties(physicalDevice, &queueCount, nullptr);
+	std::vector<VkQueueFamilyProperties> queueFamilyProperties(queueCount);
+	vkGetPhysicalDeviceQueueFamilyProperties(physicalDevice, &queueCount, queueFamilyProperties.data());
+
+	queueIndex = {
+		.graphics = GetQueueFamilyIndex(VK_QUEUE_GRAPHICS_BIT),
+		.compute  = GetQueueFamilyIndex(VK_QUEUE_COMPUTE_BIT),
+		.transfer = GetQueueFamilyIndex(VK_QUEUE_TRANSFER_BIT)
 	};
+
+	device = CreateLogicalDevice(physicalDevice, queueIndex.graphics);
+	volkLoadDevice(device);
+	graphicsQueue = CreateQueue(device, queueIndex.graphics);
+
+	commandPool = CreateCommandPool(device, queueIndex.graphics);
 }
 
-void DestroyDevice(Device& device) {
-	vkDestroyCommandPool(device.device, device.commandPool, nullptr);
-	vkDestroyDevice(device.device, nullptr);
+void Device::DestroyDevice() {
+	vkDestroyCommandPool(device, commandPool, nullptr);
+	vkDestroyDevice(device, nullptr);
 
 #if _DEBUG
-	vkDestroyDebugUtilsMessengerEXT(device.instance, device.debugMessenger, nullptr);
+	vkDestroyDebugUtilsMessengerEXT(instance, debugMessenger, nullptr);
 #endif
 
-	vkDestroySurfaceKHR(device.instance, device.surface, nullptr);
-	vkDestroyInstance(device.instance, nullptr);
+	vkDestroySurfaceKHR(instance, surface, nullptr);
+	vkDestroyInstance(instance, nullptr);
+}
+
+VkCommandBuffer Device::CreateCommandBuffer(VkCommandBufferLevel level, VkCommandPool pool) const {
+	VkCommandBufferAllocateInfo allocInfo = {
+		.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
+		.commandPool = pool,
+		.level = level,
+		.commandBufferCount = 1
+	};
+
+	VkCommandBuffer commandBuffer;
+	VkCheck(vkAllocateCommandBuffers(device, &allocInfo, &commandBuffer), "Failed to allocate command buffer");
+
+	VkCommandBufferBeginInfo beginInfo = {
+		.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
+		.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT
+	};
+
+	VkCheck(vkBeginCommandBuffer(commandBuffer, &beginInfo), "Failed to begin command buffer");
+
+	return commandBuffer;
+}
+
+VkCommandBuffer Device::CreateCommandBuffer(VkCommandBufferLevel level) const {
+	return CreateCommandBuffer(level, commandPool);
+}
+
+void Device::FlushCommandBuffer(VkCommandBuffer commandBuffer, VkQueue queue) const {
+	Check(commandBuffer != VK_NULL_HANDLE, "Buffer was null");
+
+	VkCheck(vkEndCommandBuffer(commandBuffer), "Failed to end command buffer");
+
+	VkSubmitInfo submitInfo = {
+		.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
+		.commandBufferCount = 1,
+		.pCommandBuffers = &commandBuffer
+	};
+
+	// Create fence to ensure the command buffer has finished executing
+	VkFenceCreateInfo fenceInfo = { .sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO };
+	VkFence fence;
+	VkCheck(vkCreateFence(device, &fenceInfo, nullptr, &fence), "Failed to create fence");
+
+	VkCheck(vkQueueSubmit(queue, 1, &submitInfo, fence), "Failed to submit command buffer to queue");
+
+	// Wait for the fence to signal that the command buffer has finished executing
+	VkCheck(vkWaitForFences(device, 1, &fence, VK_TRUE, 1ull << 32), "Wait for fence failed");	// TODO: define a default timeout macro. For now, 1 << 32 ~ 5 seconds.
+
+	vkDestroyFence(device, fence, nullptr);
+	vkFreeCommandBuffers(device, commandPool, 1, &commandBuffer);
+}
+
+u32 Device::GetMemoryType(u32 memoryTypeBits, VkMemoryPropertyFlags properties) const {
+	for (u32 i = 0; i < memoryProperties.memoryTypeCount; i++) {
+		bool hasProperties = (properties & memoryProperties.memoryTypes[i].propertyFlags) == properties;
+		bool matchesMemoryType = memoryTypeBits & (1 << i);
+		if (matchesMemoryType && hasProperties) {
+			return i;
+		}
+	}
+
+	Check(false, "Failed to find a memory type with:\n\tproperties: %x.\n\tMemory bits: %x\n", properties, memoryTypeBits);
+}
+
+VkSampleCountFlagBits Device::GetMaxUsableSampleCount() const {
+	VkSampleCountFlags counts = properties.limits.framebufferColorSampleCounts
+		& properties.limits.framebufferDepthSampleCounts;
+
+	if (counts & VK_SAMPLE_COUNT_64_BIT) { return VK_SAMPLE_COUNT_64_BIT; }
+	if (counts & VK_SAMPLE_COUNT_32_BIT) { return VK_SAMPLE_COUNT_32_BIT; }
+	if (counts & VK_SAMPLE_COUNT_16_BIT) { return VK_SAMPLE_COUNT_16_BIT; }
+	if (counts & VK_SAMPLE_COUNT_8_BIT) { return VK_SAMPLE_COUNT_8_BIT; }
+	if (counts & VK_SAMPLE_COUNT_4_BIT) { return VK_SAMPLE_COUNT_4_BIT; }
+	if (counts & VK_SAMPLE_COUNT_2_BIT) { return VK_SAMPLE_COUNT_2_BIT; }
+
+	return VK_SAMPLE_COUNT_1_BIT;
 }

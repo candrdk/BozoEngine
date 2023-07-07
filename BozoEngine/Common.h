@@ -1,5 +1,7 @@
 #pragma once
 
+#include <Windows.h>
+
 #include <volk.h>
 #include <GLFW/glfw3.h>
 

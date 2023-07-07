@@ -6,7 +6,7 @@
 #pragma warning(disable : 26451 6262)
 	#define STB_IMAGE_IMPLEMENTATION
 	#include <stb_image.h>
-#pragma warning(enable : 26451 6262)
+#pragma warning(default : 26451 6262)
 
 // TODO: move this later - probably to some vulkan::utility header?
 void SetImageLayout(VkCommandBuffer commandBuffer, VkImage image, VkImageLayout oldLayout, VkImageLayout newLayout, VkImageSubresourceRange subresourceRange) {

@@ -86,6 +86,16 @@ namespace bz {
 	Device device;
 	Swapchain swapchain;
 
+	// Wrap these into a FrameBufferAttachment struct
+	VkImage depthImage;
+	VkDeviceMemory depthImageMemory;
+	VkImageView depthImageView;
+
+	VkImage colorImage;
+	VkDeviceMemory colorImageMemory;
+	VkImageView colorImageView;
+
+	// Wrap into a FrameBuffer struct containing FrameBufferAttachments
 	std::vector<VkFramebuffer> swapchainFramebuffers;
 
 	VkRenderPass renderPass;
@@ -103,11 +113,8 @@ namespace bz {
 	VkSemaphore renderFinishedSemaphores[MAX_FRAMES_IN_FLIGHT];
 	VkFence inFlightFences[MAX_FRAMES_IN_FLIGHT];
 
+	// Wrap these into Model/Mesh classes //
 	Texture texture;
-
-	VkImage depthImage;
-	VkDeviceMemory depthImageMemory;
-	VkImageView depthImageView;
 
 	std::vector<Vertex> vertices;
 	VkBuffer vertexBuffer;
@@ -116,15 +123,13 @@ namespace bz {
 	std::vector<u32> indices;
 	VkBuffer indexBuffer;
 	VkDeviceMemory indexBufferMemory;
+	////////////////////////////////////////
 
 	VkBuffer uniformBuffers[MAX_FRAMES_IN_FLIGHT];
 	VkDeviceMemory uniformBuffersMemory[MAX_FRAMES_IN_FLIGHT];
 	void* uniformBuffersMapped[MAX_FRAMES_IN_FLIGHT];
 
 	VkSampleCountFlagBits msaaSamples = VK_SAMPLE_COUNT_1_BIT;
-	VkImage colorImage;
-	VkDeviceMemory colorImageMemory;
-	VkImageView colorImageView;
 
 	bool framebufferResized = false;
 }
@@ -207,21 +212,6 @@ void PrintAvailableVulkanExtensions() {
 	for (u32 i = 0; i < extensionCount; i++) {
 		printf("\t%s\n", extensions[i].extensionName);
 	}
-}
-
-VkSampleCountFlagBits GetMaxUsableSampleCount(VkPhysicalDevice physicalDevice) {
-	VkPhysicalDeviceProperties properties;
-	vkGetPhysicalDeviceProperties(physicalDevice, &properties);
-	VkSampleCountFlags counts = properties.limits.framebufferColorSampleCounts & properties.limits.framebufferDepthSampleCounts;
-
-	if (counts & VK_SAMPLE_COUNT_64_BIT) { return VK_SAMPLE_COUNT_64_BIT; }
-	if (counts & VK_SAMPLE_COUNT_32_BIT) { return VK_SAMPLE_COUNT_32_BIT; }
-	if (counts & VK_SAMPLE_COUNT_16_BIT) { return VK_SAMPLE_COUNT_16_BIT; }
-	if (counts & VK_SAMPLE_COUNT_8_BIT)  { return VK_SAMPLE_COUNT_8_BIT;  }
-	if (counts & VK_SAMPLE_COUNT_4_BIT)  { return VK_SAMPLE_COUNT_4_BIT;  }
-	if (counts & VK_SAMPLE_COUNT_2_BIT)  { return VK_SAMPLE_COUNT_2_BIT;  }
-
-	return VK_SAMPLE_COUNT_1_BIT;
 }
 
 VkImageView CreateImageView(VkImage image, VkFormat format, VkImageAspectFlags aspectFlags, u32 mipLevels) {
@@ -676,8 +666,8 @@ void EndSingleTimeCommands(VkCommandBuffer commandBuffer) {
 		.pCommandBuffers = &commandBuffer
 	};
 
-	VkCheck(vkQueueSubmit(bz::device.graphicsQueue.queue, 1, &submitInfo, VK_NULL_HANDLE), "Failed to submit command buffer to queue");
-	VkCheck(vkQueueWaitIdle(bz::device.graphicsQueue.queue), "QueueWaitIdle failed");
+	VkCheck(vkQueueSubmit(bz::device.graphicsQueue, 1, &submitInfo, VK_NULL_HANDLE), "Failed to submit command buffer to queue");
+	VkCheck(vkQueueWaitIdle(bz::device.graphicsQueue), "QueueWaitIdle failed");
 
 	vkFreeCommandBuffers(bz::device.device, bz::device.commandPool, 1, &commandBuffer);
 }
@@ -930,8 +920,8 @@ void CreateSyncObjects() {
 }
 
 void InitVulkan() {
-	bz::device = CreateDevice(window);
-	bz::msaaSamples = GetMaxUsableSampleCount(bz::device.physicalDevice);
+	bz::device.CreateDevice(window);
+	bz::msaaSamples = bz::device.GetMaxUsableSampleCount();
 	bz::swapchain = CreateSwapchain(window, bz::device, { .enableVSync = true, .prefferedImageCount = 2, .oldSwapchain = VK_NULL_HANDLE });
 
 	CreateRenderPass();
@@ -944,16 +934,15 @@ void InitVulkan() {
 
 	CreateDescriptorPool();
 
-	bz::texture.LoadFromFile(TEXTURE_PATH, bz::device, bz::device.graphicsQueue.queue, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_USAGE_SAMPLED_BIT, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+	bz::texture.LoadFromFile(TEXTURE_PATH, bz::device, bz::device.graphicsQueue, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_USAGE_SAMPLED_BIT, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 
 	LoadModel();
 	CreateVertexBuffer();
 	CreateIndexBuffer();
 	CreateUniformBuffers();
+
 	CreateDescriptorSets();
-
 	CreateCommandBuffers();
-
 	CreateSyncObjects();
 }
 
@@ -1024,7 +1013,7 @@ void CleanupVulkan() {
 		vkDestroyFence(bz::device.device, bz::inFlightFences[i], nullptr);
 	}
 
-	DestroyDevice(bz::device);
+	bz::device.DestroyDevice();
 }
 
 void UpdateUniformBuffer(u32 currentImage) {
@@ -1086,8 +1075,8 @@ void DrawFrame() {
 		.pImageIndices = &imageIndex
 	};
 
-	VkCheck(vkQueueSubmit(bz::device.graphicsQueue.queue, 1, &submitInfo, bz::inFlightFences[currentFrame]), "Failed to submit draw command buffer");
-	result = vkQueuePresentKHR(bz::device.graphicsQueue.queue, &presentInfo);
+	VkCheck(vkQueueSubmit(bz::device.graphicsQueue, 1, &submitInfo, bz::inFlightFences[currentFrame]), "Failed to submit draw command buffer");
+	result = vkQueuePresentKHR(bz::device.graphicsQueue, &presentInfo);
 
 	if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR || bz::framebufferResized) {
 		bz::framebufferResized = false;
@@ -1142,7 +1131,7 @@ void InitImGui() {
 		.Instance = bz::device.instance,
 		.PhysicalDevice = bz::device.physicalDevice,
 		.Device = bz::device.device,
-		.Queue = bz::device.graphicsQueue.queue,
+		.Queue = bz::device.graphicsQueue,
 		.DescriptorPool = imguiPool,
 		.MinImageCount = MAX_FRAMES_IN_FLIGHT,
 		.ImageCount = MAX_FRAMES_IN_FLIGHT,
