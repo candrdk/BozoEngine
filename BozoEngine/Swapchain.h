@@ -3,18 +3,19 @@
 struct SwapchainDesc {
 	bool enableVSync = true;
 	u32 prefferedImageCount = 2;
-	VkSwapchainKHR oldSwapchain = VK_NULL_HANDLE;
+	VkSwapchainKHR oldSwapchain = VK_NULL_HANDLE;	// current structure doesn't really facilitate the use of this field
 };
 
-struct Swapchain {
+class Swapchain {
+public:
 	VkExtent2D extent = {};
 	VkFormat format = VK_FORMAT_UNDEFINED;
 	VkSwapchainKHR swapchain = VK_NULL_HANDLE;
 
-	std::vector<VkImage> images;
-	std::vector<VkImageView> imageViews;
+	std::vector<VkImage> images = {};
+	std::vector<VkImageView> imageViews = {};
+
+	void CreateSwapchain(GLFWwindow* window, const Device& device, SwapchainDesc desc);
+
+	void DestroySwapchain(const Device& device, Swapchain& swapchain);
 };
-
-Swapchain CreateSwapchain(GLFWwindow* window, const Device& device, SwapchainDesc desc);
-
-void DestroySwapchain(const Device& device, Swapchain& swapchain);

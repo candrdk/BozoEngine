@@ -134,7 +134,8 @@ static VkDevice CreateLogicalDevice(VkPhysicalDevice physicalDevice, u32 queueFa
 
 	// TODO: fill these out later as needed
 	VkPhysicalDeviceVulkan13Features features13 = {
-		.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES
+		.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES,
+		.dynamicRendering = VK_TRUE
 	};
 	VkPhysicalDeviceVulkan12Features features12 = {
 		.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES,
@@ -199,7 +200,7 @@ void Device::CreateDevice(GLFWwindow* window) {
 
 	u32 queueCount = 0;
 	vkGetPhysicalDeviceQueueFamilyProperties(physicalDevice, &queueCount, nullptr);
-	std::vector<VkQueueFamilyProperties> queueFamilyProperties(queueCount);
+	queueFamilyProperties.resize(queueCount);
 	vkGetPhysicalDeviceQueueFamilyProperties(physicalDevice, &queueCount, queueFamilyProperties.data());
 
 	queueIndex = {

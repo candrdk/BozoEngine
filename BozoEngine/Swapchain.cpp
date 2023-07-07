@@ -60,16 +60,21 @@ static VkExtent2D ChooseSwapchainExtent(GLFWwindow* window, VkSurfaceKHR surface
 	return extent;
 }
 
-static VkSwapchainKHR CreateSwapchain(Device device, u32 prefferedImageCount, VkSurfaceFormatKHR surfaceFormat, VkPresentModeKHR presentMode, VkExtent2D extent, VkSwapchainKHR oldSwapchain) {
+void Swapchain::CreateSwapchain(GLFWwindow* window, const Device& device, SwapchainDesc desc) {
+	VkSurfaceFormatKHR surfaceFormat = ChooseSwapchainSurfaceFormat(device.surface, device.physicalDevice);
+	format = surfaceFormat.format;
+
+	extent = ChooseSwapchainExtent(window, device.surface, device.physicalDevice);
+
 	VkSurfaceCapabilitiesKHR surfaceCapabilities;
 	VkCheck(vkGetPhysicalDeviceSurfaceCapabilitiesKHR(device.physicalDevice, device.surface, &surfaceCapabilities), "Failed to get surface capabilities");
 
-	u32 minImageCount = glm::clamp(prefferedImageCount, surfaceCapabilities.minImageCount, surfaceCapabilities.maxImageCount);
+	VkPresentModeKHR presentMode = ChooseSwapchainPresentMode(device.surface, device.physicalDevice, desc.enableVSync);
 
 	VkSwapchainCreateInfoKHR createInfo = {
 		.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR,
 		.surface = device.surface,
-		.minImageCount = minImageCount,
+		.minImageCount = glm::clamp(desc.prefferedImageCount, surfaceCapabilities.minImageCount, surfaceCapabilities.maxImageCount),
 		.imageFormat = surfaceFormat.format,
 		.imageColorSpace = surfaceFormat.colorSpace,
 		.imageExtent = extent,
@@ -80,41 +85,24 @@ static VkSwapchainKHR CreateSwapchain(Device device, u32 prefferedImageCount, Vk
 		.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR,
 		.presentMode = presentMode,
 		.clipped = VK_TRUE,
-		.oldSwapchain = oldSwapchain
+		.oldSwapchain = desc.oldSwapchain
 	};
 
-	VkSwapchainKHR swapchain;
 	VkCheck(vkCreateSwapchainKHR(device.device, &createInfo, nullptr, &swapchain), "Failed to create swapchain");
-
-	return swapchain;
-}
-
-Swapchain CreateSwapchain(GLFWwindow* window, const Device& device, SwapchainDesc desc) {
-	VkSurfaceFormatKHR surfaceFormat = ChooseSwapchainSurfaceFormat(device.surface, device.physicalDevice);
-	VkPresentModeKHR presentMode = ChooseSwapchainPresentMode(device.surface, device.physicalDevice, desc.enableVSync);
-	VkExtent2D extent = ChooseSwapchainExtent(window, device.surface, device.physicalDevice);
-
-	Swapchain swapchain = {
-		.extent = extent,
-		.format = surfaceFormat.format,
-		.swapchain = CreateSwapchain(device, desc.prefferedImageCount, surfaceFormat, presentMode, extent, desc.oldSwapchain)
-	};
-
-	// TODO: further abstract image/imageview stuff so we dont have to do all this here
 
 	// We only specified the minimum number of images we want, so we have to check how many were actually created
 	u32 imageCount = 0;
-	vkGetSwapchainImagesKHR(device.device, swapchain.swapchain, &imageCount, nullptr);
-	swapchain.images.resize(imageCount);
-	vkGetSwapchainImagesKHR(device.device, swapchain.swapchain, &imageCount, swapchain.images.data());
+	vkGetSwapchainImagesKHR(device.device, swapchain, &imageCount, nullptr);
+	images.resize(imageCount);
+	vkGetSwapchainImagesKHR(device.device, swapchain, &imageCount, images.data());
 
-	swapchain.imageViews.resize(imageCount);
+	imageViews.resize(imageCount);
 	for (u32 i = 0; i < imageCount; i++) {
 		VkImageViewCreateInfo viewInfo = {
 			.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
-			.image = swapchain.images[i],
+			.image = images[i],
 			.viewType = VK_IMAGE_VIEW_TYPE_2D,
-			.format = swapchain.format,
+			.format = format,
 			.subresourceRange = {
 				.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
 				.baseMipLevel = 0,
@@ -124,13 +112,11 @@ Swapchain CreateSwapchain(GLFWwindow* window, const Device& device, SwapchainDes
 			}
 		};
 
-		VkCheck(vkCreateImageView(device.device, &viewInfo, nullptr, &swapchain.imageViews[i]), "Failed to create image view");
+		VkCheck(vkCreateImageView(device.device, &viewInfo, nullptr, &imageViews[i]), "Failed to create image view");
 	}
-
-	return swapchain;
 }
 
-void DestroySwapchain(const Device& device, Swapchain& swapchain) {
+void Swapchain::DestroySwapchain(const Device& device, Swapchain& swapchain) {
 	for (auto imageView : swapchain.imageViews) {
 		vkDestroyImageView(device.device, imageView, nullptr);
 	}

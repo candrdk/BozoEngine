@@ -86,7 +86,7 @@ namespace bz {
 	Device device;
 	Swapchain swapchain;
 
-	// Wrap these into a FrameBufferAttachment struct
+	// Wrap these
 	VkImage depthImage;
 	VkDeviceMemory depthImageMemory;
 	VkImageView depthImageView;
@@ -94,11 +94,6 @@ namespace bz {
 	VkImage colorImage;
 	VkDeviceMemory colorImageMemory;
 	VkImageView colorImageView;
-
-	// Wrap into a FrameBuffer struct containing FrameBufferAttachments
-	std::vector<VkFramebuffer> swapchainFramebuffers;
-
-	VkRenderPass renderPass;
 
 	VkDescriptorPool descriptorPool;
 	VkDescriptorSetLayout descriptorSetLayout;
@@ -265,86 +260,6 @@ VkShaderModule CreateShaderModule(const char* path) {
 	return shaderModule;
 }
 
-void CreateRenderPass() {
-	VkAttachmentDescription colorAttachment = {
-		.format = bz::swapchain.format,
-		.samples = bz::msaaSamples,
-		.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
-		.storeOp = VK_ATTACHMENT_STORE_OP_STORE,
-		.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
-		.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
-		.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,					// dont care. Note that contents wont be preserved. Ok, since loadOp = clear
-		.finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL
-	};
-
-	VkAttachmentDescription depthAttachment = {
-		.format = VK_FORMAT_D24_UNORM_S8_UINT,
-		.samples = bz::msaaSamples,
-		.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
-		.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
-		.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
-		.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
-		.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
-		.finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL
-	};
-
-	VkAttachmentDescription colorAttachmentResolve = {
-		.format = bz::swapchain.format,
-		.samples = VK_SAMPLE_COUNT_1_BIT,
-		.loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
-		.storeOp = VK_ATTACHMENT_STORE_OP_STORE,
-		.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
-		.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
-		.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
-		.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR
-	};
-
-	VkAttachmentReference colorAttachmentRef = {
-		.attachment = 0,
-		.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL
-	};
-
-	VkAttachmentReference depthAttachmentRef = {
-		.attachment = 1,
-		.layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL
-	};
-
-	VkAttachmentReference colorAttachmentResolveRef = {
-		.attachment = 2,
-		.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL
-	};
-
-	VkSubpassDescription subpass = {
-		.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS,
-		.colorAttachmentCount = 1,
-		.pColorAttachments = &colorAttachmentRef,
-		.pResolveAttachments = &colorAttachmentResolveRef,
-		.pDepthStencilAttachment = &depthAttachmentRef,
-	};
-
-	VkSubpassDependency dependency = {
-		.srcSubpass = VK_SUBPASS_EXTERNAL,		// implicit subpass before the renderpass
-		.dstSubpass = 0,						// our subpass
-		.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT,
-		.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT,
-		.srcAccessMask = 0,
-		.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT
-	};
-
-	VkAttachmentDescription attachments[] = { colorAttachment, depthAttachment, colorAttachmentResolve };
-	VkRenderPassCreateInfo renderPassInfo = {
-		.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO,
-		.attachmentCount = arraysize(attachments),
-		.pAttachments = attachments,
-		.subpassCount = 1,
-		.pSubpasses = &subpass,
-		.dependencyCount = 1,
-		.pDependencies = &dependency
-	};
-
-	VkCheck(vkCreateRenderPass(bz::device.device, &renderPassInfo, nullptr, &bz::renderPass), "Failed to create render pass");
-}
-
 void CreateDescriptorSetLayout() {
 	VkDescriptorSetLayoutBinding uboLayoutBinding = {
 		.binding = 0,
@@ -472,8 +387,16 @@ void CreateGraphicsPipeline() {
 
 	VkCheck(vkCreatePipelineLayout(bz::device.device, &pipelineLayoutInfo, nullptr, &bz::pipelineLayout), "Failed to create pipeline layout");
 
+	VkPipelineRenderingCreateInfo renderingCreateInfo = {
+		.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO,
+		.colorAttachmentCount = 1,
+		.pColorAttachmentFormats = &bz::swapchain.format,
+		.depthAttachmentFormat = VK_FORMAT_D24_UNORM_S8_UINT
+	};
+
 	VkGraphicsPipelineCreateInfo pipelineInfo = {
 		.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
+		.pNext = &renderingCreateInfo,
 		.stageCount = 2,
 		.pStages = shaderStages,
 		.pVertexInputState = &vertexInputInfo,
@@ -485,7 +408,7 @@ void CreateGraphicsPipeline() {
 		.pColorBlendState = &colorBlendStateInfo,
 		.pDynamicState = &dynamicStateInfo,
 		.layout = bz::pipelineLayout,
-		.renderPass = bz::renderPass,
+		.renderPass = VK_NULL_HANDLE,
 		.subpass = 0
 	};
 
@@ -563,30 +486,6 @@ void CreateDepthResources() {
 		VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
 		bz::depthImage, bz::depthImageMemory);
 	bz::depthImageView = CreateImageView(bz::depthImage, VK_FORMAT_D24_UNORM_S8_UINT, VK_IMAGE_ASPECT_DEPTH_BIT, 1);
-}
-
-void CreateFramebuffers() {
-	bz::swapchainFramebuffers.resize(bz::swapchain.imageViews.size());
-
-	for (int i = 0; i < bz::swapchain.imageViews.size(); i++) {
-		VkImageView attachments[] = {
-			bz::colorImageView,
-			bz::depthImageView,
-			bz::swapchain.imageViews[i]
-		};
-
-		VkFramebufferCreateInfo framebufferInfo = {
-			.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
-			.renderPass = bz::renderPass,
-			.attachmentCount = arraysize(attachments),
-			.pAttachments = attachments,
-			.width = bz::swapchain.extent.width,
-			.height = bz::swapchain.extent.height,
-			.layers = 1
-		};
-
-		VkCheck(vkCreateFramebuffer(bz::device.device, &framebufferInfo, nullptr, &bz::swapchainFramebuffers[i]), "Failed to create framebuffer");
-	}
 }
 
 void CreateDescriptorPool() {
@@ -842,6 +741,29 @@ void CreateCommandBuffers() {
 	VkCheck(vkAllocateCommandBuffers(bz::device.device, &allocInfo, bz::commandBuffers), "Failed to allocate command buffers");
 }
 
+void InsertImageBarrier(VkCommandBuffer cmdBuffer, VkImage image, VkAccessFlags srcAccessMask, VkAccessFlags dstAccessMask, VkImageLayout oldLayout, VkImageLayout newLayout, VkPipelineStageFlags srcStageMask, VkPipelineStageFlags dstStageMask) {
+	VkImageSubresourceRange subresourceRange = {
+		.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+		.baseMipLevel = 0,
+		.levelCount = 1,
+		.layerCount = 1
+	};
+
+	VkImageMemoryBarrier barrier = {
+		.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+		.srcAccessMask = srcAccessMask,
+		.dstAccessMask = dstAccessMask,
+		.oldLayout = oldLayout, //VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+		.newLayout = newLayout,
+		.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+		.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+		.image = image,
+		.subresourceRange = subresourceRange
+	};
+
+	vkCmdPipelineBarrier(cmdBuffer, srcStageMask, dstStageMask, 0, 0, nullptr, 0, nullptr, 1, &barrier);
+}
+
 void RecordCommandBuffer(VkCommandBuffer commandBuffer, u32 imageIndex) {
 	VkCommandBufferBeginInfo beginInfo = {
 		.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
@@ -849,24 +771,53 @@ void RecordCommandBuffer(VkCommandBuffer commandBuffer, u32 imageIndex) {
 
 	VkCheck(vkBeginCommandBuffer(commandBuffer, &beginInfo), "Failed to begin recording command buffer!");
 
-	// Order of clearvalues should be identical to the order of attachments!
-	VkClearValue clearColors[] = {
-		{{0.0f, 0.0f, 0.0f}},	// clear color to black
-		{1.0f, 0.0f}			// clear depth to far (1.0f)
+	VkRenderingAttachmentInfo colorAttachment = {
+		.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
+		.imageView = bz::colorImageView,
+		.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+		.resolveMode = VK_RESOLVE_MODE_AVERAGE_BIT,
+		.resolveImageView = bz::swapchain.imageViews[imageIndex],
+		.resolveImageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+		.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
+		.storeOp = VK_ATTACHMENT_STORE_OP_STORE,
+		.clearValue = {
+			.color = { 0.0f, 0.0f, 0.0f },
+		}
 	};
-	VkRenderPassBeginInfo renderPassInfo = {
-		.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
-		.renderPass = bz::renderPass,
-		.framebuffer = bz::swapchainFramebuffers[imageIndex],
+
+	VkRenderingAttachmentInfo depthAttachment = {
+		.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
+		.imageView = bz::depthImageView,
+		.imageLayout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL,
+		.resolveMode = VK_RESOLVE_MODE_NONE,
+		.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
+		.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
+		.clearValue = {
+			.depthStencil = { 1.0f, 0 },
+		}
+	};
+
+	VkRenderingInfo renderingInfo = {
+		.sType = VK_STRUCTURE_TYPE_RENDERING_INFO,
 		.renderArea = {
 			.offset = {0, 0},
 			.extent = bz::swapchain.extent
 		},
-		.clearValueCount = arraysize(clearColors),
-		.pClearValues = clearColors
+		.layerCount = 1,
+		.colorAttachmentCount = 1,
+		.pColorAttachments = &colorAttachment,
+		.pDepthAttachment = &depthAttachment,
+		.pStencilAttachment = nullptr
 	};
 
-	vkCmdBeginRenderPass(commandBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
+	InsertImageBarrier(commandBuffer, bz::swapchain.images[imageIndex], 
+		0, VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT, 
+		VK_IMAGE_LAYOUT_UNDEFINED, 
+		VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, 
+		VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, 
+		VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT);
+	
+	vkCmdBeginRendering(commandBuffer, &renderingInfo);
 
 	vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, bz::graphicsPipeline);
 
@@ -895,9 +846,18 @@ void RecordCommandBuffer(VkCommandBuffer commandBuffer, u32 imageIndex) {
 
 	vkCmdDrawIndexed(commandBuffer, (u32)bz::indices.size(), 1, 0, 0, 0);
 
+#if 0	// TODO: do this ourselves
 	ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), commandBuffer);
+#endif
 
-	vkCmdEndRenderPass(commandBuffer);
+	vkCmdEndRendering(commandBuffer);
+
+	InsertImageBarrier(commandBuffer, bz::swapchain.images[imageIndex],
+		VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT, 0,
+		VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+		VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
+		VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+		VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT);
 
 	VkCheck(vkEndCommandBuffer(commandBuffer), "Failed to record command buffer");
 }
@@ -922,21 +882,23 @@ void CreateSyncObjects() {
 void InitVulkan() {
 	bz::device.CreateDevice(window);
 	bz::msaaSamples = bz::device.GetMaxUsableSampleCount();
-	bz::swapchain = CreateSwapchain(window, bz::device, { .enableVSync = true, .prefferedImageCount = 2, .oldSwapchain = VK_NULL_HANDLE });
+	bz::swapchain.CreateSwapchain(window, bz::device, {
+		.enableVSync = true, 
+		.prefferedImageCount = 2, 
+		.oldSwapchain = VK_NULL_HANDLE 
+	});
 
-	CreateRenderPass();
 	CreateDescriptorSetLayout();
 	CreateGraphicsPipeline();
 
 	CreateColorResources();
 	CreateDepthResources();
-	CreateFramebuffers();
 
 	CreateDescriptorPool();
 
 	bz::texture.LoadFromFile(TEXTURE_PATH, bz::device, bz::device.graphicsQueue, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_USAGE_SAMPLED_BIT, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
-
 	LoadModel();
+
 	CreateVertexBuffer();
 	CreateIndexBuffer();
 	CreateUniformBuffers();
@@ -955,11 +917,7 @@ void CleanupSwapchain() {
 	vkDestroyImage(bz::device.device, bz::depthImage, nullptr);
 	vkFreeMemory(bz::device.device, bz::depthImageMemory, nullptr);
 
-	for (auto framebuffer : bz::swapchainFramebuffers) {
-		vkDestroyFramebuffer(bz::device.device, framebuffer, nullptr);
-	}
-
-	DestroySwapchain(bz::device, bz::swapchain);
+	bz::swapchain.DestroySwapchain(bz::device, bz::swapchain);
 }
 
 // In theory the swap chain image could change during the applications lifetime,
@@ -975,12 +933,10 @@ void RecreateSwapchain() {
 	vkDeviceWaitIdle(bz::device.device);
 
 	CleanupSwapchain();
-	bz::swapchain = CreateSwapchain(window, bz::device, { .enableVSync = true, .prefferedImageCount = 2, .oldSwapchain = VK_NULL_HANDLE });
+	bz::swapchain.CreateSwapchain(window, bz::device, { .enableVSync = true, .prefferedImageCount = 2, .oldSwapchain = bz::swapchain.swapchain });
 
 	CreateColorResources();
 	CreateDepthResources();
-
-	CreateFramebuffers();
 }
 
 void CleanupVulkan() {
@@ -1004,8 +960,6 @@ void CleanupVulkan() {
 
 	vkDestroyPipeline(bz::device.device, bz::graphicsPipeline, nullptr);
 	vkDestroyPipelineLayout(bz::device.device, bz::pipelineLayout, nullptr);
-
-	vkDestroyRenderPass(bz::device.device, bz::renderPass, nullptr);
 
 	for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
 		vkDestroySemaphore(bz::device.device, bz::imageAvailableSemaphores[i], nullptr);
@@ -1049,7 +1003,7 @@ void DrawFrame() {
 	VkCheck(vkResetFences(bz::device.device, 1, &bz::inFlightFences[currentFrame]), "Failed to reset inFlight fence");
 
 	// This reset happens implicitly on vkBeginCommandBuffer, as it was allocated from a commandPool with VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT set.
-	// VkCheck(vkResetCommandBuffer(bz::commandBuffers[currentFrame], 0), "Failed to reset command buffer"); 
+	VkCheck(vkResetCommandBuffer(bz::commandBuffers[currentFrame], 0), "Failed to reset command buffer"); 
 	RecordCommandBuffer(bz::commandBuffers[currentFrame], imageIndex);
 
 	VkSemaphore waitSemaphores[] = { bz::imageAvailableSemaphores[currentFrame] };
@@ -1089,6 +1043,7 @@ void DrawFrame() {
 	currentFrame = (currentFrame + 1) % MAX_FRAMES_IN_FLIGHT;
 }
 
+#if 0 // TODO: do this ourselves
 VkDescriptorPool imguiPool;
 void InitImGui() {
 	// Super oversized, just copied from imgui demo
@@ -1163,12 +1118,15 @@ void UpdateImGuiFrame() {
 	ImGui::ShowDemoWindow();
 	ImGui::Render();
 }
+#endif
 
 int main(int argc, char* argv[]) {
 	InitWindow(WIDTH, HEIGHT);
 	InitVulkan();
 
+#if 0
 	InitImGui();
+#endif
 
 	double lastFrame = 0.0f;
 
@@ -1179,7 +1137,9 @@ int main(int argc, char* argv[]) {
 
 		bz::camera.Update(deltaTime);
 
+#if 0
 		UpdateImGuiFrame();
+#endif
 		
 		DrawFrame();
 
@@ -1189,7 +1149,9 @@ int main(int argc, char* argv[]) {
 	// Wait until all commandbuffers are done so we can safely clean up semaphores they might potentially be using.
 	vkDeviceWaitIdle(bz::device.device);
 
+#if 0
 	CleanupImGui();
+#endif
 
 	CleanupVulkan();
 	CleanupWindow();
