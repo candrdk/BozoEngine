@@ -359,7 +359,7 @@ void CreateGraphicsPipeline() {
 		.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO,
 		.depthTestEnable = VK_TRUE,
 		.depthWriteEnable = VK_TRUE,
-		.depthCompareOp = VK_COMPARE_OP_LESS,
+		.depthCompareOp = VK_COMPARE_OP_GREATER_OR_EQUAL, // inverse z
 		.depthBoundsTestEnable = VK_FALSE,
 		.stencilTestEnable = VK_FALSE,
 		.minDepthBounds = 0.0f,
@@ -476,9 +476,8 @@ void CreateColorResources() {
 	bz::colorImageView = CreateImageView(bz::colorImage, colorFormat, VK_IMAGE_ASPECT_COLOR_BIT, 1);
 }
 
+// TODO: should query supported formats and select from them.
 void CreateDepthResources() {
-	// TODO: should query supported formats and select from them.
-
 	CreateImage(bz::swapchain.extent.width, bz::swapchain.extent.height, 1, bz::msaaSamples,
 		VK_FORMAT_D32_SFLOAT,
 		VK_IMAGE_TILING_OPTIMAL,
@@ -776,7 +775,7 @@ void RecordCommandBuffer(VkCommandBuffer commandBuffer, u32 imageIndex) {
 		.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
 		.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
 		.clearValue = {
-			.depthStencil = { 1.0f, 0 },
+			.depthStencil = { 0.0f, 0 },
 		}
 	};
 

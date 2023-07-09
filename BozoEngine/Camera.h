@@ -72,8 +72,18 @@ public:
 
 	void UpdateMatrices() {
 		view = glm::lookAt(position, position + direction, glm::vec3(0.0f, 1.0f, 0.0f));
-		projection = glm::perspective(glm::radians(fov), aspect, zNear, zFar);
-		projection[1][1] *= -1.0f;
+
+		float tanHalfFov = glm::tan(glm::radians(fov) * 0.5);
+		float h = 1.0f / tanHalfFov;
+		float w = 1.0f / (tanHalfFov * aspect);
+		float a = zNear / (zFar - zNear);
+		float b = (zNear * zFar) / (zFar - zNear);
+
+		projection = glm::mat4(
+			glm::vec4(w, 0.0f, 0.0f, 0.0f),
+			glm::vec4(0.0f, -h, 0.0f, 0.0f),
+			glm::vec4(0.0f, 0.0f, -a, -1.0f),
+			glm::vec4(0.0f, 0.0f, b, 0.0f));
 	}
 
 	float fov, aspect;
