@@ -232,6 +232,8 @@
     <None Include="shaders\triangle.vert.glsl">
       <FileType>Document</FileType>
     </None>
+    <None Include="shaders\uioverlay.frag.glsl" />
+    <None Include="shaders\uioverlay.vert.glsl" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

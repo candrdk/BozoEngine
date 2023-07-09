@@ -1,9 +1,5 @@
 #include "UIOverlay.h"
 
-#include <imgui.h>
-
-VkPipelineShaderStageCreateInfo shaders[2];
-
 UIOverlay::UIOverlay() {
 	ImGui::CreateContext();
 
@@ -26,6 +22,9 @@ UIOverlay::~UIOverlay() {
 // TODO: split up into smaller functions
 // Initialize all vulkan resources required to render the UI overlay.
 void UIOverlay::Initialize(const Device& device, VkSampleCountFlagBits rasterizationSamples, VkFormat colorFormat, VkFormat depthFormat) {
+	Check(vertShader.module != VK_NULL_HANDLE, "Cannot initialize ui overlay without vertex shader. Set UIOverlay.shaders before calling UIOverlay.Initialize!");
+	Check(fragShader.module != VK_NULL_HANDLE, "Cannot initialize ui overlay without fragment shader. Set UIOverlay.shaders before calling UIOverlay.Initialize!");
+
 	ImGuiIO& io = ImGui::GetIO();
 
 	u8* fontData;
@@ -68,6 +67,7 @@ void UIOverlay::Initialize(const Device& device, VkSampleCountFlagBits rasteriza
 	VkImageViewCreateInfo viewInfo = {
 		.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
 		.image = fontImage,
+		.viewType = VK_IMAGE_VIEW_TYPE_2D,
 		.format = VK_FORMAT_R8G8B8A8_UNORM,
 		.subresourceRange = {
 			.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
@@ -360,6 +360,53 @@ void UIOverlay::Initialize(const Device& device, VkSampleCountFlagBits rasteriza
 	VkCheck(vkCreateGraphicsPipelines(device.logicalDevice, VK_NULL_HANDLE, 1, &pipelineCreateInfo, nullptr, &pipeline), "Failed to create UI overlay pipeline");
 }
 
+// TODO: we currently free vertex buffers while they are being used by a command buffer
+//		 seems like imgui_implVulkan gets around this by keeping a vertex/index buffer
+//		 for each frame in flight. Sacha's implementation doesn't seem to do this, however, so idk.
+void UIOverlay::Update(const Device& device) {
+	ImDrawData* drawData = ImGui::GetDrawData();
+
+	if (!drawData) { return; }
+
+	VkDeviceSize vertexBufferSize = drawData->TotalVtxCount * sizeof(ImDrawVert);
+	VkDeviceSize indexBufferSize = drawData->TotalIdxCount * sizeof(ImDrawIdx);
+
+	if ((vertexBufferSize == 0) || (indexBufferSize == 0)) { return; }
+
+	// Create or resize the vertex / index buffers
+	if ((vertexBuffer.buffer == VK_NULL_HANDLE) || (vertexCount < drawData->TotalVtxCount)) {
+		vertexBuffer.unmap(device.logicalDevice);	// unmap
+		vertexBuffer.destroy(device.logicalDevice);	// free buffer + buffer memory
+		VkCheck(device.CreateBuffer(VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT, vertexBufferSize, &vertexBuffer), "Failed to create ui overlay vertex buffer");
+		vertexCount = drawData->TotalVtxCount;
+		VkCheck(vertexBuffer.map(device.logicalDevice), "Failed to map ui overlay vertex buffer");
+	}
+
+	if ((indexBuffer.buffer == VK_NULL_HANDLE) || (indexCount < drawData->TotalIdxCount)) {
+		indexBuffer.unmap(device.logicalDevice);	// unmap
+		indexBuffer.destroy(device.logicalDevice);	// free buffer + buffer memory
+		VkCheck(device.CreateBuffer(VK_BUFFER_USAGE_INDEX_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT, indexBufferSize, &indexBuffer), "Failed to create ui overlay index buffer");
+		indexCount = drawData->TotalIdxCount;
+		VkCheck(indexBuffer.map(device.logicalDevice), "Failed to map ui overlay index buffer");
+	}
+
+	// Upload vertex / index data into a single contiguous GPU buffer
+	ImDrawVert* vertexDst = (ImDrawVert*)vertexBuffer.mapped;
+	ImDrawIdx* indexDst = (ImDrawIdx*)indexBuffer.mapped;
+	for (int i = 0; i < drawData->CmdListsCount; i++) {
+		ImDrawList* cmdList = drawData->CmdLists[i];
+
+		memcpy(vertexDst, cmdList->VtxBuffer.Data, cmdList->VtxBuffer.Size * sizeof(ImDrawVert));
+		memcpy(indexDst, cmdList->IdxBuffer.Data, cmdList->IdxBuffer.Size * sizeof(ImDrawIdx));
+
+		vertexDst += cmdList->VtxBuffer.Size;
+		indexDst += cmdList->IdxBuffer.Size;
+	}
+
+	VkCheck(vertexBuffer.Flush(device.logicalDevice), "Failed to flush ui overlay vertex buffer");
+	VkCheck(indexBuffer.Flush(device.logicalDevice), "Failed to flush ui overlay index buffer");
+}
+
 void UIOverlay::Draw(VkCommandBuffer cmdBuffer) {
 	ImDrawData* imDrawData = ImGui::GetDrawData();
 	int32_t vertexOffset = 0;
@@ -404,17 +451,19 @@ void UIOverlay::Draw(VkCommandBuffer cmdBuffer) {
 	}
 }
 
-bool Update(const Device& device) {
-	// TODO: update/fill vertex and index buffers with imDrawData
-	return false;
-}
-
 void UIOverlay::Resize(u32 width, u32 height) {
 	ImGuiIO& io = ImGui::GetIO();
 	io.DisplaySize = ImVec2((float)width, (float)height);
 }
 
 void UIOverlay::Free(const Device& device) {
+	if (vertShader.module) {
+		vkDestroyShaderModule(device.logicalDevice, vertShader.module, nullptr);
+	}
+	if (fragShader.module) {
+		vkDestroyShaderModule(device.logicalDevice, fragShader.module, nullptr);
+	}
+
 	vertexBuffer.destroy(device.logicalDevice);
 	indexBuffer.destroy(device.logicalDevice);
 

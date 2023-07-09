@@ -9,7 +9,6 @@
 #include <chrono> // ugh
 
 #include <backends/imgui_impl_glfw.h>
-#include <backends/imgui_impl_vulkan.h>
 
 #include <glm/gtc/matrix_transform.hpp>		// glm::rotate
 
@@ -23,6 +22,8 @@
 #include "Swapchain.h"
 #include "Texture.h"
 #include "Camera.h"
+
+#include "UIOverlay.h"
 
 constexpr u32 WIDTH = 800;
 constexpr u32 HEIGHT = 600;
@@ -85,6 +86,8 @@ namespace bz {
 
 	Device device;
 	Swapchain swapchain;
+
+	UIOverlay Overlay;
 
 	// Wrap these
 	VkImage depthImage;
@@ -260,6 +263,16 @@ VkShaderModule CreateShaderModule(const char* path) {
 	return shaderModule;
 }
 
+VkPipelineShaderStageCreateInfo LoadShader(const char* path, VkShaderStageFlagBits stage) {
+	return {
+		.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+		.stage = stage,
+		.module = CreateShaderModule(path),
+		.pName = "main",
+		.pSpecializationInfo = 0
+	};
+}
+
 void CreateDescriptorSetLayout() {
 	VkDescriptorSetLayoutBinding uboLayoutBinding = {
 		.binding = 0,
@@ -288,22 +301,9 @@ void CreateDescriptorSetLayout() {
 }
 
 void CreateGraphicsPipeline() {
-	VkShaderModule vertShaderModule = CreateShaderModule("shaders/triangle.vert.spv");
-	VkShaderModule fragShaderModule = CreateShaderModule("shaders/triangle.frag.spv");
-
 	VkPipelineShaderStageCreateInfo shaderStages[] = {
-		{ // Vertex shader module
-			.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
-			.stage = VK_SHADER_STAGE_VERTEX_BIT,
-			.module = vertShaderModule,
-			.pName = "main"
-		},
-		{ // Fragment shader module
-		.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
-		.stage = VK_SHADER_STAGE_FRAGMENT_BIT,
-		.module = fragShaderModule,
-		.pName = "main"
-		}
+		LoadShader("shaders/triangle.vert.spv", VK_SHADER_STAGE_VERTEX_BIT),
+		LoadShader("shaders/triangle.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT)
 	};
 
 	VkDynamicState dynamicState[] = {
@@ -414,8 +414,9 @@ void CreateGraphicsPipeline() {
 
 	VkCheck(vkCreateGraphicsPipelines(bz::device.logicalDevice, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &bz::graphicsPipeline), "Failed to create graphics pipeline");
 
-	vkDestroyShaderModule(bz::device.logicalDevice, vertShaderModule, nullptr);
-	vkDestroyShaderModule(bz::device.logicalDevice, fragShaderModule, nullptr);
+	// if we rebuild this pipeline often, we should retain these shader modules.
+	vkDestroyShaderModule(bz::device.logicalDevice, shaderStages[0].module, nullptr);
+	vkDestroyShaderModule(bz::device.logicalDevice, shaderStages[1].module, nullptr);
 }
 
 u32 FindMemoryType(u32 typeFilter, VkMemoryPropertyFlags properties) {
@@ -823,9 +824,7 @@ void RecordCommandBuffer(VkCommandBuffer commandBuffer, u32 imageIndex) {
 
 	vkCmdDrawIndexed(commandBuffer, (u32)bz::indices.size(), 1, 0, 0, 0);
 
-#if 0	// TODO: do this ourselves
-	ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), commandBuffer);
-#endif
+	bz::Overlay.Draw(commandBuffer);
 
 	vkCmdEndRendering(commandBuffer);
 
@@ -984,7 +983,7 @@ void DrawFrame() {
 	VkCheck(vkResetFences(bz::device.logicalDevice, 1, &bz::inFlightFences[currentFrame]), "Failed to reset inFlight fence");
 
 	// This reset happens implicitly on vkBeginCommandBuffer, as it was allocated from a commandPool with VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT set.
-	VkCheck(vkResetCommandBuffer(bz::commandBuffers[currentFrame], 0), "Failed to reset command buffer"); 
+	VkCheck(vkResetCommandBuffer(bz::commandBuffers[currentFrame], 0), "Failed to reset command buffer");
 	RecordCommandBuffer(bz::commandBuffers[currentFrame], imageIndex);
 
 	VkSemaphore waitSemaphores[] = { bz::imageAvailableSemaphores[currentFrame] };
@@ -1024,90 +1023,24 @@ void DrawFrame() {
 	currentFrame = (currentFrame + 1) % MAX_FRAMES_IN_FLIGHT;
 }
 
-#if 0 // TODO: do this ourselves
-VkDescriptorPool imguiPool;
-void InitImGui() {
-	// Super oversized, just copied from imgui demo
-	VkDescriptorPoolSize poolSizes[] =
-	{
-		{ VK_DESCRIPTOR_TYPE_SAMPLER, 1000 },
-		{ VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1000 },
-		{ VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1000 },
-		{ VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1000 },
-		{ VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER, 1000 },
-		{ VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER, 1000 },
-		{ VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1000 },
-		{ VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1000 },
-		{ VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, 1000 },
-		{ VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC, 1000 },
-		{ VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, 1000 }
-	};
-
-	VkDescriptorPoolCreateInfo poolInfo = {
-		.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
-		.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT,
-		.maxSets = 1000,
-		.poolSizeCount = arraysize(poolSizes),
-		.pPoolSizes = poolSizes,
-	};
-
-	VkCheck(vkCreateDescriptorPool(bz::device.device, &poolInfo, nullptr, &imguiPool), "Failed to create imgui descriptor pool");
-
-	IMGUI_CHECKVERSION();
-	ImGui::CreateContext();
-	ImGuiIO& io = ImGui::GetIO();
-	io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
-	io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;
-
-	ImGui::StyleColorsDark();
-
-	ImGui_ImplGlfw_InitForVulkan(window, true);
-
-	ImGui_ImplVulkan_InitInfo initInfo = {
-		.Instance = bz::device.instance,
-		.PhysicalDevice = bz::device.physicalDevice,
-		.Device = bz::device.device,
-		.Queue = bz::device.graphicsQueue,
-		.DescriptorPool = imguiPool,
-		.MinImageCount = MAX_FRAMES_IN_FLIGHT,
-		.ImageCount = MAX_FRAMES_IN_FLIGHT,
-		.MSAASamples = bz::msaaSamples
-	};
-
-	ImGui_ImplVulkan_LoadFunctions([](const char* function_name, void* vulkan_instance) {
-		return vkGetInstanceProcAddr(*(reinterpret_cast<VkInstance*>(vulkan_instance)), function_name);
-		}, &bz::device.instance);
-	ImGui_ImplVulkan_Init(&initInfo, bz::renderPass);
-	
-	VkCommandBuffer buffer = BeginSingleTimeCommands();
-	ImGui_ImplVulkan_CreateFontsTexture(buffer);
-	EndSingleTimeCommands(buffer);
-
-	ImGui_ImplVulkan_DestroyFontUploadObjects();
-}
-
-void CleanupImGui() {
-	ImGui_ImplVulkan_Shutdown();
-	ImGui_ImplGlfw_Shutdown();
-	vkDestroyDescriptorPool(bz::device.device, imguiPool, nullptr);
-}
-
 void UpdateImGuiFrame() {
-	ImGui_ImplVulkan_NewFrame();
 	ImGui_ImplGlfw_NewFrame();
+
 	ImGui::NewFrame();
 	ImGui::ShowDemoWindow();
 	ImGui::Render();
+
+	bz::Overlay.Update(bz::device);
 }
-#endif
 
 int main(int argc, char* argv[]) {
 	InitWindow(WIDTH, HEIGHT);
 	InitVulkan();
 
-#if 0
-	InitImGui();
-#endif
+	ImGui_ImplGlfw_InitForVulkan(window, true);
+	bz::Overlay.vertShader = LoadShader("shaders/uioverlay.vert.spv", VK_SHADER_STAGE_VERTEX_BIT);
+	bz::Overlay.fragShader = LoadShader("shaders/uioverlay.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT);
+	bz::Overlay.Initialize(bz::device, bz::msaaSamples, bz::swapchain.format, VK_FORMAT_D24_UNORM_S8_UINT);
 
 	double lastFrame = 0.0f;
 
@@ -1118,9 +1051,7 @@ int main(int argc, char* argv[]) {
 
 		bz::camera.Update(deltaTime);
 
-#if 0
 		UpdateImGuiFrame();
-#endif
 		
 		DrawFrame();
 
@@ -1130,9 +1061,7 @@ int main(int argc, char* argv[]) {
 	// Wait until all commandbuffers are done so we can safely clean up semaphores they might potentially be using.
 	vkDeviceWaitIdle(bz::device.logicalDevice);
 
-#if 0
-	CleanupImGui();
-#endif
+	bz::Overlay.Free(bz::device);
 
 	CleanupVulkan();
 	CleanupWindow();
