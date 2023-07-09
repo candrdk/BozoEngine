@@ -1,5 +1,8 @@
 #pragma once
 
+// TODO: move this to separate buffer.h file.
+//		 Everything regarding buffers will likely be heavliy changed once we start working with larger scenes 
+//		 and implement a resource manager. It's okay to elave it like this for now, though.
 struct Buffer {
 	VkBuffer buffer;
 	VkDeviceMemory memory;
@@ -106,6 +109,9 @@ public:
 		if (result != VK_SUCCESS) return result;
 		result = vkBindBufferMemory(logicalDevice, buffer->buffer, buffer->memory, 0); // , "Failed to bind DeviceMemory to VkBuffer");
 		if (result != VK_SUCCESS) return result;
+
+		buffer->size = memRequirements.size;
+		buffer->offset = 0;
 
 		return result;
 	}

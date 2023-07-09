@@ -77,7 +77,6 @@ struct UniformBufferObject {
 	alignas(16) glm::mat4 proj;
 };
 
-constexpr int MAX_FRAMES_IN_FLIGHT = 2;
 u32 currentFrame = 0;
 
 // Temporary namespace to contain globals

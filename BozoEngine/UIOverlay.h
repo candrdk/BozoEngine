@@ -8,12 +8,11 @@
 
 class UIOverlay {
 public:
-	
-	Buffer vertexBuffer;
-	int vertexCount;
-
-	Buffer indexBuffer;
-	int indexCount;
+	Buffer drawDataBuffer;
+	void* vertexBufferStart;
+	void* indexBufferStart;
+	VkDeviceSize vertexBufferOffset;
+	VkDeviceSize indexBufferOffset;
 
 	VkImage fontImage;
 	VkImageView fontView;
@@ -43,11 +42,15 @@ public:
 	UIOverlay();
 	~UIOverlay();
 
+	// Initialize all vulkan resources needed to draw the ui overlay
 	void Initialize(const Device& device, VkSampleCountFlagBits rasterizationSamples, VkFormat colorFormat, VkFormat depthFormat);
 
+	// Update the ui overlay draw data. Should be called after ImGui::Render();
 	void Update(const Device& device);
+
+	// Draw the ui overlay in the specified VkCommandBuffer. 
+	// Caller must have begun rendering with VkBeginRendering();
 	void Draw(VkCommandBuffer cmdBuffer);
-	void Resize(u32 width, u32 height);
 
 	void Free(const Device& device);
 };
