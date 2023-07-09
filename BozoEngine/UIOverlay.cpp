@@ -361,8 +361,7 @@ void UIOverlay::Initialize(const Device& device, VkSampleCountFlagBits rasteriza
 		.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO,
 		.colorAttachmentCount = 1,
 		.pColorAttachmentFormats = &colorFormat,
-		.depthAttachmentFormat = depthFormat,
-		.stencilAttachmentFormat = depthFormat
+		.depthAttachmentFormat = depthFormat
 	};
 
 	VkGraphicsPipelineCreateInfo pipelineCreateInfo = {

@@ -103,9 +103,9 @@ void SetImageLayout2(VkCommandBuffer commandBuffer, VkImage image, VkImageLayout
 	vkCmdPipelineBarrier(commandBuffer, sourceStage, destinationStage, 0, 0, nullptr, 0, nullptr, 1, &barrier);
 }
 
-void InsertImageBarrier(VkCommandBuffer cmdBuffer, VkImage image, VkAccessFlags srcAccessMask, VkAccessFlags dstAccessMask, VkImageLayout oldLayout, VkImageLayout newLayout, VkPipelineStageFlags srcStageMask, VkPipelineStageFlags dstStageMask) {
+void InsertImageBarrier(VkCommandBuffer cmdBuffer, VkImage image, VkImageAspectFlags aspectMask, VkAccessFlags srcAccessMask, VkAccessFlags dstAccessMask, VkImageLayout oldLayout, VkImageLayout newLayout, VkPipelineStageFlags srcStageMask, VkPipelineStageFlags dstStageMask) {
 	VkImageSubresourceRange subresourceRange = {
-		.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+		.aspectMask = aspectMask,
 		.baseMipLevel = 0,
 		.levelCount = 1,
 		.layerCount = 1

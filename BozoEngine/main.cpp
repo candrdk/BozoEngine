@@ -390,7 +390,7 @@ void CreateGraphicsPipeline() {
 		.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO,
 		.colorAttachmentCount = 1,
 		.pColorAttachmentFormats = &bz::swapchain.format,
-		.depthAttachmentFormat = VK_FORMAT_D24_UNORM_S8_UINT
+		.depthAttachmentFormat = VK_FORMAT_D32_SFLOAT
 	};
 
 	VkGraphicsPipelineCreateInfo pipelineInfo = {
@@ -480,12 +480,18 @@ void CreateDepthResources() {
 	// TODO: should query supported formats and select from them.
 
 	CreateImage(bz::swapchain.extent.width, bz::swapchain.extent.height, 1, bz::msaaSamples,
-		VK_FORMAT_D24_UNORM_S8_UINT,
+		VK_FORMAT_D32_SFLOAT,
 		VK_IMAGE_TILING_OPTIMAL,
 		VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
 		VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
 		bz::depthImage, bz::depthImageMemory);
-	bz::depthImageView = CreateImageView(bz::depthImage, VK_FORMAT_D24_UNORM_S8_UINT, VK_IMAGE_ASPECT_DEPTH_BIT, 1);
+	bz::depthImageView = CreateImageView(bz::depthImage, VK_FORMAT_D32_SFLOAT, VK_IMAGE_ASPECT_DEPTH_BIT, 1);
+	
+	VkCommandBuffer cmdBuffer = bz::device.CreateCommandBuffer(VK_COMMAND_BUFFER_LEVEL_PRIMARY);
+	SetImageLayout(cmdBuffer, bz::depthImage, VK_IMAGE_ASPECT_DEPTH_BIT, 
+		VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL, 
+		VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT);	// TODO: check that these stages are appropriate (prop doesn't matter in this case, but still nice to have right)
+	bz::device.FlushCommandBuffer(cmdBuffer, bz::device.graphicsQueue);
 }
 
 void CreateDescriptorPool() {
@@ -787,8 +793,8 @@ void RecordCommandBuffer(VkCommandBuffer commandBuffer, u32 imageIndex) {
 		.pStencilAttachment = nullptr
 	};
 
-	InsertImageBarrier(commandBuffer, bz::swapchain.images[imageIndex], 
-		0, VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT, 
+	InsertImageBarrier(commandBuffer, bz::swapchain.images[imageIndex], VK_IMAGE_ASPECT_COLOR_BIT,
+		0, VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
 		VK_IMAGE_LAYOUT_UNDEFINED, 
 		VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, 
 		VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, 
@@ -827,7 +833,7 @@ void RecordCommandBuffer(VkCommandBuffer commandBuffer, u32 imageIndex) {
 
 	vkCmdEndRendering(commandBuffer);
 
-	InsertImageBarrier(commandBuffer, bz::swapchain.images[imageIndex],
+	InsertImageBarrier(commandBuffer, bz::swapchain.images[imageIndex], VK_IMAGE_ASPECT_COLOR_BIT,
 		VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT, 0,
 		VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
 		VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
@@ -1039,7 +1045,7 @@ int main(int argc, char* argv[]) {
 	ImGui_ImplGlfw_InitForVulkan(window, true);
 	bz::Overlay.vertShader = LoadShader("shaders/uioverlay.vert.spv", VK_SHADER_STAGE_VERTEX_BIT);
 	bz::Overlay.fragShader = LoadShader("shaders/uioverlay.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT);
-	bz::Overlay.Initialize(bz::device, bz::msaaSamples, bz::swapchain.format, VK_FORMAT_D24_UNORM_S8_UINT);
+	bz::Overlay.Initialize(bz::device, bz::msaaSamples, bz::swapchain.format, VK_FORMAT_D32_SFLOAT);
 
 	double lastFrame = 0.0f;
 

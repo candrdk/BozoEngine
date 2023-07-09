@@ -31,6 +31,7 @@ void SetImageLayout2(
 void InsertImageBarrier(
 	VkCommandBuffer cmdBuffer,
 	VkImage image,
+	VkImageAspectFlags aspectMask,
 	VkAccessFlags srcAccessMask,
 	VkAccessFlags dstAccessMask,
 	VkImageLayout oldLayout,
