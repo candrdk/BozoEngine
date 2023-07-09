@@ -4,7 +4,9 @@ What kinda bozo would try to write an engine from scratch???
 ![Unaware 1st year computer science students attempts to write a vulkan renderer.](https://cdn.discordapp.com/attachments/707920399752626247/1123779412769386619/vulkan_unaware.png)
 
 ## What
-Small engine written for Vulkan 1.3. Project is written in `c++20` and is exclusively targeting Windows.
+Small `Vulkan 1.3` engine. Project is written in `c++20` and is exclusively targeting Windows. Error handling currently consists of violently asserting and shutting down the program whenever BozoEngine gets slightly uncomfortable, so please be nice!
+
+The goal is just to learn vulkan implement a very basic deffered renderer along the way.
 
 ## Features
 - Custom Dear Dear ImGui](https://github.com/ocornut/imgui) vulkan backend for use with dynamic rendering.
