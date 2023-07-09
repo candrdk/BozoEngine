@@ -9,7 +9,7 @@ Small `Vulkan 1.3` engine. Project is written in `c++20` and is exclusively targ
 The goal is just to learn vulkan implement a very basic deffered renderer along the way.
 
 ## Features
-- Custom Dear Dear ImGui](https://github.com/ocornut/imgui) vulkan backend for use with dynamic rendering.
+- Custom [Dear ImGui](https://github.com/ocornut/imgui) vulkan backend for use with dynamic rendering.
 - Reversed depth buffering for better precision.
 - Yeah thats kinda it... Don't judge mmkay.
 
