@@ -104,9 +104,6 @@
     <ClCompile Include="..\Extern\imgui\backends\imgui_impl_glfw.cpp">
       <Filter>imgui</Filter>
     </ClCompile>
-    <ClCompile Include="..\Extern\imgui\backends\imgui_impl_vulkan.cpp">
-      <Filter>imgui</Filter>
-    </ClCompile>
     <ClCompile Include="..\Extern\imgui\imgui.cpp">
       <Filter>imgui</Filter>
     </ClCompile>
@@ -181,16 +178,10 @@
     <ClInclude Include="..\Extern\imgui\backends\imgui_impl_glfw.h">
       <Filter>imgui</Filter>
     </ClInclude>
-    <ClInclude Include="..\Extern\imgui\backends\imgui_impl_vulkan.h">
-      <Filter>imgui</Filter>
-    </ClInclude>
     <ClInclude Include="..\Extern\imgui\imconfig.h">
       <Filter>imgui</Filter>
     </ClInclude>
     <ClInclude Include="..\Extern\imgui\imgui.h">
-      <Filter>imgui</Filter>
-    </ClInclude>
-    <ClInclude Include="..\Extern\imgui\imgui_internal.h">
       <Filter>imgui</Filter>
     </ClInclude>
     <ClInclude Include="..\Extern\imgui\imstb_rectpack.h">

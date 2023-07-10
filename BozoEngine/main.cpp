@@ -104,8 +104,9 @@ namespace bz {
 	VkPipelineLayout pipelineLayout;
 	VkPipeline graphicsPipeline;
 
+	// Maybe wrap all of these in a RenderFrame struct?
+	// Every renderframe should have its own comandbuffer pool, which is reset every frame.
 	VkCommandBuffer commandBuffers[MAX_FRAMES_IN_FLIGHT];
-
 	VkSemaphore imageAvailableSemaphores[MAX_FRAMES_IN_FLIGHT];
 	VkSemaphore renderFinishedSemaphores[MAX_FRAMES_IN_FLIGHT];
 	VkFence inFlightFences[MAX_FRAMES_IN_FLIGHT];

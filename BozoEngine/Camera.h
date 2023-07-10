@@ -73,7 +73,7 @@ public:
 	void UpdateMatrices() {
 		view = glm::lookAt(position, position + direction, glm::vec3(0.0f, 1.0f, 0.0f));
 
-		float tanHalfFov = glm::tan(glm::radians(fov) * 0.5);
+		float tanHalfFov = glm::tan(glm::radians(fov) * 0.5f);
 		float h = 1.0f / tanHalfFov;
 		float w = 1.0f / (tanHalfFov * aspect);
 		float a = zNear / (zFar - zNear);

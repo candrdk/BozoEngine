@@ -183,7 +183,6 @@
     <ClCompile Include="..\Extern\glfw\src\win32_window.c" />
     <ClCompile Include="..\Extern\glfw\src\window.c" />
     <ClCompile Include="..\Extern\imgui\backends\imgui_impl_glfw.cpp" />
-    <ClCompile Include="..\Extern\imgui\backends\imgui_impl_vulkan.cpp" />
     <ClCompile Include="..\Extern\imgui\imgui.cpp" />
     <ClCompile Include="..\Extern\imgui\imgui_demo.cpp" />
     <ClCompile Include="..\Extern\imgui\imgui_draw.cpp" />
@@ -209,10 +208,8 @@
     <ClInclude Include="..\Extern\glfw\src\win32_thread.h" />
     <ClInclude Include="..\Extern\glfw\src\win32_time.h" />
     <ClInclude Include="..\Extern\imgui\backends\imgui_impl_glfw.h" />
-    <ClInclude Include="..\Extern\imgui\backends\imgui_impl_vulkan.h" />
     <ClInclude Include="..\Extern\imgui\imconfig.h" />
     <ClInclude Include="..\Extern\imgui\imgui.h" />
-    <ClInclude Include="..\Extern\imgui\imgui_internal.h" />
     <ClInclude Include="..\Extern\imgui\imstb_rectpack.h" />
     <ClInclude Include="..\Extern\imgui\imstb_textedit.h" />
     <ClInclude Include="..\Extern\imgui\imstb_truetype.h" />
