@@ -1,5 +1,9 @@
 #pragma once
 
+#include "Common.h"
+
+#include "Device.h"
+
 struct SwapchainDesc {
 	bool enableVSync = true;
 	u32 prefferedImageCount = 2;

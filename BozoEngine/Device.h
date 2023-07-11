@@ -1,5 +1,7 @@
 #pragma once
 
+#include "Common.h"
+
 // TODO: move this to separate buffer.h file.
 //		 Everything regarding buffers will likely be heavliy changed once we start working with larger scenes 
 //		 and implement a resource manager. It's okay to elave it like this for now, though.

@@ -1,8 +1,6 @@
 #pragma once
 
 #include "Common.h"
-
-#include "Logging.h"
 #include "Device.h"
 
 class Texture2D {

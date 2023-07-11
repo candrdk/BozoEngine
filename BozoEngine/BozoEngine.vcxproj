@@ -192,6 +192,7 @@
     <ClCompile Include="..\Extern\imgui\imgui_widgets.cpp" />
     <ClCompile Include="..\Extern\volk\volk.c" />
     <ClCompile Include="Device.cpp" />
+    <ClCompile Include="GLTF.cpp" />
     <ClCompile Include="Logging.cpp" />
     <ClCompile Include="main.cpp" />
     <ClCompile Include="Swapchain.cpp" />

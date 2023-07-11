@@ -1,5 +1,4 @@
 #include "Tools.h"
-#include "Logging.h"
 
 // https://github.com/SaschaWillems/Vulkan/blob/master/base/VulkanTools.cpp
 void SetImageLayout(

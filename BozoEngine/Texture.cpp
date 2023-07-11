@@ -1,12 +1,12 @@
-// At the moment, we generate our own mip maps if they are not provided by the texture file being loaded
-// Look into what the appropriate way to handle this is. Idk if this is the right place to be doing it.
-
 #include "Texture.h"
 
 #pragma warning(disable : 26451 6262)
 	#define STB_IMAGE_IMPLEMENTATION
 	#include <stb_image.h>
 #pragma warning(default : 26451 6262)
+
+// TODO: there are propably quite a few issues with the current fromBuffer/loadFromFile implementations
+//		 especially relating to mipmap generation / loading... Look into this later.
 
 static void GenerateMipmaps(VkCommandBuffer commandBuffer, const Device& device, VkImage image, VkFormat imageFormat, i32 width, i32 height, u32 mipLevels) {
 	VkFormatProperties formatProperties;
@@ -235,54 +235,13 @@ void Texture2D::CreateFromBuffer(void* buffer, VkDeviceSize bufferSize, const De
 	height = texHeight;
 	mipLevels = 1;
 
-	// Create a host-visible staging buffer that contains the raw image data
-	VkBuffer stagingBuffer;
-	VkDeviceMemory stagingBufferMemory;
-
-	VkBufferCreateInfo stagingBufferCreateInfo = {
-		.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
-		.size = bufferSize,
-		.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
-		.sharingMode = VK_SHARING_MODE_EXCLUSIVE
-	};
-	VkCheck(vkCreateBuffer(device.logicalDevice, &stagingBufferCreateInfo, nullptr, &stagingBuffer), "Failed to create staging buffer");
-
-	VkMemoryRequirements memRequirements;
-	vkGetBufferMemoryRequirements(device.logicalDevice, stagingBuffer, &memRequirements);
-
-	VkMemoryAllocateInfo allocInfo = {
-		.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
-		.allocationSize = memRequirements.size,
-		.memoryTypeIndex = device.GetMemoryType(memRequirements.memoryTypeBits, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT)
-	};
-
-	VkCheck(vkAllocateMemory(device.logicalDevice, &allocInfo, nullptr, &stagingBufferMemory), "Failed to allocate vertex buffer memory");
-	VkCheck(vkBindBufferMemory(device.logicalDevice, stagingBuffer, stagingBufferMemory, 0), "Failed to bind DeviceMemory to VkBuffer");
-
-	// Copy texture data into the staging buffer
-	void* data;
-	VkCheck(vkMapMemory(device.logicalDevice, stagingBufferMemory, 0, memRequirements.size, 0, &data), "Failed to map staging buffer memory");
-	memcpy(data, buffer, bufferSize);
-	vkUnmapMemory(device.logicalDevice, stagingBufferMemory);
-
-	VkBufferImageCopy bufferCopyRegion = {
-		.bufferOffset = 0,
-		.imageSubresource = {
-			.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-			.mipLevel = 0,
-			.baseArrayLayer = 0,
-			.layerCount = 1
-		},
-		.imageExtent = {
-			.width = width,
-			.height = height,
-			.depth = 1
-		}
-	};
-
 	// Generate our own mip maps
 	bool generateMipmaps = (requestedImageLayout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL) && (mipLevels == 1);
-	generateMipmaps = false;
+
+	Buffer stagingBuffer;
+	device.CreateBuffer(VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, bufferSize, &stagingBuffer, buffer);
+
+	// If we're generating our own mipmaps, we will be copying to the image
 	if (generateMipmaps) {
 		mipLevels = (u32)(std::floor(std::log2(std::max(width, height))) + 1);
 		usage |= VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
@@ -290,9 +249,10 @@ void Texture2D::CreateFromBuffer(void* buffer, VkDeviceSize bufferSize, const De
 
 	CreateImage(device, format, usage);
 
+	VkMemoryRequirements memRequirements;
 	vkGetImageMemoryRequirements(device.logicalDevice, image, &memRequirements);
 
-	allocInfo = {
+	VkMemoryAllocateInfo allocInfo = {
 		.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
 		.allocationSize = memRequirements.size,
 		.memoryTypeIndex = device.GetMemoryType(memRequirements.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT)
@@ -312,8 +272,22 @@ void Texture2D::CreateFromBuffer(void* buffer, VkDeviceSize bufferSize, const De
 	// Image barrier
 	SetImageLayout2(copyCmd, image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, subResourceRange);
 
-	// Copy mip levels from staging buffer to device local memory
-	vkCmdCopyBufferToImage(copyCmd, stagingBuffer, image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &bufferCopyRegion);
+	// Copy mip level 0 from staging buffer to device local memory
+	VkBufferImageCopy bufferCopyRegion = {
+		.bufferOffset = 0,
+		.imageSubresource = {
+			.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+			.mipLevel = 0,
+			.baseArrayLayer = 0,
+			.layerCount = 1
+		},
+		.imageExtent = {
+			.width = width,
+			.height = height,
+			.depth = 1
+		}
+	};
+	vkCmdCopyBufferToImage(copyCmd, stagingBuffer.buffer, image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &bufferCopyRegion);
 
 	// Change texture image layout to the requested image layout (often SHADER_READ) after all mip levels have been copied.
 	layout = requestedImageLayout;
@@ -328,8 +302,9 @@ void Texture2D::CreateFromBuffer(void* buffer, VkDeviceSize bufferSize, const De
 	device.FlushCommandBuffer(copyCmd, copyQueue);
 
 	// Clean up staging resources
-	vkDestroyBuffer(device.logicalDevice, stagingBuffer, nullptr);
-	vkFreeMemory(device.logicalDevice, stagingBufferMemory, nullptr);
+	//vkDestroyBuffer(device.logicalDevice, stagingBuffer, nullptr);
+	//vkFreeMemory(device.logicalDevice, stagingBufferMemory, nullptr);
+	stagingBuffer.destroy(device.logicalDevice);
 
 	// Create a default sampler
 	CreateDefaultSampler(device);

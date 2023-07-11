@@ -1,7 +1,6 @@
 #pragma once
-
+#include "Common.h"
 #include <source_location>
-#include <vulkan/vk_enum_string_helper.h>
 
 // SGR escape sequences: https://docs.microsoft.com/en-us/windows/console/console-virtual-terminal-sequences
 #define SGR_SET_BG_GRAY  "\x1B[100;1m"

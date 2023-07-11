@@ -1,9 +1,6 @@
 #pragma once
 
-#include <imgui.h>
-
 #include "Common.h"
-#include "Logging.h"
 #include "Device.h"
 
 class UIOverlay {

@@ -1,5 +1,7 @@
 #include "Logging.h"
 
+#include <vulkan/vk_enum_string_helper.h>
+
 static void PrintCheck(const char* result, const char* message, std::source_location location) {
 	fprintf(stderr, SGR_SET_BG_RED "[CHECK]" SGR_SET_DEFAULT " `%s`. %s\n\tFile: %s(%u:%u) in `%s`\n",
 		result,

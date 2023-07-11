@@ -1,7 +1,3 @@
-#include "Common.h"
-
-#include "Logging.h"
-#include "Device.h"
 #include "Swapchain.h"
 
 static VkSurfaceFormatKHR ChooseSwapchainSurfaceFormat(VkSurfaceKHR surface, VkPhysicalDevice physicalDevice) {

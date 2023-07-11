@@ -1,6 +1,3 @@
-#include "Common.h"
-
-#include "Logging.h"
 #include "Device.h"
 
 static VkInstance CreateInstance() {

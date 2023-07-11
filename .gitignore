@@ -16,6 +16,9 @@ imgui.ini
 # SPIR-V files
 *.spv
 
+# Visual studio compile score extension files
+compileData.scor*
+
 # User-specific files (MonoDevelop/Xamarin Studio)
 *.userprefs
 

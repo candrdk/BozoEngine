@@ -1,16 +1,9 @@
-// Stuff TODO in the future: 
-//	- At some point VMA should be integrated instead of making individual allocations for every buffer.
-//	- Read up on driver developer recommendations (fx. suballocating vertex/index buffers inside the same VkBuffer)
-//	- Add meshoptimizer
-//	- Implement loading multiple mip levels from a file instead of creating them at runtime.
-
 #include "Common.h"
 
 #include <backends/imgui_impl_glfw.h>
 
 #include <glm/gtc/matrix_transform.hpp>		// glm::rotate
 
-#include "Logging.h"
 #include "Device.h"
 #include "Swapchain.h"
 #include "Texture.h"

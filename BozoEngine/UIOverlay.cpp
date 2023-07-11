@@ -1,5 +1,7 @@
 #include "UIOverlay.h"
 
+#include <imgui.h>
+
 UIOverlay::UIOverlay() {
 	ImGui::CreateContext();
 

@@ -12,6 +12,7 @@
 #include <assert.h>
 
 #include "Tools.h"
+#include "Logging.h"
 #define MAX_FRAMES_IN_FLIGHT 2
 
 typedef uint8_t	 u8;
