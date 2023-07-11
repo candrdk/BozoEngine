@@ -26,7 +26,7 @@ u32 currentFrame = 0;
 
 // Temporary namespace to contain globals
 namespace bz {
-	Camera camera(glm::vec3(0.0f, 0.0f, 0.5f), 1.0f, 90.0f, (float)WIDTH / HEIGHT, 0.01f, 100.0f, 0.0f, -90.0f);
+	Camera camera(glm::vec3(0.0f, 0.0f, 0.5f), 1.0f, 90.0f, (float)WIDTH / HEIGHT, 0.01f, 0.0f, -90.0f);
 
 	Device device;
 	Swapchain swapchain;
@@ -77,6 +77,7 @@ void KeyCallback(GLFWwindow* window, int key, int scancode, int action, int mods
 
 	case GLFW_KEY_SPACE:
 	case GLFW_KEY_LEFT_CONTROL:
+	case GLFW_KEY_LEFT_SHIFT:
 	case GLFW_KEY_W:
 	case GLFW_KEY_A:
 	case GLFW_KEY_S:

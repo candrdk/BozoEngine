@@ -4,8 +4,8 @@
 
 class Camera {
 public:
-	Camera(glm::vec3 startPos, float speed, float fov, float aspect, float zNear, float zFar, float pitch, float yaw)
-		: position{startPos}, speed{speed}, fov {fov}, aspect{aspect}, zNear{ zNear }, zFar{ zFar }, pitch{pitch}, yaw{yaw}
+	Camera(glm::vec3 startPos, float speed, float fov, float aspect, float zNear, float pitch, float yaw)
+		: position{startPos}, speed{speed}, fov {fov}, aspect{aspect}, zNear{ zNear }, pitch{pitch}, yaw{yaw}
 	{
 		UpdateDirection();
 		UpdateMatrices();
@@ -22,7 +22,7 @@ public:
 		if (moveBack)  move -= direction;
 
 		if (glm::length(move) > 0.01f) 
-			position += deltaTime * speed * glm::normalize(move);
+			position += deltaTime * speed * (speedBoost ? 2.0f : 1.0f) * glm::normalize(move);
 
 		UpdateMatrices();
 	}
@@ -50,6 +50,9 @@ public:
 		case GLFW_KEY_D:
 			moveRight = move;
 			break;
+		case GLFW_KEY_LEFT_SHIFT:
+			speedBoost = move;
+			break;
 		}
 	}
 
@@ -72,28 +75,32 @@ public:
 
 	void UpdateMatrices() {
 		view = glm::lookAt(position, position + direction, glm::vec3(0.0f, 1.0f, 0.0f));
-
-		float tanHalfFov = glm::tan(glm::radians(fov) * 0.5f);
-		float h = 1.0f / tanHalfFov;
-		float w = 1.0f / (tanHalfFov * aspect);
-		float a = zNear / (zFar - zNear);
-		float b = (zNear * zFar) / (zFar - zNear);
-
-		projection = glm::mat4(
-			glm::vec4(w, 0.0f, 0.0f, 0.0f),
-			glm::vec4(0.0f, -h, 0.0f, 0.0f),
-			glm::vec4(0.0f, 0.0f, -a, -1.0f),
-			glm::vec4(0.0f, 0.0f, b, 0.0f));
+		projection = MatRevInfiniteProjection(fov, aspect, zNear);
 	}
 
-	float fov, aspect;
-	float zNear, zFar;
+	// Calculates the reversed z infinite perspetive projection. Taken from FGED 2, Listing 6.3.
+	// fovy: vertical field of view
+	// s: Aspect ratio
+	// n: Near plane
+	// e: Small epsilon value to deal with round-off errors when rendering objects at infinity. Defaults to 2^-20
+	glm::mat4 MatRevInfiniteProjection(float fovy, float s, float n, float e = 1.0f / (1 << 20)) {
+		float g = 1.0f / glm::tan(glm::radians(fovy) * 0.5f);
+
+		return glm::mat4(
+			g / s,	0.0f,	0.0f,			0.0f,
+			0.0f,	-g,		0.0f,			0.0f,
+			0.0f,	0.0f,	e,				-1.0f,
+			0.0f,	0.0f,   n * (1.0f - e),	0.0f);
+	}
+
+	float fov, aspect, zNear;
 
 	float speed;
-	bool moveUp   = false,
+	bool speedBoost = false,
+		moveUp    = false,
 		moveDown  = false,
 		moveLeft  = false,
-		moveRight = false, 
+		moveRight = false,
 		moveFront = false,
 		moveBack  = false;
 
