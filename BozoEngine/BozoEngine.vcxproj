@@ -237,6 +237,9 @@
     <None Include="shaders\uioverlay.frag.glsl" />
     <None Include="shaders\uioverlay.vert.glsl" />
   </ItemGroup>
+  <ItemGroup>
+    <Natvis Include="..\Extern\glm\util\glm.natvis" />
+  </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
   </ImportGroup>

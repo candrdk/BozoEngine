@@ -20,7 +20,7 @@ layout(location = 1) out vec3 outColor;
 layout(location = 2) out vec2 outUV;
 
 void main() {
-    outNormal = inNormal;
+    outNormal = mat3(primitive.model) * inNormal;
     outColor = inColor;
     outUV = inUV;
     gl_Position = uboScene.proj * uboScene.view * primitive.model * vec4(inPos, 1.0);

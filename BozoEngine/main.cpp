@@ -43,7 +43,7 @@ u32 currentFrame = 0;
 
 // Temporary namespace to contain globals
 namespace bz {
-	Camera camera(glm::vec3(1.0f, 1.0f, 1.0f), 1.0f, 90.0f, (float)WIDTH / HEIGHT, 0.1f, 100.0f, -30.0f, -135.0f);
+	Camera camera(glm::vec3(0.0f, 0.0f, 0.5f), 1.0f, 90.0f, (float)WIDTH / HEIGHT, 0.01f, 100.0f, 0.0f, -90.0f);
 
 	Device device;
 	Swapchain swapchain;

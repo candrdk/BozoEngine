@@ -238,4 +238,7 @@
       <Filter>shaders</Filter>
     </None>
   </ItemGroup>
+  <ItemGroup>
+    <Natvis Include="..\Extern\glm\util\glm.natvis" />
+  </ItemGroup>
 </Project>

@@ -11,6 +11,8 @@
 #define TINYGLTF_IMPLEMENTATION
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include <tiny_gltf.h>
+
+#define GLM_FORCE_QUAT_DATA_XYZW	// glTF stores quaternions with xyzw layout. GLM defaults to wxyz.
 #include <glm/gtc/type_ptr.hpp>
 #include <glm/ext/matrix_transform.hpp>
 
@@ -277,7 +279,7 @@ public:
 				if (primitive.attributes.find("TEXCOORD_0") != primitive.attributes.end()) {
 					const tinygltf::Accessor& accessor = model.accessors[primitive.attributes.find("TEXCOORD_0")->second];
 					const tinygltf::BufferView& view = model.bufferViews[accessor.bufferView];
-					normalsBuffer = (float*)(&model.buffers[view.buffer].data[accessor.byteOffset + view.byteOffset]);
+					texCoordsBuffer = (float*)(&model.buffers[view.buffer].data[accessor.byteOffset + view.byteOffset]);
 				}
 
 				// Reserve space for and append the vertices to the model's vertexBuffer
