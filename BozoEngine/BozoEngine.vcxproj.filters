@@ -27,6 +27,9 @@
     <Filter Include="imgui">
       <UniqueIdentifier>{e0bee483-b25d-4d45-9759-e89a9c367513}</UniqueIdentifier>
     </Filter>
+    <Filter Include="tinygltf">
+      <UniqueIdentifier>{731023d8-68e1-4064-a10e-35d35b864e36}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="main.cpp">
@@ -210,6 +213,15 @@
     </ClInclude>
     <ClInclude Include="Tools.h">
       <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="GLTF.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Extern\tinygltf\tiny_gltf.h">
+      <Filter>tinygltf</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Extern\tinygltf\json.hpp">
+      <Filter>tinygltf</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

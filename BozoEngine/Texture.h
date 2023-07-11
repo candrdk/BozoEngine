@@ -5,7 +5,7 @@
 #include "Logging.h"
 #include "Device.h"
 
-class Texture {
+class Texture2D {
 public:
 	VkImage image;
 	VkImageView view;
@@ -22,7 +22,8 @@ public:
 
 	void LoadFromFile(const char* path, const Device& device, VkQueue copyQueue, VkFormat format, VkImageUsageFlags usage, VkImageLayout requestedImageLayout);
 
-	void CreateFromBuffer(void* buffer, VkDeviceSize bufferSize, const Device& device, VkQueue copyQueue, u32 texWidth, u32 texHeight, VkFormat format, VkImageUsageFlags usage, VkImageLayout requestedImageLayout);
+	void CreateFromBuffer(void* buffer, VkDeviceSize bufferSize, const Device& device, VkQueue copyQueue, 
+		u32 texWidth, u32 texHeight, VkFormat format, VkImageUsageFlags usage = VK_IMAGE_USAGE_SAMPLED_BIT, VkImageLayout requestedImageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 
 private:
 	void CreateImage(const Device& device, VkFormat format, VkImageUsageFlags usage);

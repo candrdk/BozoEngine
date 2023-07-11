@@ -9,7 +9,6 @@ struct Buffer {
 	void* mapped;
 
 	VkDeviceSize size;
-	VkDeviceSize offset;
 
 	VkResult map(VkDevice device, VkDeviceSize size = VK_WHOLE_SIZE, VkDeviceSize offset = 0) {
 		return vkMapMemory(device, memory, offset, size, 0, &mapped);
@@ -22,7 +21,7 @@ struct Buffer {
 		}
 	}
 
-	VkResult bind(VkDevice device, VkDeviceSize offset) {
+	VkResult bind(VkDevice device, VkDeviceSize offset = 0) {
 		return vkBindBufferMemory(device, buffer, memory, offset);
 	}
 
@@ -35,7 +34,7 @@ struct Buffer {
 		}
 	}
 
-	VkResult Flush(VkDevice device) {
+	VkResult Flush(VkDevice device, VkDeviceSize offset = 0) {
 		VkMappedMemoryRange mappedRange = {
 			.sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE,
 			.memory = memory,
@@ -84,8 +83,7 @@ public:
 
 	// TODO: Add a VkLog(VkResult, string) that simply prints if condition fails and returns VkResult
 	//		 Also add a macro for the	`if(!VkResult) return VkLog(VkResult, string);`	  pattern.
-	VkResult CreateBuffer(VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkDeviceSize size, Buffer* buffer) const {
-		VkResult result = VK_SUCCESS;
+	VkResult CreateBuffer(VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkDeviceSize size, Buffer* buffer, void* data = nullptr) const {
 		VkBufferCreateInfo bufferInfo = {
 			.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
 			.size = size,
@@ -93,8 +91,7 @@ public:
 			.sharingMode = VK_SHARING_MODE_EXCLUSIVE
 		};
 
-		result = vkCreateBuffer(logicalDevice, &bufferInfo, nullptr, &buffer->buffer); // , "Failed to create buffer");
-		if (result != VK_SUCCESS) return result;
+		VkCheck(vkCreateBuffer(logicalDevice, &bufferInfo, nullptr, &buffer->buffer), "Failed to create buffer");
 
 		VkMemoryRequirements memRequirements;
 		vkGetBufferMemoryRequirements(logicalDevice, buffer->buffer, &memRequirements);
@@ -105,15 +102,21 @@ public:
 			.memoryTypeIndex = GetMemoryType(memRequirements.memoryTypeBits, properties)
 		};
 
-		result = vkAllocateMemory(logicalDevice, &allocInfo, nullptr, &buffer->memory); // , "Failed to allocate buffer memory");
-		if (result != VK_SUCCESS) return result;
-		result = vkBindBufferMemory(logicalDevice, buffer->buffer, buffer->memory, 0); // , "Failed to bind DeviceMemory to VkBuffer");
-		if (result != VK_SUCCESS) return result;
-
+		VkCheck(vkAllocateMemory(logicalDevice, &allocInfo, nullptr, &buffer->memory), "Failed to allocate buffer memory");
 		buffer->size = memRequirements.size;
-		buffer->offset = 0;
 
-		return result;
+		if (data != nullptr) {
+			VkCheck(buffer->map(logicalDevice));
+			memcpy(buffer->mapped, data, size);
+			if ((properties & VK_MEMORY_PROPERTY_HOST_COHERENT_BIT) == 0) {
+				buffer->Flush(logicalDevice);
+			}
+			buffer->unmap(logicalDevice);
+		}
+
+		buffer->bind(logicalDevice);
+
+		return VK_SUCCESS;
 	}
 
 	u32 GetMemoryType(u32 memoryTypeBits, VkMemoryPropertyFlags properties) const;

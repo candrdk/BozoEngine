@@ -76,6 +76,7 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>WIN32;_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
+      <AdditionalIncludeDirectories>..\Extern\tinygltf;..\Extern\imgui;..\Extern\fast_obj;..\Extern\stb;..\Extern\glm;..\Extern\glfw\include;..\Extern\volk;$(VULKAN_SDK)\Include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -90,6 +91,7 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>WIN32;NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
+      <AdditionalIncludeDirectories>..\Extern\tinygltf;..\Extern\imgui;..\Extern\fast_obj;..\Extern\stb;..\Extern\glm;..\Extern\glfw\include;..\Extern\volk;$(VULKAN_SDK)\Include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -104,7 +106,7 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>_DEBUG;_CONSOLE;%(PreprocessorDefinitions);_GLFW_WIN32;_CRT_SECURE_NO_WARNINGS;VK_USE_PLATFORM_WIN32_KHR;NOMINMAX;WIN32_LEAN_AND_MEAN;IMGUI_IMPL_VULKAN_NO_PROTOTYPES</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>..\Extern\imgui;..\Extern\fast_obj;..\Extern\stb;..\Extern\glm;..\Extern\glfw\include;..\Extern\volk;$(VULKAN_SDK)\Include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>..\Extern\tinygltf;..\Extern\imgui;..\Extern\fast_obj;..\Extern\stb;..\Extern\glm;..\Extern\glfw\include;..\Extern\volk;$(VULKAN_SDK)\Include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <LanguageStandard>stdcpp20</LanguageStandard>
       <ShowIncludes>false</ShowIncludes>
     </ClCompile>
@@ -135,7 +137,7 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>NDEBUG;_CONSOLE;%(PreprocessorDefinitions);_GLFW_WIN32;_CRT_SECURE_NO_WARNINGS;VK_USE_PLATFORM_WIN32_KHR;NOMINMAX;WIN32_LEAN_AND_MEAN;IMGUI_IMPL_VULKAN_NO_PROTOTYPES</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>..\Extern\imgui;..\Extern\fast_obj;..\Extern\stb;..\Extern\glm;..\Extern\glfw\include;..\Extern\volk;$(VULKAN_SDK)\Include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>..\Extern\tinygltf;..\Extern\imgui;..\Extern\fast_obj;..\Extern\stb;..\Extern\glm;..\Extern\glfw\include;..\Extern\volk;$(VULKAN_SDK)\Include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <LanguageStandard>stdcpp20</LanguageStandard>
       <ShowIncludes>false</ShowIncludes>
     </ClCompile>
@@ -214,10 +216,13 @@
     <ClInclude Include="..\Extern\imgui\imstb_textedit.h" />
     <ClInclude Include="..\Extern\imgui\imstb_truetype.h" />
     <ClInclude Include="..\Extern\stb\stb_image.h" />
+    <ClInclude Include="..\Extern\tinygltf\json.hpp" />
+    <ClInclude Include="..\Extern\tinygltf\tiny_gltf.h" />
     <ClInclude Include="..\Extern\volk\volk.h" />
     <ClInclude Include="Camera.h" />
     <ClInclude Include="Common.h" />
     <ClInclude Include="Device.h" />
+    <ClInclude Include="GLTF.h" />
     <ClInclude Include="Logging.h" />
     <ClInclude Include="Swapchain.h" />
     <ClInclude Include="Texture.h" />

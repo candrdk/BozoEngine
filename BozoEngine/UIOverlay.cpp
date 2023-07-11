@@ -103,33 +103,8 @@ void UIOverlay::Initialize(const Device& device, VkSampleCountFlagBits rasteriza
 	VkCheck(vkCreateImageView(device.logicalDevice, &viewInfo, nullptr, &fontView), "Failed to create image view of font image");
 
 	// Create staging buffer for font data upload
-	VkBuffer stagingBuffer;
-	VkDeviceMemory stagingBufferMemory;
-	VkMemoryRequirements memRequirements;
-
-	VkBufferCreateInfo stagingBufferCreateInfo = {
-		.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
-		.size = uploadSize,
-		.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
-		.sharingMode = VK_SHARING_MODE_EXCLUSIVE
-	};
-	VkCheck(vkCreateBuffer(device.logicalDevice, &stagingBufferCreateInfo, nullptr, &stagingBuffer), "Failed to create staging buffer");
-
-	vkGetBufferMemoryRequirements(device.logicalDevice, stagingBuffer, &memRequirements);
-
-	VkMemoryAllocateInfo memoryAllocInfo = {
-		.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
-		.allocationSize = memRequirements.size,
-		.memoryTypeIndex = device.GetMemoryType(memRequirements.memoryTypeBits, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT)
-	};
-
-	VkCheck(vkAllocateMemory(device.logicalDevice, &memoryAllocInfo, nullptr, &stagingBufferMemory), "Failed to allocate vertex buffer memory");
-	VkCheck(vkBindBufferMemory(device.logicalDevice, stagingBuffer, stagingBufferMemory, 0), "Failed to bind DeviceMemory to VkBuffer");
-
-	void* data;
-	VkCheck(vkMapMemory(device.logicalDevice, stagingBufferMemory, 0, memRequirements.size, 0, &data), "Failed to map staging buffer memory");
-	memcpy(data, fontData, uploadSize);
-	vkUnmapMemory(device.logicalDevice, stagingBufferMemory);
+	Buffer stagingBuffer;
+	device.CreateBuffer(VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, uploadSize, &stagingBuffer, fontData);
 
 	VkCommandBuffer copyCmd = device.CreateCommandBuffer(VK_COMMAND_BUFFER_LEVEL_PRIMARY);
 
@@ -152,7 +127,7 @@ void UIOverlay::Initialize(const Device& device, VkSampleCountFlagBits rasteriza
 		}
 	};
 
-	vkCmdCopyBufferToImage(copyCmd, stagingBuffer, fontImage, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &bufferCopyRegion);
+	vkCmdCopyBufferToImage(copyCmd, stagingBuffer.buffer, fontImage, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &bufferCopyRegion);
 
 	// prepare font image for shader read
 	SetImageLayout(copyCmd, fontImage, VK_IMAGE_ASPECT_COLOR_BIT, 
@@ -164,8 +139,7 @@ void UIOverlay::Initialize(const Device& device, VkSampleCountFlagBits rasteriza
 	device.FlushCommandBuffer(copyCmd, device.graphicsQueue);
 	
 	// Clean up staging buffer
-	vkDestroyBuffer(device.logicalDevice, stagingBuffer, nullptr);
-	vkFreeMemory(device.logicalDevice, stagingBufferMemory, nullptr);
+	stagingBuffer.destroy(device.logicalDevice);
 
 	// Font texture sampler
 	VkSamplerCreateInfo samplerInfo = {

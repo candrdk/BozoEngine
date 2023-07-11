@@ -94,14 +94,14 @@ static void GenerateMipmaps(VkCommandBuffer commandBuffer, const Device& device,
 		1, &barrier);
 }
 
-void Texture::Destroy(const Device& device) {
+void Texture2D::Destroy(const Device& device) {
 	vkDestroyImageView(device.logicalDevice, view, nullptr);
 	vkDestroyImage(device.logicalDevice, image, nullptr);
 	vkDestroySampler(device.logicalDevice, sampler, nullptr);
 	vkFreeMemory(device.logicalDevice, deviceMemory, nullptr);
 }
 
-void Texture::LoadFromFile(const char* path, const Device& device, VkQueue copyQueue, VkFormat format, VkImageUsageFlags usage, VkImageLayout requestedImageLayout) {
+void Texture2D::LoadFromFile(const char* path, const Device& device, VkQueue copyQueue, VkFormat format, VkImageUsageFlags usage, VkImageLayout requestedImageLayout) {
 	stbi_set_flip_vertically_on_load(true);
 	int channels;
 	stbi_uc* pixels = stbi_load(path, (int*)(&width), (int*)(&height), &channels, STBI_rgb_alpha);
@@ -229,7 +229,7 @@ void Texture::LoadFromFile(const char* path, const Device& device, VkQueue copyQ
 	};
 }
 
-void Texture::CreateFromBuffer(void* buffer, VkDeviceSize bufferSize, const Device& device, VkQueue copyQueue, u32 texWidth, u32 texHeight, VkFormat format, VkImageUsageFlags usage, VkImageLayout requestedImageLayout) {
+void Texture2D::CreateFromBuffer(void* buffer, VkDeviceSize bufferSize, const Device& device, VkQueue copyQueue, u32 texWidth, u32 texHeight, VkFormat format, VkImageUsageFlags usage, VkImageLayout requestedImageLayout) {
 	Check(buffer != nullptr, "Cannot create image from a null buffer");
 	width = texWidth;
 	height = texHeight;
@@ -269,7 +269,7 @@ void Texture::CreateFromBuffer(void* buffer, VkDeviceSize bufferSize, const Devi
 		.bufferOffset = 0,
 		.imageSubresource = {
 			.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-			.mipLevel = 1,
+			.mipLevel = 0,
 			.baseArrayLayer = 0,
 			.layerCount = 1
 		},
@@ -282,6 +282,7 @@ void Texture::CreateFromBuffer(void* buffer, VkDeviceSize bufferSize, const Devi
 
 	// Generate our own mip maps
 	bool generateMipmaps = (requestedImageLayout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL) && (mipLevels == 1);
+	generateMipmaps = false;
 	if (generateMipmaps) {
 		mipLevels = (u32)(std::floor(std::log2(std::max(width, height))) + 1);
 		usage |= VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
@@ -344,7 +345,7 @@ void Texture::CreateFromBuffer(void* buffer, VkDeviceSize bufferSize, const Devi
 	};
 }
 
-void Texture::CreateImage(const Device& device, VkFormat format, VkImageUsageFlags usage) {
+void Texture2D::CreateImage(const Device& device, VkFormat format, VkImageUsageFlags usage) {
 	VkImageCreateInfo imageInfo = {
 		.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
 		.imageType = VK_IMAGE_TYPE_2D,
@@ -366,7 +367,7 @@ void Texture::CreateImage(const Device& device, VkFormat format, VkImageUsageFla
 	VkCheck(vkCreateImage(device.logicalDevice, &imageInfo, nullptr, &image), "Failed to create image");
 }
 
-void Texture::CreateDefaultSampler(const Device& device) {
+void Texture2D::CreateDefaultSampler(const Device& device) {
 	VkSamplerCreateInfo samplerInfo = {
 		.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
 		.magFilter = VK_FILTER_LINEAR,
@@ -391,7 +392,7 @@ void Texture::CreateDefaultSampler(const Device& device) {
 	VkCheck(vkCreateSampler(device.logicalDevice, &samplerInfo, nullptr, &sampler), "Failed to create texture sampler");
 }
 
-void Texture::CreateImageView(const Device& device, VkFormat format) {
+void Texture2D::CreateImageView(const Device& device, VkFormat format) {
 	VkImageViewCreateInfo viewInfo = {
 		.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
 		.image = image,
