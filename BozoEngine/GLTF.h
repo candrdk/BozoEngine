@@ -183,8 +183,8 @@ public:
 				buffer = &gltfImage.image[0];
 				bufferSize = gltfImage.image.size();
 			}
-
-			images[i].texture.CreateFromBuffer(buffer, bufferSize, device, device.graphicsQueue, gltfImage.width, gltfImage.height, VK_FORMAT_R8G8B8A8_UNORM);
+			// TODO: Still not quite sure when to use unorm/srgb. Look into gamma / sRGB stuff at some point.
+			images[i].texture.CreateFromBuffer(buffer, bufferSize, device, device.graphicsQueue, gltfImage.width, gltfImage.height, VK_FORMAT_R8G8B8A8_SRGB);
 		}
 	}
 
