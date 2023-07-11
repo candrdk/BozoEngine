@@ -28,8 +28,6 @@
 
 constexpr u32 WIDTH = 800;
 constexpr u32 HEIGHT = 600;
-constexpr const char* MODEL_PATH = "models/viking_room.obj";
-constexpr const char* TEXTURE_PATH = "textures/viking_room.png";
 
 GLTFModel* flightHelmet;
 
@@ -745,7 +743,7 @@ void InitVulkan() {
 	});
 
 	flightHelmet = new GLTFModel(bz::device);
-	flightHelmet->LoadGLTFFile("models/FlightHelmet/FlightHelmet.gltf");
+	flightHelmet->LoadGLTFFile("assets/FlightHelmet/FlightHelmet.gltf");
 
 	CreateUniformBuffers();
 
