@@ -6,8 +6,6 @@
 
 #include "Common.h"
 
-#include <chrono> // ugh
-
 #include <backends/imgui_impl_glfw.h>
 
 #include <glm/gtc/matrix_transform.hpp>		// glm::rotate
@@ -27,7 +25,6 @@ constexpr u32 HEIGHT = 600;
 GLTFModel* flightHelmet;
 
 struct UniformBufferObject {
-	alignas(16) glm::mat4 model;
 	alignas(16) glm::mat4 view;
 	alignas(16) glm::mat4 proj;
 };
@@ -817,12 +814,7 @@ void CleanupVulkan() {
 }
 
 void UpdateUniformBuffer(u32 currentImage) {
-	static auto startTime = std::chrono::high_resolution_clock::now();
-	auto currentTime = std::chrono::high_resolution_clock::now();
-	float time = std::chrono::duration<float, std::chrono::seconds::period>(currentTime - startTime).count();
-
 	UniformBufferObject ubo = {
-		.model = glm::rotate(glm::mat4(1.0f), time * glm::radians(90.0f), glm::vec3(0.0f, 1.0f, 0.0f)),
 		.view = bz::camera.view,
 		.proj = bz::camera.projection
 	};
