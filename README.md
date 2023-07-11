@@ -11,6 +11,7 @@ The goal is just to learn vulkan implement a very basic deffered renderer along 
 ## Features
 - Custom [Dear ImGui](https://github.com/ocornut/imgui) vulkan backend for use with dynamic rendering.
 - Reversed depth buffering for better precision.
+- Basic loading and rendering of glTF 2.0 models with [tinygltf](https://github.com/syoyo/tinygltf). Still very barebones.
 - Yeah thats kinda it... Don't judge mmkay.
 
 ## Dependencies
@@ -19,6 +20,5 @@ Bozo Engine uses the following 3rd party libraries:
 - Math stuff with [glm](https://github.com/g-truc/glm)
 - Vulkan meta-loader: [volk](https://github.com/zeux/volk)
 - Image loading with [stb](https://github.com/nothings/stb) (only using stb_image.h)
-- OBJ loading with [fast_obj](https://github.com/thisistherk/fast_obj)
 - glTF loading with [tinygltf](https://github.com/syoyo/tinygltf)
 - UI with [Dear ImGui](https://github.com/ocornut/imgui)
