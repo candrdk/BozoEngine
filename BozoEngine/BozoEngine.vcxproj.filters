@@ -21,9 +21,6 @@
     <Filter Include="stb">
       <UniqueIdentifier>{d64c5770-3eb5-45b5-8653-f64077042eb0}</UniqueIdentifier>
     </Filter>
-    <Filter Include="fast_obj">
-      <UniqueIdentifier>{14d26764-09f1-4ed9-b685-d0e549a82769}</UniqueIdentifier>
-    </Filter>
     <Filter Include="imgui">
       <UniqueIdentifier>{e0bee483-b25d-4d45-9759-e89a9c367513}</UniqueIdentifier>
     </Filter>
@@ -171,9 +168,6 @@
     </ClInclude>
     <ClInclude Include="..\Extern\stb\stb_image.h">
       <Filter>stb</Filter>
-    </ClInclude>
-    <ClInclude Include="..\Extern\fast_obj\fast_obj.h">
-      <Filter>fast_obj</Filter>
     </ClInclude>
     <ClInclude Include="Camera.h">
       <Filter>Header Files</Filter>

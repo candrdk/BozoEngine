@@ -200,7 +200,6 @@
     <ClCompile Include="UIOverlay.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="..\Extern\fast_obj\fast_obj.h" />
     <ClInclude Include="..\Extern\glfw\src\internal.h" />
     <ClInclude Include="..\Extern\glfw\src\null_joystick.h" />
     <ClInclude Include="..\Extern\glfw\src\null_platform.h" />

@@ -12,11 +12,6 @@
 
 #include <glm/gtc/matrix_transform.hpp>		// glm::rotate
 
-#pragma warning(disable : 26451 6262)
-	#define FAST_OBJ_IMPLEMENTATION
-	#include <fast_obj.h>
-#pragma warning(default : 26451 6262)
-
 #include "Logging.h"
 #include "Device.h"
 #include "Swapchain.h"
