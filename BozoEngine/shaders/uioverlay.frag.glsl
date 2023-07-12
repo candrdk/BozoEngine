@@ -8,5 +8,5 @@ layout(location = 1) in vec4 inColor;
 layout(location = 0) out vec4 outColor;
 
 void main() {
-	outColor = inColor * texture(fontSampler, inUV);
+	outColor = pow(inColor, vec4(1.5)) * texture(fontSampler, inUV);	// very rouch gamma correction
 }

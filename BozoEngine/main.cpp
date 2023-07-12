@@ -12,8 +12,8 @@
 #include "GLTF.h"
 #include "UIOverlay.h"
 
-constexpr u32 WIDTH = 800;
-constexpr u32 HEIGHT = 600;
+constexpr u32 WIDTH = 1600;
+constexpr u32 HEIGHT = 900;
 
 GLTFModel* flightHelmet;
 
