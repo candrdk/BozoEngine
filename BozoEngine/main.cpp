@@ -43,6 +43,8 @@ namespace bz {
 	Swapchain swapchain;
 
 	UIOverlay Overlay;
+	RenderFrame renderFrames[MAX_FRAMES_IN_FLIGHT];
+	Buffer uniformBuffers[MAX_FRAMES_IN_FLIGHT];
 
 	// Wrap these
 	VkImage depthImage;
@@ -59,10 +61,6 @@ namespace bz {
 
 	VkPipelineLayout pipelineLayout;
 	VkPipeline graphicsPipeline;
-
-	RenderFrame renderFrames[MAX_FRAMES_IN_FLIGHT];
-
-	Buffer uniformBuffers[MAX_FRAMES_IN_FLIGHT];
 
 	VkSampleCountFlagBits msaaSamples = VK_SAMPLE_COUNT_1_BIT;
 
@@ -421,7 +419,7 @@ void CreateBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyF
 }
 
 void CreateUniformBuffers() {
-	for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
+	for (int i = 0; i < arraysize(bz::uniformBuffers); i++) {
 		bz::device.CreateBuffer(
 			VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, 
 			VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, 
@@ -434,7 +432,7 @@ void CreateDescriptorPool() {
 	VkDescriptorPoolSize poolSizes[2] = {
 		{ // uniform buffer descriptor pool
 			.type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-			.descriptorCount = MAX_FRAMES_IN_FLIGHT	// TODO: try setting this to 1
+			.descriptorCount = arraysize(bz::uniformBuffers)	// 1 descriptor per uniform buffer
 		},
 		{ // combined image sampler descriptor pool per model image / texture
 			.type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
@@ -442,11 +440,9 @@ void CreateDescriptorPool() {
 		}
 	};
 
-	// One set for matrices and one per model image/texture
-	const u32 maxSetCount = (u32)flightHelmet->images.size() + MAX_FRAMES_IN_FLIGHT;
 	VkDescriptorPoolCreateInfo poolInfo = {
 		.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
-		.maxSets = maxSetCount,
+		.maxSets = poolSizes[0].descriptorCount + poolSizes[1].descriptorCount,
 		.poolSizeCount = arraysize(poolSizes),
 		.pPoolSizes = poolSizes
 	};
@@ -503,12 +499,12 @@ void CreateDescriptorSets() {
 	VkDescriptorSetAllocateInfo allocInfo = {
 		.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
 		.descriptorPool = bz::descriptorPool,
-		.descriptorSetCount = MAX_FRAMES_IN_FLIGHT, // TODO also set to 1 here
+		.descriptorSetCount = arraysize(bz::uniformBuffers), // 1 descriptor set per uniform buffer
 		.pSetLayouts = setLayouts
 	};
 	VkCheck(vkAllocateDescriptorSets(bz::device.logicalDevice, &allocInfo, bz::uboDescriptorSets), "Failed to allocate UBO descriptor sets");
 
-	for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
+	for (int i = 0; i < arraysize(bz::uniformBuffers); i++) {
 		VkDescriptorBufferInfo bufferInfo = {
 			.buffer = bz::uniformBuffers[i].buffer,
 			.offset = 0,
@@ -736,7 +732,7 @@ void CleanupVulkan() {
 
 	delete flightHelmet;
 
-	for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
+	for (int i = 0; i < arraysize(bz::uniformBuffers); i++) {
 		bz::uniformBuffers[i].unmap(bz::device.logicalDevice);
 		bz::uniformBuffers[i].destroy(bz::device.logicalDevice);
 	}
