@@ -62,9 +62,7 @@ namespace bz {
 
 	RenderFrame renderFrames[MAX_FRAMES_IN_FLIGHT];
 
-	VkBuffer uniformBuffers[MAX_FRAMES_IN_FLIGHT];
-	VkDeviceMemory uniformBuffersMemory[MAX_FRAMES_IN_FLIGHT];
-	void* uniformBuffersMapped[MAX_FRAMES_IN_FLIGHT];
+	Buffer uniformBuffers[MAX_FRAMES_IN_FLIGHT];
 
 	VkSampleCountFlagBits msaaSamples = VK_SAMPLE_COUNT_1_BIT;
 
@@ -423,15 +421,12 @@ void CreateBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyF
 }
 
 void CreateUniformBuffers() {
-	VkDeviceSize bufferSize = sizeof(UniformBufferObject);
-
 	for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
-		CreateBuffer(bufferSize, 
+		bz::device.CreateBuffer(
 			VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, 
 			VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, 
-			bz::uniformBuffers[i], bz::uniformBuffersMemory[i]);
-
-		VkCheck(vkMapMemory(bz::device.logicalDevice, bz::uniformBuffersMemory[i], 0, bufferSize, 0, &bz::uniformBuffersMapped[i]), "Failed to map memory");
+			sizeof(UniformBufferObject), &bz::uniformBuffers[i]);
+		bz::uniformBuffers[i].map(bz::device.logicalDevice);
 	}
 }
 
@@ -515,7 +510,7 @@ void CreateDescriptorSets() {
 
 	for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
 		VkDescriptorBufferInfo bufferInfo = {
-			.buffer = bz::uniformBuffers[i],
+			.buffer = bz::uniformBuffers[i].buffer,
 			.offset = 0,
 			.range = sizeof(UniformBufferObject)
 		};
@@ -742,8 +737,8 @@ void CleanupVulkan() {
 	delete flightHelmet;
 
 	for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
-		vkDestroyBuffer(bz::device.logicalDevice, bz::uniformBuffers[i], nullptr);
-		vkFreeMemory(bz::device.logicalDevice, bz::uniformBuffersMemory[i], nullptr);
+		bz::uniformBuffers[i].unmap(bz::device.logicalDevice);
+		bz::uniformBuffers[i].destroy(bz::device.logicalDevice);
 	}
 
 	vkDestroyDescriptorPool(bz::device.logicalDevice, bz::descriptorPool, nullptr);
@@ -769,7 +764,7 @@ void UpdateUniformBuffer(u32 currentImage) {
 		.proj = bz::camera.projection
 	};
 
-	memcpy(bz::uniformBuffersMapped[currentImage], &ubo, sizeof(ubo));
+	memcpy(bz::uniformBuffers[currentImage].mapped, &ubo, sizeof(ubo));
 }
 
 void DrawFrame() {
