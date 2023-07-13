@@ -59,10 +59,8 @@ GLTFModel::~GLTFModel() {
 		delete node;
 	}
 
-	vkDestroyBuffer(device.logicalDevice, vertices.buffer, nullptr);
-	vkFreeMemory(device.logicalDevice, vertices.memory, nullptr);
-	vkDestroyBuffer(device.logicalDevice, indices.buffer, nullptr);
-	vkFreeMemory(device.logicalDevice, indices.memory, nullptr);
+	vertices.destroy(device.logicalDevice);
+	indices.destroy(device.logicalDevice);
 
 	for (Image image : images) {
 		image.texture.Destroy(device);

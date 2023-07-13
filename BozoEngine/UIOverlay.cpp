@@ -5,8 +5,6 @@
 UIOverlay::UIOverlay() {
 	ImGui::CreateContext();
 
-	ImGui::StyleColorsDark();
-
 	// TODO: Check if these configFlags are necessary
 	// Also, check if io.FontGlobalScale should be changed.
 	ImGuiIO& io = ImGui::GetIO();
@@ -14,6 +12,7 @@ UIOverlay::UIOverlay() {
 	io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;
 
 	// TODO: set our own imgui style here
+	ImGui::StyleColorsDark();
 
 	// Zero initialize everything
 	drawDataBuffer = {};
