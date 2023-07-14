@@ -234,6 +234,18 @@
     <None Include="shaders\uioverlay.frag.glsl">
       <Filter>shaders</Filter>
     </None>
+    <None Include="shaders\deferred.vert.glsl">
+      <Filter>shaders</Filter>
+    </None>
+    <None Include="shaders\deferred.frag.glsl">
+      <Filter>shaders</Filter>
+    </None>
+    <None Include="shaders\offscreen.vert.glsl">
+      <Filter>shaders</Filter>
+    </None>
+    <None Include="shaders\offscreen.frag.glsl">
+      <Filter>shaders</Filter>
+    </None>
   </ItemGroup>
   <ItemGroup>
     <Natvis Include="..\Extern\glm\util\glm.natvis" />

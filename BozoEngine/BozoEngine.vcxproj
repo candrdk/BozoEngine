@@ -230,6 +230,10 @@
     <ClInclude Include="UIOverlay.h" />
   </ItemGroup>
   <ItemGroup>
+    <None Include="shaders\deferred.frag.glsl" />
+    <None Include="shaders\deferred.vert.glsl" />
+    <None Include="shaders\offscreen.frag.glsl" />
+    <None Include="shaders\offscreen.vert.glsl" />
     <None Include="shaders\triangle.frag.glsl" />
     <None Include="shaders\triangle.vert.glsl">
       <FileType>Document</FileType>
