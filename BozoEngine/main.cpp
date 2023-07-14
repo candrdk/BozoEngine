@@ -135,19 +135,6 @@ void CleanupWindow() {
 	glfwTerminate();
 }
 
-void PrintAvailableVulkanExtensions() {
-	u32 extensionCount;
-	VkCheck(vkEnumerateInstanceExtensionProperties(nullptr, &extensionCount, nullptr));
-
-	std::vector<VkExtensionProperties> extensions(extensionCount);
-	VkCheck(vkEnumerateInstanceExtensionProperties(nullptr, &extensionCount, extensions.data()));
-
-	printf("Available extensions:\n");
-	for (u32 i = 0; i < extensionCount; i++) {
-		printf("\t%s\n", extensions[i].extensionName);
-	}
-}
-
 VkImageView CreateImageView(VkImage image, VkFormat format, VkImageAspectFlags aspectFlags, u32 mipLevels) {
 	VkImageViewCreateInfo viewInfo = {
 			.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
@@ -393,29 +380,6 @@ void CreateDepthResources() {
 		VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL, 
 		VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT);	// TODO: check that these stages are appropriate (prop doesn't matter in this case, but still nice to have right)
 	bz::device.FlushCommandBuffer(cmdBuffer, bz::device.graphicsQueue);
-}
-
-void CreateBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkBuffer& buffer, VkDeviceMemory& bufferMemory) {
-	VkBufferCreateInfo bufferInfo = {
-		.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
-		.size = size,
-		.usage = usage,
-		.sharingMode = VK_SHARING_MODE_EXCLUSIVE
-	};
-
-	VkCheck(vkCreateBuffer(bz::device.logicalDevice, &bufferInfo, nullptr, &buffer), "Failed to create buffer");
-
-	VkMemoryRequirements memRequirements;
-	vkGetBufferMemoryRequirements(bz::device.logicalDevice, buffer, &memRequirements);
-
-	VkMemoryAllocateInfo allocInfo = {
-		.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
-		.allocationSize = memRequirements.size,
-		.memoryTypeIndex = FindMemoryType(memRequirements.memoryTypeBits, properties)
-	};
-
-	VkCheck(vkAllocateMemory(bz::device.logicalDevice, &allocInfo, nullptr, &bufferMemory), "Failed to allocate vertex buffer memory");
-	VkCheck(vkBindBufferMemory(bz::device.logicalDevice, buffer, bufferMemory, 0), "Failed to bind DeviceMemory to VkBuffer");
 }
 
 void CreateUniformBuffers() {
