@@ -35,6 +35,14 @@ struct RenderFrame {
 	VkCommandBuffer commandBuffer;
 };
 
+struct RenderAttachment {
+	VkImage image;
+	VkDeviceMemory memory;
+	VkImageView view;
+	VkFormat format;
+	VkRenderingAttachmentInfo attachmentInfo;
+};
+
 // Temporary namespace to contain globals
 namespace bz {
 	Camera camera(glm::vec3(0.0f, 0.0f, 0.5f), 1.0f, 90.0f, (float)WIDTH / HEIGHT, 0.01f, 0.0f, -90.0f);
@@ -45,15 +53,7 @@ namespace bz {
 	UIOverlay Overlay;
 	RenderFrame renderFrames[MAX_FRAMES_IN_FLIGHT];
 	Buffer uniformBuffers[MAX_FRAMES_IN_FLIGHT];
-
-	// Wrap these
-	VkImage depthImage;
-	VkDeviceMemory depthImageMemory;
-	VkImageView depthImageView;
-
-	VkImage colorImage;
-	VkDeviceMemory colorImageMemory;
-	VkImageView colorImageView;
+	RenderAttachment depth, color;
 
 	VkDescriptorPool descriptorPool;
 	VkDescriptorSetLayout uboLayout, texturesLayout;
@@ -133,6 +133,40 @@ void InitWindow(int width, int height) {
 void CleanupWindow() {
 	glfwDestroyWindow(window);
 	glfwTerminate();
+}
+
+void CreateImage(u32 width, u32 height, u32 mipLevels, VkSampleCountFlagBits samples, VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage, VkMemoryPropertyFlags properties, VkImage& image, VkDeviceMemory& imageMemory) {
+	VkImageCreateInfo imageInfo = {
+		.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
+		.imageType = VK_IMAGE_TYPE_2D,
+		.format = format,
+		.extent = {
+			.width = width,
+			.height = height,
+			.depth = 1
+		},
+		.mipLevels = mipLevels,
+		.arrayLayers = 1,
+		.samples = samples,
+		.tiling = tiling,
+		.usage = usage,
+		.sharingMode = VK_SHARING_MODE_EXCLUSIVE,
+		.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED
+	};
+
+	VkCheck(vkCreateImage(bz::device.logicalDevice, &imageInfo, nullptr, &image), "Failed to create image");
+
+	VkMemoryRequirements memRequirements;
+	vkGetImageMemoryRequirements(bz::device.logicalDevice, image, &memRequirements);
+
+	VkMemoryAllocateInfo allocInfo = {
+		.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
+		.allocationSize = memRequirements.size,
+		.memoryTypeIndex = bz::device.GetMemoryType(memRequirements.memoryTypeBits, properties)
+	};
+
+	VkCheck(vkAllocateMemory(bz::device.logicalDevice, &allocInfo, nullptr, &imageMemory), "Failed to allocate image memory");
+	VkCheck(vkBindImageMemory(bz::device.logicalDevice, image, imageMemory, 0), "Failed to bind VkDeviceMemory to VkImage");
 }
 
 VkImageView CreateImageView(VkImage image, VkFormat format, VkImageAspectFlags aspectFlags, u32 mipLevels) {
@@ -278,8 +312,8 @@ void CreateGraphicsPipeline() {
 	VkPipelineRenderingCreateInfo renderingCreateInfo = {
 		.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO,
 		.colorAttachmentCount = 1,
-		.pColorAttachmentFormats = &bz::swapchain.format,
-		.depthAttachmentFormat = VK_FORMAT_D32_SFLOAT
+		.pColorAttachmentFormats = &bz::color.format,
+		.depthAttachmentFormat = bz::depth.format
 	};
 
 	VkGraphicsPipelineCreateInfo pipelineInfo = {
@@ -307,77 +341,52 @@ void CreateGraphicsPipeline() {
 	vkDestroyShaderModule(bz::device.logicalDevice, shaderStages[1].module, nullptr);
 }
 
-u32 FindMemoryType(u32 typeFilter, VkMemoryPropertyFlags properties) {
-	VkPhysicalDeviceMemoryProperties memProperties;
-	vkGetPhysicalDeviceMemoryProperties(bz::device.physicalDevice, &memProperties);
-
-	for (u32 i = 0; i < memProperties.memoryTypeCount; i++) {
-		if ((typeFilter & (1 << i)) && (memProperties.memoryTypes[i].propertyFlags & properties) == properties) {
-			return i;
-		}
-	}
-
-	Check(false, "Failed to find suitable memory type");
-}
-
-void CreateImage(u32 width, u32 height, u32 mipLevels, VkSampleCountFlagBits samples, VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage, VkMemoryPropertyFlags properties, VkImage& image, VkDeviceMemory& imageMemory) {
-	VkImageCreateInfo imageInfo = {
-		.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
-		.imageType = VK_IMAGE_TYPE_2D,
-		.format = format,
-		.extent = {
-			.width = width,
-			.height = height,
-			.depth = 1
-		},
-		.mipLevels = mipLevels,
-		.arrayLayers = 1,
-		.samples = samples,
-		.tiling = tiling,
-		.usage = usage,
-		.sharingMode = VK_SHARING_MODE_EXCLUSIVE,
-		.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED
-	};
-
-	VkCheck(vkCreateImage(bz::device.logicalDevice, &imageInfo, nullptr, &image), "Failed to create image");
-
-	VkMemoryRequirements memRequirements;
-	vkGetImageMemoryRequirements(bz::device.logicalDevice, image, &memRequirements);
-
-	VkMemoryAllocateInfo allocInfo = {
-		.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
-		.allocationSize = memRequirements.size,
-		.memoryTypeIndex = FindMemoryType(memRequirements.memoryTypeBits, properties)
-	};
-
-	VkCheck(vkAllocateMemory(bz::device.logicalDevice, &allocInfo, nullptr, &imageMemory), "Failed to allocate image memory");
-	VkCheck(vkBindImageMemory(bz::device.logicalDevice, image, imageMemory, 0), "Failed to bind VkDeviceMemory to VkImage");
-}
-
 void CreateColorResources() {
-	VkFormat colorFormat = bz::swapchain.format;
+	bz::color.format = bz::swapchain.format;
 
-	CreateImage(bz::swapchain.extent.width, bz::swapchain.extent.height, 1, bz::msaaSamples, colorFormat,
+	CreateImage(bz::swapchain.extent.width, bz::swapchain.extent.height, 1, bz::msaaSamples, bz::color.format,
 		VK_IMAGE_TILING_OPTIMAL,
 		VK_IMAGE_USAGE_TRANSIENT_ATTACHMENT_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
 		VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-		bz::colorImage, bz::colorImageMemory);
-	bz::colorImageView = CreateImageView(bz::colorImage, colorFormat, VK_IMAGE_ASPECT_COLOR_BIT, 1);
+		bz::color.image, bz::color.memory);
+	bz::color.view = CreateImageView(bz::color.image, bz::color.format, VK_IMAGE_ASPECT_COLOR_BIT, 1);
+
+	bz::color.attachmentInfo = {
+		.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
+		.imageView = bz::color.view,
+		.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+		.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
+		.storeOp = VK_ATTACHMENT_STORE_OP_STORE,
+		.clearValue = {
+			.color = { 0.0f, 0.0f, 0.0f },
+		}
+	};
 }
 
-// TODO: should query supported formats and select from them.
 void CreateDepthResources() {
-	CreateImage(bz::swapchain.extent.width, bz::swapchain.extent.height, 1, bz::msaaSamples,
-		VK_FORMAT_D32_SFLOAT,
+	bz::depth.format = VK_FORMAT_D32_SFLOAT;
+
+	CreateImage(bz::swapchain.extent.width, bz::swapchain.extent.height, 1, bz::msaaSamples, bz::depth.format,
 		VK_IMAGE_TILING_OPTIMAL,
 		VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
 		VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-		bz::depthImage, bz::depthImageMemory);
-	bz::depthImageView = CreateImageView(bz::depthImage, VK_FORMAT_D32_SFLOAT, VK_IMAGE_ASPECT_DEPTH_BIT, 1);
-	
-	VkCommandBuffer cmdBuffer = bz::device.CreateCommandBuffer(VK_COMMAND_BUFFER_LEVEL_PRIMARY);
-	SetImageLayout(cmdBuffer, bz::depthImage, VK_IMAGE_ASPECT_DEPTH_BIT, 
-		VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL, 
+		bz::depth.image, bz::depth.memory);
+	bz::depth.view = CreateImageView(bz::depth.image, bz::depth.format, VK_IMAGE_ASPECT_DEPTH_BIT, 1);
+
+	bz::depth.attachmentInfo = {
+		.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
+		.imageView = bz::depth.view,
+		.imageLayout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL,
+		.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
+		.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
+		.clearValue = {
+			.depthStencil = { 0.0f, 0 },
+		}
+	};
+
+	VkCommandBuffer cmdBuffer = bz::device.CreateCommandBuffer(VK_COMMAND_BUFFER_LEVEL_PRIMARY, true);
+	SetImageLayout(cmdBuffer, bz::depth.image, VK_IMAGE_ASPECT_DEPTH_BIT,
+		VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL,
 		VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT);	// TODO: check that these stages are appropriate (prop doesn't matter in this case, but still nice to have right)
 	bz::device.FlushCommandBuffer(cmdBuffer, bz::device.graphicsQueue);
 }
@@ -511,18 +520,6 @@ void CreateDescriptorSets() {
 	}
 }
 
-void CreateCommandBuffers() {
-	VkCommandBufferAllocateInfo allocInfo = {
-		.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
-		.commandPool = bz::device.commandPool,
-		.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
-		.commandBufferCount = 1
-	};
-
-	for (u32 i = 0; i < arraysize(bz::renderFrames); i++)
-		VkCheck(vkAllocateCommandBuffers(bz::device.logicalDevice, &allocInfo, &bz::renderFrames[i].commandBuffer), "Failed to allocate command buffers");
-}
-
 void RecordCommandBuffer(VkCommandBuffer commandBuffer, u32 imageIndex) {
 	VkCommandBufferBeginInfo beginInfo = {
 		.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
@@ -530,31 +527,9 @@ void RecordCommandBuffer(VkCommandBuffer commandBuffer, u32 imageIndex) {
 
 	VkCheck(vkBeginCommandBuffer(commandBuffer, &beginInfo), "Failed to begin recording command buffer!");
 
-	VkRenderingAttachmentInfo colorAttachment = {
-		.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
-		.imageView = bz::colorImageView,
-		.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-		.resolveMode = VK_RESOLVE_MODE_AVERAGE_BIT,
-		.resolveImageView = bz::swapchain.imageViews[imageIndex],
-		.resolveImageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-		.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
-		.storeOp = VK_ATTACHMENT_STORE_OP_STORE,
-		.clearValue = {
-			.color = { 0.0f, 0.0f, 0.0f },
-		}
-	};
-
-	VkRenderingAttachmentInfo depthAttachment = {
-		.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
-		.imageView = bz::depthImageView,
-		.imageLayout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL,
-		.resolveMode = VK_RESOLVE_MODE_NONE,
-		.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
-		.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
-		.clearValue = {
-			.depthStencil = { 0.0f, 0 },
-		}
-	};
+	bz::color.attachmentInfo.resolveMode = VK_RESOLVE_MODE_AVERAGE_BIT;
+	bz::color.attachmentInfo.resolveImageView = bz::swapchain.imageViews[imageIndex];
+	bz::color.attachmentInfo.resolveImageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
 
 	VkRenderingInfo renderingInfo = {
 		.sType = VK_STRUCTURE_TYPE_RENDERING_INFO,
@@ -564,8 +539,8 @@ void RecordCommandBuffer(VkCommandBuffer commandBuffer, u32 imageIndex) {
 		},
 		.layerCount = 1,
 		.colorAttachmentCount = 1,
-		.pColorAttachments = &colorAttachment,
-		.pDepthAttachment = &depthAttachment,
+		.pColorAttachments = &bz::color.attachmentInfo,
+		.pDepthAttachment = &bz::depth.attachmentInfo,
 		.pStencilAttachment = nullptr
 	};
 
@@ -613,20 +588,15 @@ void RecordCommandBuffer(VkCommandBuffer commandBuffer, u32 imageIndex) {
 	VkCheck(vkEndCommandBuffer(commandBuffer), "Failed to record command buffer");
 }
 
-void CreateSyncObjects() {
-	VkSemaphoreCreateInfo semaphoreInfo = {
-		.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO
-	};
+void CreateRenderFrames() {
+	VkSemaphoreCreateInfo semaphoreInfo = { .sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO };
+	VkFenceCreateInfo fenceInfo = { .sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO, .flags = VK_FENCE_CREATE_SIGNALED_BIT };
 
-	VkFenceCreateInfo fenceInfo = {
-		.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO,
-		.flags = VK_FENCE_CREATE_SIGNALED_BIT
-	};
-
-	for (int i = 0; i < arraysize(bz::renderFrames); i++) {
+	for (u32 i = 0; i < arraysize(bz::renderFrames); i++) {
 		VkCheck(vkCreateSemaphore(bz::device.logicalDevice, &semaphoreInfo, nullptr, &bz::renderFrames[i].imageAvailable), "Failed to create imageAvailable semaphore");
 		VkCheck(vkCreateSemaphore(bz::device.logicalDevice, &semaphoreInfo, nullptr, &bz::renderFrames[i].renderFinished), "Failed to create renderFinished semaphore");
 		VkCheck(vkCreateFence(bz::device.logicalDevice, &fenceInfo, nullptr, &bz::renderFrames[i].inFlight), "Failed to create inFlight fence");
+		bz::renderFrames[i].commandBuffer = bz::device.CreateCommandBuffer(VK_COMMAND_BUFFER_LEVEL_PRIMARY);
 	}
 }
 
@@ -635,7 +605,7 @@ void InitVulkan() {
 	bz::msaaSamples = bz::device.GetMaxUsableSampleCount();
 	bz::swapchain.CreateSwapchain(window, bz::device, {
 		.enableVSync = true, 
-		.prefferedImageCount = 2, 
+		.preferredImageCount = 2, 
 		.oldSwapchain = VK_NULL_HANDLE 
 	});
 
@@ -643,27 +613,25 @@ void InitVulkan() {
 	flightHelmet->LoadGLTFFile("assets/FlightHelmet/FlightHelmet.gltf");
 
 	CreateUniformBuffers();
+	CreateColorResources();
+	CreateDepthResources();
 
 	CreateDescriptorPool();
 	CreateDescriptorSets();
 
 	CreateGraphicsPipeline();
 
-	CreateColorResources();
-	CreateDepthResources();
-
-	CreateCommandBuffers();
-	CreateSyncObjects();
+	CreateRenderFrames();
 }
 
 void CleanupSwapchain() {
-	vkDestroyImageView(bz::device.logicalDevice, bz::colorImageView, nullptr);
-	vkDestroyImage(bz::device.logicalDevice, bz::colorImage, nullptr);
-	vkFreeMemory(bz::device.logicalDevice, bz::colorImageMemory, nullptr);
+	vkDestroyImageView(bz::device.logicalDevice, bz::color.view, nullptr);
+	vkDestroyImage(bz::device.logicalDevice, bz::color.image, nullptr);
+	vkFreeMemory(bz::device.logicalDevice, bz::color.memory, nullptr);
 
-	vkDestroyImageView(bz::device.logicalDevice, bz::depthImageView, nullptr);
-	vkDestroyImage(bz::device.logicalDevice, bz::depthImage, nullptr);
-	vkFreeMemory(bz::device.logicalDevice, bz::depthImageMemory, nullptr);
+	vkDestroyImageView(bz::device.logicalDevice, bz::depth.view, nullptr);
+	vkDestroyImage(bz::device.logicalDevice, bz::depth.image, nullptr);
+	vkFreeMemory(bz::device.logicalDevice, bz::depth.memory, nullptr);
 
 	bz::swapchain.DestroySwapchain(bz::device, bz::swapchain);
 }
@@ -683,7 +651,7 @@ void RecreateSwapchain() {
 	CleanupSwapchain();
 	bz::swapchain.CreateSwapchain(window, bz::device, { 
 		.enableVSync = true, 
-		.prefferedImageCount = 2, 
+		.preferredImageCount = 2, 
 		.oldSwapchain = VK_NULL_HANDLE 
 	});
 

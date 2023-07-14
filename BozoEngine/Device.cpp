@@ -225,7 +225,7 @@ void Device::DestroyDevice() {
 	vkDestroyInstance(instance, nullptr);
 }
 
-VkCommandBuffer Device::CreateCommandBuffer(VkCommandBufferLevel level, VkCommandPool pool) const {
+VkCommandBuffer Device::CreateCommandBuffer(VkCommandBufferLevel level, VkCommandPool pool, bool begin) const {
 	VkCommandBufferAllocateInfo allocInfo = {
 		.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
 		.commandPool = pool,
@@ -241,13 +241,15 @@ VkCommandBuffer Device::CreateCommandBuffer(VkCommandBufferLevel level, VkComman
 		.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT
 	};
 
-	VkCheck(vkBeginCommandBuffer(commandBuffer, &beginInfo), "Failed to begin command buffer");
+	if (begin) {
+		VkCheck(vkBeginCommandBuffer(commandBuffer, &beginInfo), "Failed to begin command buffer");
+	}
 
 	return commandBuffer;
 }
 
-VkCommandBuffer Device::CreateCommandBuffer(VkCommandBufferLevel level) const {
-	return CreateCommandBuffer(level, commandPool);
+VkCommandBuffer Device::CreateCommandBuffer(VkCommandBufferLevel level, bool begin) const {
+	return CreateCommandBuffer(level, commandPool, begin);
 }
 
 void Device::FlushCommandBuffer(VkCommandBuffer commandBuffer, VkQueue queue) const {

@@ -6,7 +6,7 @@
 
 struct SwapchainDesc {
 	bool enableVSync = true;
-	u32 prefferedImageCount = 2;
+	u32 preferredImageCount = 2;
 	VkSwapchainKHR oldSwapchain = VK_NULL_HANDLE;	// current structure doesn't really facilitate the use of this field
 };
 

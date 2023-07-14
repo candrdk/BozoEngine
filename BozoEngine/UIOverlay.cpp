@@ -107,7 +107,7 @@ void UIOverlay::Initialize(const Device& device, VkSampleCountFlagBits rasteriza
 	Buffer stagingBuffer;
 	device.CreateBuffer(VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, uploadSize, &stagingBuffer, fontData);
 
-	VkCommandBuffer copyCmd = device.CreateCommandBuffer(VK_COMMAND_BUFFER_LEVEL_PRIMARY);
+	VkCommandBuffer copyCmd = device.CreateCommandBuffer(VK_COMMAND_BUFFER_LEVEL_PRIMARY, true);
 
 	// prepare font image for transfer
 	SetImageLayout(copyCmd, fontImage, VK_IMAGE_ASPECT_COLOR_BIT, 

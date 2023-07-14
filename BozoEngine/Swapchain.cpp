@@ -70,7 +70,7 @@ void Swapchain::CreateSwapchain(GLFWwindow* window, const Device& device, Swapch
 	VkSwapchainCreateInfoKHR createInfo = {
 		.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR,
 		.surface = device.surface,
-		.minImageCount = glm::clamp(desc.prefferedImageCount, surfaceCapabilities.minImageCount, surfaceCapabilities.maxImageCount),
+		.minImageCount = glm::clamp(desc.preferredImageCount, surfaceCapabilities.minImageCount, surfaceCapabilities.maxImageCount),
 		.imageFormat = surfaceFormat.format,
 		.imageColorSpace = surfaceFormat.colorSpace,
 		.imageExtent = extent,

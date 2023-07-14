@@ -77,9 +77,9 @@ public:
 	// TODO: Maybe add bool param to conditionally call vkBeginCommandBuffer?
 	// TODO: If we want this method to be generic, ONE_TIME_SUBMIT should not be set.
 	//		 Likewise, we should only conditionally free the command buffer in FlushCommandBuffer.
-	VkCommandBuffer CreateCommandBuffer(VkCommandBufferLevel level, VkCommandPool pool) const;
+	VkCommandBuffer CreateCommandBuffer(VkCommandBufferLevel level, VkCommandPool pool, bool begin = false) const;
 
-	VkCommandBuffer CreateCommandBuffer(VkCommandBufferLevel level) const;
+	VkCommandBuffer CreateCommandBuffer(VkCommandBufferLevel level, bool begin = false) const;
 
 	void FlushCommandBuffer(VkCommandBuffer commandBuffer, VkQueue queue) const;
 
