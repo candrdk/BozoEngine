@@ -3,7 +3,10 @@
 
 #include "Device.h"
 #include "Texture.h"
+
+#pragma warning(push, 0)
 #include <tiny_gltf.h>
+#pragma warning(pop)
 
 class GLTFModel {
 public:

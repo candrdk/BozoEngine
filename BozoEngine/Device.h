@@ -6,11 +6,11 @@
 //		 Everything regarding buffers will likely be heavliy changed once we start working with larger scenes 
 //		 and implement a resource manager. It's okay to elave it like this for now, though.
 struct Buffer {
-	VkBuffer buffer;
-	VkDeviceMemory memory;
-	void* mapped;
+	VkBuffer buffer = VK_NULL_HANDLE;
+	VkDeviceMemory memory = VK_NULL_HANDLE;
+	void* mapped = nullptr;
 
-	VkDeviceSize size;
+	VkDeviceSize size = 0;
 
 	VkResult map(VkDevice device, VkDeviceSize size = VK_WHOLE_SIZE, VkDeviceSize offset = 0) {
 		return vkMapMemory(device, memory, offset, size, 0, &mapped);
