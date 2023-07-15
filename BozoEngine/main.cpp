@@ -449,6 +449,26 @@ void CreateRenderAttachments() {
 	VkCheck(vkCreateSampler(bz::device.logicalDevice, &samplerInfo, nullptr, &bozo::attachmentSampler), "Failed to create sampler");
 }
 
+void CleanupRenderAttachments() {
+	vkDestroySampler(bz::device.logicalDevice, bozo::attachmentSampler, nullptr);
+
+	vkDestroyImageView(bz::device.logicalDevice, bozo::albedo.view, nullptr);
+	vkDestroyImage(bz::device.logicalDevice, bozo::albedo.image, nullptr);
+	vkFreeMemory(bz::device.logicalDevice, bozo::albedo.memory, nullptr);
+
+	vkDestroyImageView(bz::device.logicalDevice, bozo::normal.view, nullptr);
+	vkDestroyImage(bz::device.logicalDevice, bozo::normal.image, nullptr);
+	vkFreeMemory(bz::device.logicalDevice, bozo::normal.memory, nullptr);
+
+	vkDestroyImageView(bz::device.logicalDevice, bz::color.view, nullptr);
+	vkDestroyImage(bz::device.logicalDevice, bz::color.image, nullptr);
+	vkFreeMemory(bz::device.logicalDevice, bz::color.memory, nullptr);
+
+	vkDestroyImageView(bz::device.logicalDevice, bz::depth.view, nullptr);
+	vkDestroyImage(bz::device.logicalDevice, bz::depth.image, nullptr);
+	vkFreeMemory(bz::device.logicalDevice, bz::depth.memory, nullptr);
+}
+
 void CreateDescriptorPool() {
 	VkDescriptorPoolSize poolSizes[2] = {
 		{ // uniform buffer descriptor pool
@@ -645,9 +665,22 @@ void SetupDescriptorSetLayout() {
 	VkCheck(vkCreatePipelineLayout(bz::device.logicalDevice, &pipelineLayoutInfo, nullptr, &bozo::pipelineLayout), "Failed to create pipeline layout");
 }
 
-void SetupDescriptorSet() {	
-	{	// Deferred compositon
+void AllocateDescriptorSets() {
+		// Deferred composition descriptor set
+	{
 		std::vector<VkDescriptorSetLayout> layouts(2, bozo::descriptorSetLayout);
+		VkDescriptorSetAllocateInfo allocInfo = {
+			.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
+			.descriptorPool = bz::descriptorPool,
+			.descriptorSetCount = u32(layouts.size()),
+			.pSetLayouts = layouts.data()
+		};
+
+		VkCheck(vkAllocateDescriptorSets(bz::device.logicalDevice, &allocInfo, &bozo::descriptorSet), "Failed to allocate descriptor sets");
+	}
+		// UBO buffer descriptor sets
+	{
+		std::vector<VkDescriptorSetLayout> layouts(arraysize(bozo::uboDescriptorSets), bozo::uboDescriptorSetLayout);
 		VkDescriptorSetAllocateInfo allocInfo = {
 			.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
 			.descriptorPool = bz::descriptorPool,
@@ -655,6 +688,25 @@ void SetupDescriptorSet() {
 			.pSetLayouts = layouts.data(),
 		};
 
+		VkCheck(vkAllocateDescriptorSets(bz::device.logicalDevice, &allocInfo, bozo::uboDescriptorSets), "Failed to allocate descriptor sets");
+	}
+		// Material descriptor sets
+	{
+		std::vector<VkDescriptorSetLayout> layouts(1, bozo::descriptorSetLayout);
+		VkDescriptorSetAllocateInfo allocInfo = {
+			.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
+			.descriptorPool = bz::descriptorPool,
+			.descriptorSetCount = u32(layouts.size()),
+			.pSetLayouts = layouts.data(),
+		};
+		for (auto& image : flightHelmet->images) {
+			VkCheck(vkAllocateDescriptorSets(bz::device.logicalDevice, &allocInfo, &image.descriptorSet), "Failed to allocate descriptor set for image");
+		}
+	}
+}
+
+void UpdateDescriptorSets() {
+	{	// Deferred compositon
 		// Image descriptors for the offscreen gbuffer attachments
 		VkDescriptorImageInfo texDescriptorNormal = {
 			.sampler = bozo::attachmentSampler,
@@ -667,7 +719,6 @@ void SetupDescriptorSet() {
 			.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
 		};
 
-		VkCheck(vkAllocateDescriptorSets(bz::device.logicalDevice, &allocInfo, &bozo::descriptorSet), "Failed to allocate descriptor sets");
 		VkWriteDescriptorSet writeDescriptorSets[] = {
 			{	// Binding 1: World space normals texture
 				.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
@@ -691,17 +742,10 @@ void SetupDescriptorSet() {
 		vkUpdateDescriptorSets(bz::device.logicalDevice, arraysize(writeDescriptorSets), writeDescriptorSets, 0, nullptr);
 	}
 
+	// TODO: split the ubo and model material descriptor updates into a second function
+	// they don't have to be updated on every swapchain recreation.
+
 	{	// Offscreen: Model ubo
-		std::vector<VkDescriptorSetLayout> layouts(arraysize(bozo::uboDescriptorSets), bozo::uboDescriptorSetLayout);
-		VkDescriptorSetAllocateInfo allocInfo = {
-			.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
-			.descriptorPool = bz::descriptorPool,
-			.descriptorSetCount = u32(layouts.size()),
-			.pSetLayouts = layouts.data(),
-		};
-
-		VkCheck(vkAllocateDescriptorSets(bz::device.logicalDevice, &allocInfo, bozo::uboDescriptorSets), "Failed to allocate descriptor sets");
-
 		for (u32 i = 0; i < arraysize(bozo::uboDescriptorSets); i++) {
 			// Buffer descriptor for the offscreen uniform buffer
 			VkDescriptorBufferInfo uniformBufferDescriptor = {
@@ -725,16 +769,8 @@ void SetupDescriptorSet() {
 	}
 
 	{	// Offscreen: Model materials
-		std::vector<VkDescriptorSetLayout> layouts(1, bozo::descriptorSetLayout);
-		VkDescriptorSetAllocateInfo allocInfo = {
-			.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
-			.descriptorPool = bz::descriptorPool,
-			.descriptorSetCount = u32(layouts.size()),
-			.pSetLayouts = layouts.data(),
-		};
-
 		for (auto& image : flightHelmet->images) {
-			VkCheck(vkAllocateDescriptorSets(bz::device.logicalDevice, &allocInfo, &image.descriptorSet), "Failed to allocate descriptor set for image");
+			//VkCheck(vkAllocateDescriptorSets(bz::device.logicalDevice, &allocInfo, &image.descriptorSet), "Failed to allocate descriptor set for image");
 
 			VkWriteDescriptorSet writeDescriptorSet = {
 				.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
@@ -1049,7 +1085,8 @@ void InitVulkan() {
 
 #ifdef DEFERRED
 	SetupDescriptorSetLayout();
-	SetupDescriptorSet();
+	AllocateDescriptorSets();
+	UpdateDescriptorSets();
 	SetupPipelines();
 #else
 	CreateDescriptorSets();
@@ -1060,24 +1097,7 @@ void InitVulkan() {
 }
 
 void CleanupSwapchain() {
-	vkDestroySampler(bz::device.logicalDevice, bozo::attachmentSampler, nullptr);
-
-	vkDestroyImageView(bz::device.logicalDevice, bz::color.view, nullptr);
-	vkDestroyImage(bz::device.logicalDevice, bz::color.image, nullptr);
-	vkFreeMemory(bz::device.logicalDevice, bz::color.memory, nullptr);
-
-	vkDestroyImageView(bz::device.logicalDevice, bz::depth.view, nullptr);
-	vkDestroyImage(bz::device.logicalDevice, bz::depth.image, nullptr);
-	vkFreeMemory(bz::device.logicalDevice, bz::depth.memory, nullptr);
-
-	vkDestroyImageView(bz::device.logicalDevice, bozo::normal.view, nullptr);
-	vkDestroyImage(bz::device.logicalDevice, bozo::normal.image, nullptr);
-	vkFreeMemory(bz::device.logicalDevice, bozo::normal.memory, nullptr);
-
-	vkDestroyImageView(bz::device.logicalDevice, bozo::albedo.view, nullptr);
-	vkDestroyImage(bz::device.logicalDevice, bozo::albedo.image, nullptr);
-	vkFreeMemory(bz::device.logicalDevice, bozo::albedo.memory, nullptr);
-
+	CleanupRenderAttachments();
 	bz::swapchain.DestroySwapchain(bz::device, bz::swapchain);
 }
 
@@ -1101,6 +1121,7 @@ void RecreateSwapchain() {
 	});
 
 	CreateRenderAttachments();
+	UpdateDescriptorSets();
 }
 
 void CleanupVulkan() {
