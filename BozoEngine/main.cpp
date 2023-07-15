@@ -469,6 +469,42 @@ void CleanupRenderAttachments() {
 	vkFreeMemory(bz::device.logicalDevice, bz::depth.memory, nullptr);
 }
 
+void UpdateRenderAttachmentDescriptorSets() {
+	// Image descriptors for the offscreen gbuffer attachments
+	VkDescriptorImageInfo texDescriptorNormal = {
+		.sampler = bozo::attachmentSampler,
+		.imageView = bozo::normal.view,
+		.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
+	};
+	VkDescriptorImageInfo texDescriptorAlbedo = {
+		.sampler = bozo::attachmentSampler,
+		.imageView = bozo::albedo.view,
+		.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
+	};
+
+	VkWriteDescriptorSet writeDescriptorSets[] = {
+		{	// Binding 1: World space normals texture
+			.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+			.dstSet = bozo::descriptorSet,
+			.dstBinding = 1,
+			.dstArrayElement = 0,
+			.descriptorCount = 1,
+			.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+			.pImageInfo = &texDescriptorNormal
+		},
+		{	// Binding 2: Albedo texture
+			.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+			.dstSet = bozo::descriptorSet,
+			.dstBinding = 2,
+			.dstArrayElement = 0,
+			.descriptorCount = 1,
+			.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+			.pImageInfo = &texDescriptorAlbedo
+		}
+	};
+	vkUpdateDescriptorSets(bz::device.logicalDevice, arraysize(writeDescriptorSets), writeDescriptorSets, 0, nullptr);
+}
+
 void CreateDescriptorPool() {
 	VkDescriptorPoolSize poolSizes[2] = {
 		{ // uniform buffer descriptor pool
@@ -666,6 +702,7 @@ void SetupDescriptorSetLayout() {
 }
 
 void AllocateDescriptorSets() {
+
 		// Deferred composition descriptor set
 	{
 		std::vector<VkDescriptorSetLayout> layouts(2, bozo::descriptorSetLayout);
@@ -678,6 +715,7 @@ void AllocateDescriptorSets() {
 
 		VkCheck(vkAllocateDescriptorSets(bz::device.logicalDevice, &allocInfo, &bozo::descriptorSet), "Failed to allocate descriptor sets");
 	}
+
 		// UBO buffer descriptor sets
 	{
 		std::vector<VkDescriptorSetLayout> layouts(arraysize(bozo::uboDescriptorSets), bozo::uboDescriptorSetLayout);
@@ -690,6 +728,7 @@ void AllocateDescriptorSets() {
 
 		VkCheck(vkAllocateDescriptorSets(bz::device.logicalDevice, &allocInfo, bozo::uboDescriptorSets), "Failed to allocate descriptor sets");
 	}
+
 		// Material descriptor sets
 	{
 		std::vector<VkDescriptorSetLayout> layouts(1, bozo::descriptorSetLayout);
@@ -706,84 +745,42 @@ void AllocateDescriptorSets() {
 }
 
 void UpdateDescriptorSets() {
-	{	// Deferred compositon
-		// Image descriptors for the offscreen gbuffer attachments
-		VkDescriptorImageInfo texDescriptorNormal = {
-			.sampler = bozo::attachmentSampler,
-			.imageView = bozo::normal.view,
-			.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
-		};
-		VkDescriptorImageInfo texDescriptorAlbedo = {
-			.sampler = bozo::attachmentSampler,
-			.imageView = bozo::albedo.view,
-			.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
+	// Offscreen: Model ubo
+	for (u32 i = 0; i < arraysize(bozo::uboDescriptorSets); i++) {
+		// Buffer descriptor for the offscreen uniform buffer
+		VkDescriptorBufferInfo uniformBufferDescriptor = {
+			.buffer = bz::uniformBuffers[i].buffer,
+			.offset = 0,
+			.range = sizeof(UniformBufferObject)
 		};
 
-		VkWriteDescriptorSet writeDescriptorSets[] = {
-			{	// Binding 1: World space normals texture
-				.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-				.dstSet = bozo::descriptorSet,
-				.dstBinding = 1,
-				.dstArrayElement = 0,
-				.descriptorCount = 1,
-				.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-				.pImageInfo = &texDescriptorNormal
-			},
-			{	// Binding 2: Albedo texture
-				.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-				.dstSet = bozo::descriptorSet,
-				.dstBinding = 2,
-				.dstArrayElement = 0,
-				.descriptorCount = 1,
-				.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-				.pImageInfo = &texDescriptorAlbedo
-			}
+		VkWriteDescriptorSet writeDescriptorSet = {	// Binding 0: Vertex shader uniform buffer
+			.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+			.dstSet = bozo::uboDescriptorSets[i],
+			.dstBinding = 0,
+			.dstArrayElement = 0,
+			.descriptorCount = 1,
+			.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+			.pBufferInfo = &uniformBufferDescriptor
 		};
-		vkUpdateDescriptorSets(bz::device.logicalDevice, arraysize(writeDescriptorSets), writeDescriptorSets, 0, nullptr);
+
+		vkUpdateDescriptorSets(bz::device.logicalDevice, 1, &writeDescriptorSet, 0, nullptr);
 	}
 
-	// TODO: split the ubo and model material descriptor updates into a second function
-	// they don't have to be updated on every swapchain recreation.
+	// Offscreen: Model materials
+	// TODO: this should probably be the done by the GLTFModel itself
+	for (auto& image : flightHelmet->images) {
+		VkWriteDescriptorSet writeDescriptorSet = {
+			.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+			.dstSet = image.descriptorSet,
+			.dstBinding = 1,
+			.dstArrayElement = 0,
+			.descriptorCount = 1,
+			.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+			.pImageInfo = &image.texture.descriptor
+		};
 
-	{	// Offscreen: Model ubo
-		for (u32 i = 0; i < arraysize(bozo::uboDescriptorSets); i++) {
-			// Buffer descriptor for the offscreen uniform buffer
-			VkDescriptorBufferInfo uniformBufferDescriptor = {
-				.buffer = bz::uniformBuffers[i].buffer,
-				.offset = 0,
-				.range = sizeof(UniformBufferObject)
-			};
-
-			VkWriteDescriptorSet writeDescriptorSet = {	// Binding 0: Vertex shader uniform buffer
-				.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-				.dstSet = bozo::uboDescriptorSets[i],
-				.dstBinding = 0,
-				.dstArrayElement = 0,
-				.descriptorCount = 1,
-				.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-				.pBufferInfo = &uniformBufferDescriptor
-			};
-
-			vkUpdateDescriptorSets(bz::device.logicalDevice, 1, &writeDescriptorSet, 0, nullptr);
-		}
-	}
-
-	{	// Offscreen: Model materials
-		for (auto& image : flightHelmet->images) {
-			//VkCheck(vkAllocateDescriptorSets(bz::device.logicalDevice, &allocInfo, &image.descriptorSet), "Failed to allocate descriptor set for image");
-
-			VkWriteDescriptorSet writeDescriptorSet = {
-				.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-				.dstSet = image.descriptorSet,
-				.dstBinding = 1,
-				.dstArrayElement = 0,
-				.descriptorCount = 1,
-				.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-				.pImageInfo = &image.texture.descriptor
-			};
-
-			vkUpdateDescriptorSets(bz::device.logicalDevice, 1, &writeDescriptorSet, 0, nullptr);
-		}
+		vkUpdateDescriptorSets(bz::device.logicalDevice, 1, &writeDescriptorSet, 0, nullptr);
 	}
 }
 
@@ -966,7 +963,8 @@ void CreateDescriptorSets() {
 		vkUpdateDescriptorSets(bz::device.logicalDevice, 1, &writeDescriptorSet, 0, nullptr);
 	}
 
-	// Create descriptor sets for materials
+	// Create descriptor sets for materials.
+	// TODO: this should probably be the done by the GLTFModel itself
 	allocInfo = {
 		.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
 		.descriptorPool = bz::descriptorPool,
@@ -1086,6 +1084,7 @@ void InitVulkan() {
 #ifdef DEFERRED
 	SetupDescriptorSetLayout();
 	AllocateDescriptorSets();
+	UpdateRenderAttachmentDescriptorSets();
 	UpdateDescriptorSets();
 	SetupPipelines();
 #else
@@ -1121,7 +1120,7 @@ void RecreateSwapchain() {
 	});
 
 	CreateRenderAttachments();
-	UpdateDescriptorSets();
+	UpdateRenderAttachmentDescriptorSets();
 }
 
 void CleanupVulkan() {
