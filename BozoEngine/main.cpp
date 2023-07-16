@@ -56,28 +56,25 @@ namespace bz {
 
 	Device device;
 	Swapchain swapchain;
-
 	UIOverlay Overlay;
+
 	RenderFrame renderFrames[MAX_FRAMES_IN_FLIGHT];
 	Buffer uniformBuffers[MAX_FRAMES_IN_FLIGHT];
-	RenderAttachment depth, color;
-
-	VkDescriptorPool descriptorPool;
-
-	VkSampleCountFlagBits msaaSamples = VK_SAMPLE_COUNT_1_BIT;
-
-	bool framebufferResized = false;
-
-	RenderAttachment albedo, normal;
+	RenderAttachment depth, albedo, normal;
 	VkSampler attachmentSampler;
 
+	VkDescriptorPool descriptorPool;
 	VkDescriptorSetLayout uboDescriptorSetLayout, descriptorSetLayout;
 	VkPipelineLayout pipelineLayout;
+
 	VkDescriptorSet descriptorSet;
 	VkDescriptorSet uboDescriptorSets[arraysize(bz::uniformBuffers)];
 
 	VkPipeline offscreenPipeline;
 	VkPipeline deferredPipeline;
+
+	VkSampleCountFlagBits msaaSamples = VK_SAMPLE_COUNT_1_BIT;
+	bool framebufferResized = false;
 }
 
 void FramebufferSizeCallback(GLFWwindow* window, int width, int height) {
@@ -290,13 +287,6 @@ void CreateRenderAttachments() {
 		.samples = bz::msaaSamples
 	});
 
-	CreateRenderAttachment(bz::color, {
-		.extent = bz::swapchain.extent,
-		.format = bz::swapchain.format,
-		.usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSIENT_ATTACHMENT_BIT,	// TODO: clarify if transient is needed
-		.samples = bz::msaaSamples
-	});
-
 	CreateRenderAttachment(bz::normal, {
 		.extent = bz::swapchain.extent,
 		.format = VK_FORMAT_R8G8B8A8_UNORM,
@@ -340,10 +330,6 @@ void CleanupRenderAttachments() {
 	vkDestroyImageView(bz::device.logicalDevice, bz::normal.view, nullptr);
 	vkDestroyImage(bz::device.logicalDevice, bz::normal.image, nullptr);
 	vkFreeMemory(bz::device.logicalDevice, bz::normal.memory, nullptr);
-
-	vkDestroyImageView(bz::device.logicalDevice, bz::color.view, nullptr);
-	vkDestroyImage(bz::device.logicalDevice, bz::color.image, nullptr);
-	vkFreeMemory(bz::device.logicalDevice, bz::color.memory, nullptr);
 
 	vkDestroyImageView(bz::device.logicalDevice, bz::depth.view, nullptr);
 	vkDestroyImage(bz::device.logicalDevice, bz::depth.image, nullptr);
@@ -438,7 +424,7 @@ void SetupPipelines() {
 
 	VkPipelineMultisampleStateCreateInfo multisampeInfo = {
 		.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,
-		.rasterizationSamples = bz::msaaSamples,
+		.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT,
 		.sampleShadingEnable = VK_FALSE
 	};
 
@@ -500,6 +486,8 @@ void SetupPipelines() {
 	vertexInputInfo.pVertexAttributeDescriptions = attributeDescriptions.data();
 
 	rasterizationInfo.cullMode = VK_CULL_MODE_BACK_BIT;
+
+	multisampeInfo.rasterizationSamples = bz::msaaSamples;
 
 	VkPipelineColorBlendAttachmentState blendAttachmentStates[] = {
 		{.blendEnable = VK_FALSE, .colorWriteMask = 0xF },
@@ -733,10 +721,6 @@ void RecordDeferredCommandBuffer(VkCommandBuffer cmd, u32 imageIndex) {
 		VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,		VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
 		VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,	VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT);
 
-	bz::color.attachmentInfo.resolveMode = VK_RESOLVE_MODE_AVERAGE_BIT;
-	bz::color.attachmentInfo.resolveImageView = bz::swapchain.imageViews[imageIndex];
-	bz::color.attachmentInfo.resolveImageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-
 	renderingInfo = {
 		.sType = VK_STRUCTURE_TYPE_RENDERING_INFO,
 		.renderArea = {
@@ -745,7 +729,7 @@ void RecordDeferredCommandBuffer(VkCommandBuffer cmd, u32 imageIndex) {
 		},
 		.layerCount = 1,
 		.colorAttachmentCount = 1,
-		.pColorAttachments = &bz::color.attachmentInfo,
+		.pColorAttachments = &bz::swapchain.attachmentInfos[imageIndex],
 		.pDepthAttachment = nullptr,
 		.pStencilAttachment = nullptr
 	};
@@ -947,7 +931,7 @@ int main(int argc, char* argv[]) {
 	ImGui_ImplGlfw_InitForVulkan(window, true);
 	bz::Overlay.vertShader = LoadShader("shaders/uioverlay.vert.spv", VK_SHADER_STAGE_VERTEX_BIT);
 	bz::Overlay.fragShader = LoadShader("shaders/uioverlay.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT);
-	bz::Overlay.Initialize(bz::device, bz::msaaSamples, bz::swapchain.format, VK_FORMAT_D32_SFLOAT);
+	bz::Overlay.Initialize(bz::device, VK_SAMPLE_COUNT_1_BIT, bz::swapchain.format, VK_FORMAT_D32_SFLOAT);
 
 	double lastFrame = 0.0f;
 

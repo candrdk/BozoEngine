@@ -18,6 +18,7 @@ public:
 
 	std::vector<VkImage> images = {};
 	std::vector<VkImageView> imageViews = {};
+	std::vector<VkRenderingAttachmentInfo> attachmentInfos = {};
 
 	void CreateSwapchain(GLFWwindow* window, const Device& device, SwapchainDesc desc);
 

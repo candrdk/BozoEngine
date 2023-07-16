@@ -93,6 +93,7 @@ void Swapchain::CreateSwapchain(GLFWwindow* window, const Device& device, Swapch
 	vkGetSwapchainImagesKHR(device.logicalDevice, swapchain, &imageCount, images.data());
 
 	imageViews.resize(imageCount);
+	attachmentInfos.reserve(imageCount);
 	for (u32 i = 0; i < imageCount; i++) {
 		VkImageViewCreateInfo viewInfo = {
 			.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
@@ -109,6 +110,14 @@ void Swapchain::CreateSwapchain(GLFWwindow* window, const Device& device, Swapch
 		};
 
 		VkCheck(vkCreateImageView(device.logicalDevice, &viewInfo, nullptr, &imageViews[i]), "Failed to create image view");
+
+		attachmentInfos.push_back({
+			.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
+			.imageView = imageViews[i],
+			.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+			.loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+			.storeOp = VK_ATTACHMENT_STORE_OP_STORE
+		});
 	}
 }
 
