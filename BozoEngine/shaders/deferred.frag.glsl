@@ -2,6 +2,7 @@
 
 layout (set = 1, binding = 1) uniform sampler2DMS samplerNormal;
 layout (set = 1, binding = 2) uniform sampler2DMS samplerAlbedo;
+layout (set = 1, binding = 3) uniform sampler2DMS samplerDepth;
 
 layout (location = 0) in vec2 inUV;
 
@@ -23,10 +24,13 @@ vec4 resolve(sampler2DMS tex, ivec2 uv) {
 void main() {
 	ivec2 uv = ivec2(inUV * textureSize(samplerAlbedo));
 
-	if (inUV.y < 0.5) {
+	if (inUV.x < inUV.y - 0.15) {
 		outFragcolor = resolve(samplerNormal, uv);
 	}
-	else {
+	else if (inUV.x < inUV.y + 0.15) {
 		outFragcolor = resolve(samplerAlbedo, uv);
+	}
+	else {
+		outFragcolor = resolve(samplerDepth, uv);
 	}
 }

@@ -348,6 +348,11 @@ void UpdateRenderAttachmentDescriptorSets() {
 		.imageView = bz::albedo.view,
 		.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
 	};
+	VkDescriptorImageInfo texDescriptorDepth = {
+		.sampler = bz::attachmentSampler,
+		.imageView = bz::depth.view,
+		.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
+	};
 
 	VkWriteDescriptorSet writeDescriptorSets[] = {
 		{	// Binding 1: World space normals texture
@@ -367,6 +372,15 @@ void UpdateRenderAttachmentDescriptorSets() {
 			.descriptorCount = 1,
 			.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
 			.pImageInfo = &texDescriptorAlbedo
+		},
+		{	// Binding 3: Depth texture
+			.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+			.dstSet = bz::descriptorSet,
+			.dstBinding = 3,
+			.dstArrayElement = 0,
+			.descriptorCount = 1,
+			.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+			.pImageInfo = &texDescriptorDepth
 		}
 	};
 	vkUpdateDescriptorSets(bz::device.logicalDevice, arraysize(writeDescriptorSets), writeDescriptorSets, 0, nullptr);
@@ -543,6 +557,12 @@ void SetupDescriptorSetLayout() {
 		},
 		{	// Binding 2 : Albedo texture target
 			.binding = 2,
+			.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+			.descriptorCount = 1,
+			.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT
+		},
+		{	// Binding 2 : Depth texture target
+			.binding = 3,
 			.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
 			.descriptorCount = 1,
 			.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT
