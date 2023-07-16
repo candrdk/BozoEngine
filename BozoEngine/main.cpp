@@ -14,7 +14,6 @@
 
 constexpr u32 WIDTH = 1600;
 constexpr u32 HEIGHT = 900;
-#define DEFERRED
 
 GLTFModel* flightHelmet;
 
@@ -64,18 +63,11 @@ namespace bz {
 	RenderAttachment depth, color;
 
 	VkDescriptorPool descriptorPool;
-	VkDescriptorSetLayout uboLayout, texturesLayout;			// bozo
-	VkDescriptorSet uboDescriptorSets[MAX_FRAMES_IN_FLIGHT];	// bozo
-
-	VkPipelineLayout pipelineLayout;							// bozo
-	VkPipeline graphicsPipeline;
 
 	VkSampleCountFlagBits msaaSamples = VK_SAMPLE_COUNT_1_BIT;
 
 	bool framebufferResized = false;
-}
 
-namespace bozo {
 	RenderAttachment albedo, normal;
 	VkSampler attachmentSampler;
 
@@ -248,117 +240,6 @@ VkPipelineShaderStageCreateInfo LoadShader(const char* path, VkShaderStageFlagBi
 	};
 }
 
-void CreateGraphicsPipeline() {
-	VkPipelineShaderStageCreateInfo shaderStages[] = {
-		LoadShader("shaders/triangle.vert.spv", VK_SHADER_STAGE_VERTEX_BIT),
-		LoadShader("shaders/triangle.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT)
-	};
-
-	VkDynamicState dynamicState[] = {
-		VK_DYNAMIC_STATE_VIEWPORT,
-		VK_DYNAMIC_STATE_SCISSOR
-	};
-
-	VkPipelineDynamicStateCreateInfo dynamicStateInfo = {
-		.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO,
-		.dynamicStateCount = arraysize(dynamicState),
-		.pDynamicStates = dynamicState
-	};
-
-	VkPipelineViewportStateCreateInfo viewportStateInfo = {
-		.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO,
-		.viewportCount = 1,
-		.scissorCount = 1
-	};
-
-	VkVertexInputBindingDescription bindingDescription = GLTFModel::Vertex::GetBindingDescription();
-	std::vector<VkVertexInputAttributeDescription> attributeDescriptions = GLTFModel::Vertex::GetAttributeDescriptions();
-	VkPipelineVertexInputStateCreateInfo vertexInputInfo = {
-		.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
-		.vertexBindingDescriptionCount = 1,
-		.pVertexBindingDescriptions = &bindingDescription,
-		.vertexAttributeDescriptionCount = (u32)attributeDescriptions.size(),
-		.pVertexAttributeDescriptions = attributeDescriptions.data()
-	};
-
-	VkPipelineInputAssemblyStateCreateInfo inputAssemblyInfo = {
-		.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,
-		.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
-		.primitiveRestartEnable = VK_FALSE
-	};
-
-	VkPipelineRasterizationStateCreateInfo rasterizationInfo = {
-		.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
-		.depthClampEnable = VK_FALSE,		// depth clamp discards fragments outside the near/far planes. Usefull for shadow maps, requires enabling a GPU feature.
-		.rasterizerDiscardEnable = VK_FALSE,
-		.polygonMode = VK_POLYGON_MODE_FILL,
-		.cullMode = VK_CULL_MODE_BACK_BIT,
-		.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE,
-		.depthBiasEnable = VK_FALSE,
-		.lineWidth = 1.0f,
-	};
-
-	VkPipelineMultisampleStateCreateInfo multisampeInfo = {
-		.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,
-		.rasterizationSamples = bz::msaaSamples,
-		.sampleShadingEnable = VK_FALSE
-	};
-
-	VkPipelineDepthStencilStateCreateInfo depthStencilInfo = {
-		.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO,
-		.depthTestEnable = VK_TRUE,
-		.depthWriteEnable = VK_TRUE,
-		.depthCompareOp = VK_COMPARE_OP_GREATER_OR_EQUAL, // inverse z
-		.depthBoundsTestEnable = VK_FALSE,
-		.stencilTestEnable = VK_FALSE,
-		.minDepthBounds = 0.0f,
-		.maxDepthBounds = 1.0f
-	};
-
-	VkPipelineColorBlendAttachmentState colorBlendAttachment = {
-		.blendEnable = VK_FALSE,
-		.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT
-	};
-
-	VkPipelineColorBlendStateCreateInfo colorBlendStateInfo = { 
-		.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO,
-		.logicOpEnable = VK_FALSE,
-		.attachmentCount = 1,
-		.pAttachments = &colorBlendAttachment
-	};
-
-	VkPipelineRenderingCreateInfo renderingCreateInfo = {
-		.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO,
-		.colorAttachmentCount = 1,
-		.pColorAttachmentFormats = &bz::color.format,
-		.depthAttachmentFormat = bz::depth.format
-	};
-
-	VkGraphicsPipelineCreateInfo pipelineInfo = {
-		.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
-		.pNext = &renderingCreateInfo,
-		.stageCount = 2,
-		.pStages = shaderStages,
-		.pVertexInputState = &vertexInputInfo,
-		.pInputAssemblyState = &inputAssemblyInfo,
-		.pViewportState = &viewportStateInfo,
-		.pRasterizationState = &rasterizationInfo,
-		.pMultisampleState = &multisampeInfo,
-		.pDepthStencilState = &depthStencilInfo,
-		.pColorBlendState = &colorBlendStateInfo,
-		.pDynamicState = &dynamicStateInfo,
-		.layout = bz::pipelineLayout,
-		.renderPass = VK_NULL_HANDLE,
-		.subpass = 0
-	};
-
-	VkCheck(vkCreateGraphicsPipelines(bz::device.logicalDevice, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &bz::graphicsPipeline), "Failed to create graphics pipeline");
-
-	// if we rebuild this pipeline often, we should retain these shader modules.
-	vkDestroyShaderModule(bz::device.logicalDevice, shaderStages[0].module, nullptr);
-	vkDestroyShaderModule(bz::device.logicalDevice, shaderStages[1].module, nullptr);
-}
-
 void CreateUniformBuffers() {
 	for (int i = 0; i < arraysize(bz::uniformBuffers); i++) {
 		bz::device.CreateBuffer(
@@ -416,14 +297,14 @@ void CreateRenderAttachments() {
 		.samples = bz::msaaSamples
 	});
 
-	CreateRenderAttachment(bozo::normal, {
+	CreateRenderAttachment(bz::normal, {
 		.extent = bz::swapchain.extent,
 		.format = VK_FORMAT_R8G8B8A8_UNORM,
 		.usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
 		.samples = bz::msaaSamples
 	});
 
-	CreateRenderAttachment(bozo::albedo, {
+	CreateRenderAttachment(bz::albedo, {
 		.extent = bz::swapchain.extent,
 		.format = VK_FORMAT_R8G8B8A8_UNORM,
 		.usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
@@ -446,19 +327,19 @@ void CreateRenderAttachments() {
 		.borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK
 	};
 
-	VkCheck(vkCreateSampler(bz::device.logicalDevice, &samplerInfo, nullptr, &bozo::attachmentSampler), "Failed to create sampler");
+	VkCheck(vkCreateSampler(bz::device.logicalDevice, &samplerInfo, nullptr, &bz::attachmentSampler), "Failed to create sampler");
 }
 
 void CleanupRenderAttachments() {
-	vkDestroySampler(bz::device.logicalDevice, bozo::attachmentSampler, nullptr);
+	vkDestroySampler(bz::device.logicalDevice, bz::attachmentSampler, nullptr);
 
-	vkDestroyImageView(bz::device.logicalDevice, bozo::albedo.view, nullptr);
-	vkDestroyImage(bz::device.logicalDevice, bozo::albedo.image, nullptr);
-	vkFreeMemory(bz::device.logicalDevice, bozo::albedo.memory, nullptr);
+	vkDestroyImageView(bz::device.logicalDevice, bz::albedo.view, nullptr);
+	vkDestroyImage(bz::device.logicalDevice, bz::albedo.image, nullptr);
+	vkFreeMemory(bz::device.logicalDevice, bz::albedo.memory, nullptr);
 
-	vkDestroyImageView(bz::device.logicalDevice, bozo::normal.view, nullptr);
-	vkDestroyImage(bz::device.logicalDevice, bozo::normal.image, nullptr);
-	vkFreeMemory(bz::device.logicalDevice, bozo::normal.memory, nullptr);
+	vkDestroyImageView(bz::device.logicalDevice, bz::normal.view, nullptr);
+	vkDestroyImage(bz::device.logicalDevice, bz::normal.image, nullptr);
+	vkFreeMemory(bz::device.logicalDevice, bz::normal.memory, nullptr);
 
 	vkDestroyImageView(bz::device.logicalDevice, bz::color.view, nullptr);
 	vkDestroyImage(bz::device.logicalDevice, bz::color.image, nullptr);
@@ -472,20 +353,20 @@ void CleanupRenderAttachments() {
 void UpdateRenderAttachmentDescriptorSets() {
 	// Image descriptors for the offscreen gbuffer attachments
 	VkDescriptorImageInfo texDescriptorNormal = {
-		.sampler = bozo::attachmentSampler,
-		.imageView = bozo::normal.view,
+		.sampler = bz::attachmentSampler,
+		.imageView = bz::normal.view,
 		.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
 	};
 	VkDescriptorImageInfo texDescriptorAlbedo = {
-		.sampler = bozo::attachmentSampler,
-		.imageView = bozo::albedo.view,
+		.sampler = bz::attachmentSampler,
+		.imageView = bz::albedo.view,
 		.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
 	};
 
 	VkWriteDescriptorSet writeDescriptorSets[] = {
 		{	// Binding 1: World space normals texture
 			.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-			.dstSet = bozo::descriptorSet,
+			.dstSet = bz::descriptorSet,
 			.dstBinding = 1,
 			.dstArrayElement = 0,
 			.descriptorCount = 1,
@@ -494,7 +375,7 @@ void UpdateRenderAttachmentDescriptorSets() {
 		},
 		{	// Binding 2: Albedo texture
 			.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-			.dstSet = bozo::descriptorSet,
+			.dstSet = bz::descriptorSet,
 			.dstBinding = 2,
 			.dstArrayElement = 0,
 			.descriptorCount = 1,
@@ -601,10 +482,10 @@ void SetupPipelines() {
 		.pDepthStencilState = &depthStencilInfo,
 		.pColorBlendState = &colorBlendStateInfo,
 		.pDynamicState = &dynamicStateInfo,
-		.layout = bozo::pipelineLayout
+		.layout = bz::pipelineLayout
 	};
 
-	VkCheck(vkCreateGraphicsPipelines(bz::device.logicalDevice, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &bozo::deferredPipeline), "Failed to create graphics pipeline");
+	VkCheck(vkCreateGraphicsPipelines(bz::device.logicalDevice, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &bz::deferredPipeline), "Failed to create graphics pipeline");
 
 	VkPipelineShaderStageCreateInfo offscreenShaders[] = {
 		LoadShader("shaders/offscreen.vert.spv", VK_SHADER_STAGE_VERTEX_BIT),
@@ -630,7 +511,7 @@ void SetupPipelines() {
 	pipelineInfo.stageCount = arraysize(offscreenShaders);
 	pipelineInfo.pStages = offscreenShaders;
 
-	VkFormat colorAttachmentFormats[] = {bozo::normal.format, bozo::albedo.format};
+	VkFormat colorAttachmentFormats[] = {bz::normal.format, bz::albedo.format};
 	renderingCreateInfo = {
 		.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO,
 		.colorAttachmentCount = arraysize(colorAttachmentFormats),
@@ -638,7 +519,7 @@ void SetupPipelines() {
 		.depthAttachmentFormat = bz::depth.format
 	};
 
-	VkCheck(vkCreateGraphicsPipelines(bz::device.logicalDevice, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &bozo::offscreenPipeline), "Failed to create graphics pipeline");
+	VkCheck(vkCreateGraphicsPipelines(bz::device.logicalDevice, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &bz::offscreenPipeline), "Failed to create graphics pipeline");
 
 	vkDestroyShaderModule(bz::device.logicalDevice, deferredShaders[0].module, nullptr);
 	vkDestroyShaderModule(bz::device.logicalDevice, deferredShaders[1].module, nullptr);
@@ -663,7 +544,7 @@ void SetupDescriptorSetLayout() {
 		.pBindings = uboLayoutBinding
 	};
 
-	VkCheck(vkCreateDescriptorSetLayout(bz::device.logicalDevice, &uboDescriptorLayout, nullptr, &bozo::uboDescriptorSetLayout), "Failed to create descriptor set layout");
+	VkCheck(vkCreateDescriptorSetLayout(bz::device.logicalDevice, &uboDescriptorLayout, nullptr, &bz::uboDescriptorSetLayout), "Failed to create descriptor set layout");
 
 	VkDescriptorSetLayoutBinding setLayoutBindings[] = {
 		{	// Binding 1 : Normals texture target
@@ -686,10 +567,10 @@ void SetupDescriptorSetLayout() {
 		.pBindings = setLayoutBindings
 	};
 
-	VkCheck(vkCreateDescriptorSetLayout(bz::device.logicalDevice, &descriptorLayout, nullptr, &bozo::descriptorSetLayout), "Failed to create descriptor set layout");
+	VkCheck(vkCreateDescriptorSetLayout(bz::device.logicalDevice, &descriptorLayout, nullptr, &bz::descriptorSetLayout), "Failed to create descriptor set layout");
 
 	VkPushConstantRange pushConstantRange = { .stageFlags = VK_SHADER_STAGE_VERTEX_BIT, .offset = 0, .size = sizeof(glm::mat4) };
-	VkDescriptorSetLayout layouts[] = { bozo::uboDescriptorSetLayout, bozo::descriptorSetLayout };
+	VkDescriptorSetLayout layouts[] = { bz::uboDescriptorSetLayout, bz::descriptorSetLayout };
 	VkPipelineLayoutCreateInfo pipelineLayoutInfo = {
 		.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
 		.setLayoutCount = arraysize(layouts),
@@ -698,14 +579,13 @@ void SetupDescriptorSetLayout() {
 		.pPushConstantRanges = &pushConstantRange
 	};
 
-	VkCheck(vkCreatePipelineLayout(bz::device.logicalDevice, &pipelineLayoutInfo, nullptr, &bozo::pipelineLayout), "Failed to create pipeline layout");
+	VkCheck(vkCreatePipelineLayout(bz::device.logicalDevice, &pipelineLayoutInfo, nullptr, &bz::pipelineLayout), "Failed to create pipeline layout");
 }
 
 void AllocateDescriptorSets() {
-
 		// Deferred composition descriptor set
 	{
-		std::vector<VkDescriptorSetLayout> layouts(2, bozo::descriptorSetLayout);
+		std::vector<VkDescriptorSetLayout> layouts(2, bz::descriptorSetLayout);
 		VkDescriptorSetAllocateInfo allocInfo = {
 			.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
 			.descriptorPool = bz::descriptorPool,
@@ -713,12 +593,12 @@ void AllocateDescriptorSets() {
 			.pSetLayouts = layouts.data()
 		};
 
-		VkCheck(vkAllocateDescriptorSets(bz::device.logicalDevice, &allocInfo, &bozo::descriptorSet), "Failed to allocate descriptor sets");
+		VkCheck(vkAllocateDescriptorSets(bz::device.logicalDevice, &allocInfo, &bz::descriptorSet), "Failed to allocate descriptor sets");
 	}
 
 		// UBO buffer descriptor sets
 	{
-		std::vector<VkDescriptorSetLayout> layouts(arraysize(bozo::uboDescriptorSets), bozo::uboDescriptorSetLayout);
+		std::vector<VkDescriptorSetLayout> layouts(arraysize(bz::uboDescriptorSets), bz::uboDescriptorSetLayout);
 		VkDescriptorSetAllocateInfo allocInfo = {
 			.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
 			.descriptorPool = bz::descriptorPool,
@@ -726,12 +606,12 @@ void AllocateDescriptorSets() {
 			.pSetLayouts = layouts.data(),
 		};
 
-		VkCheck(vkAllocateDescriptorSets(bz::device.logicalDevice, &allocInfo, bozo::uboDescriptorSets), "Failed to allocate descriptor sets");
+		VkCheck(vkAllocateDescriptorSets(bz::device.logicalDevice, &allocInfo, bz::uboDescriptorSets), "Failed to allocate descriptor sets");
 	}
 
 		// Material descriptor sets
 	{
-		std::vector<VkDescriptorSetLayout> layouts(1, bozo::descriptorSetLayout);
+		std::vector<VkDescriptorSetLayout> layouts(1, bz::descriptorSetLayout);
 		VkDescriptorSetAllocateInfo allocInfo = {
 			.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
 			.descriptorPool = bz::descriptorPool,
@@ -746,7 +626,7 @@ void AllocateDescriptorSets() {
 
 void UpdateDescriptorSets() {
 	// Offscreen: Model ubo
-	for (u32 i = 0; i < arraysize(bozo::uboDescriptorSets); i++) {
+	for (u32 i = 0; i < arraysize(bz::uboDescriptorSets); i++) {
 		// Buffer descriptor for the offscreen uniform buffer
 		VkDescriptorBufferInfo uniformBufferDescriptor = {
 			.buffer = bz::uniformBuffers[i].buffer,
@@ -756,7 +636,7 @@ void UpdateDescriptorSets() {
 
 		VkWriteDescriptorSet writeDescriptorSet = {	// Binding 0: Vertex shader uniform buffer
 			.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-			.dstSet = bozo::uboDescriptorSets[i],
+			.dstSet = bz::uboDescriptorSets[i],
 			.dstBinding = 0,
 			.dstArrayElement = 0,
 			.descriptorCount = 1,
@@ -796,7 +676,7 @@ void RecordDeferredCommandBuffer(VkCommandBuffer cmd, u32 imageIndex) {
 
 	VkCheck(vkBeginCommandBuffer(cmd, &beginInfo), "Failed to begin recording command buffer!");
 
-	VkRenderingAttachmentInfo colorAttachments[] = { bozo::normal.attachmentInfo, bozo::albedo.attachmentInfo };
+	VkRenderingAttachmentInfo colorAttachments[] = { bz::normal.attachmentInfo, bz::albedo.attachmentInfo };
 	VkRenderingAttachmentInfo depthAttachment[] = { bz::depth.attachmentInfo };
 
 	VkRenderingInfo renderingInfo = {
@@ -817,11 +697,11 @@ void RecordDeferredCommandBuffer(VkCommandBuffer cmd, u32 imageIndex) {
 		VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT,
 		VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT);
 
-	SetImageLayout(cmd, bozo::normal.image, VK_IMAGE_ASPECT_COLOR_BIT,
+	SetImageLayout(cmd, bz::normal.image, VK_IMAGE_ASPECT_COLOR_BIT,
 		VK_IMAGE_LAYOUT_UNDEFINED,						VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
 		VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,	VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT);
 
-	SetImageLayout(cmd, bozo::albedo.image, VK_IMAGE_ASPECT_COLOR_BIT,
+	SetImageLayout(cmd, bz::albedo.image, VK_IMAGE_ASPECT_COLOR_BIT,
 		VK_IMAGE_LAYOUT_UNDEFINED,						VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
 		VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,	VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT);
 
@@ -830,10 +710,10 @@ void RecordDeferredCommandBuffer(VkCommandBuffer cmd, u32 imageIndex) {
 	vkCmdSetViewport(cmd, 0, 1, &viewport);
 	vkCmdSetScissor(cmd, 0, 1, &scissor);
 
-	vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, bozo::offscreenPipeline);
-	vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, bozo::pipelineLayout, 0, 1, &bozo::uboDescriptorSets[currentFrame], 0, nullptr);
+	vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, bz::offscreenPipeline);
+	vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, bz::pipelineLayout, 0, 1, &bz::uboDescriptorSets[currentFrame], 0, nullptr);
 
-	flightHelmet->Draw(cmd, bozo::pipelineLayout);
+	flightHelmet->Draw(cmd, bz::pipelineLayout);
 
 	vkCmdEndRendering(cmd);
 
@@ -845,11 +725,11 @@ void RecordDeferredCommandBuffer(VkCommandBuffer cmd, u32 imageIndex) {
 		VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL,		VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
 		VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT,		VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT);
 
-	SetImageLayout(cmd, bozo::normal.image, VK_IMAGE_ASPECT_COLOR_BIT,
+	SetImageLayout(cmd, bz::normal.image, VK_IMAGE_ASPECT_COLOR_BIT,
 		VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,		VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
 		VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,	VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT);
 
-	SetImageLayout(cmd, bozo::albedo.image, VK_IMAGE_ASPECT_COLOR_BIT,
+	SetImageLayout(cmd, bz::albedo.image, VK_IMAGE_ASPECT_COLOR_BIT,
 		VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,		VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
 		VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,	VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT);
 
@@ -874,8 +754,8 @@ void RecordDeferredCommandBuffer(VkCommandBuffer cmd, u32 imageIndex) {
 
 	vkCmdSetViewport(cmd, 0, 1, &viewport);
 	vkCmdSetScissor(cmd, 0, 1, &scissor);
-	vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, bozo::pipelineLayout, 1, 1, &bozo::descriptorSet, 0, nullptr);
-	vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, bozo::deferredPipeline);
+	vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, bz::pipelineLayout, 1, 1, &bz::descriptorSet, 0, nullptr);
+	vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, bz::deferredPipeline);
 	vkCmdDraw(cmd, 3, 1, 0, 0);
 
 	bz::Overlay.Draw(cmd);
@@ -887,169 +767,6 @@ void RecordDeferredCommandBuffer(VkCommandBuffer cmd, u32 imageIndex) {
 		VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,	VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT);
 
 	VkCheck(vkEndCommandBuffer(cmd), "Failed to record command buffer");
-}
-
-void CreateDescriptorSets() {
-	// Descriptor set layout for passing matrices
-	VkDescriptorSetLayoutBinding setLayoutBinding = {
-		.binding = 0,
-		.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-		.descriptorCount = 1,
-		.stageFlags = VK_SHADER_STAGE_VERTEX_BIT
-	};
-	VkDescriptorSetLayoutCreateInfo descriptorSetLayoutInfo = {
-		.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
-		.bindingCount = 1,
-		.pBindings = &setLayoutBinding
-	};
-	VkCheck(vkCreateDescriptorSetLayout(bz::device.logicalDevice, &descriptorSetLayoutInfo, nullptr, &bz::uboLayout), "Failed to create descriptor set layout for the matrix UBO");
-
-	// Descriptor set layout for passing material textures
-	setLayoutBinding = {
-		.binding = 0,
-		.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-		.descriptorCount = 1,
-		.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
-		.pImmutableSamplers = nullptr
-	};
-	VkCheck(vkCreateDescriptorSetLayout(bz::device.logicalDevice, &descriptorSetLayoutInfo, nullptr, &bz::texturesLayout), "Failed to create descriptor set layout for textures");
-
-	// Push constants are used to push local matrices of a primitive to the vertex shader
-	VkPushConstantRange pushConstantRange = {
-		.stageFlags = VK_SHADER_STAGE_VERTEX_BIT,
-		.offset = 0,
-		.size = sizeof(glm::mat4)
-	};
-
-	// Pipeline layout using both descriptor sets (set 0 = matrices, set 1 = material)
-	VkDescriptorSetLayout setLayouts[2] = { bz::uboLayout, bz::texturesLayout };
-	VkPipelineLayoutCreateInfo pipelineLayoutInfo = {
-		.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
-		.setLayoutCount = arraysize(setLayouts),
-		.pSetLayouts = setLayouts,
-		.pushConstantRangeCount = 1,
-		.pPushConstantRanges = &pushConstantRange
-	};
-
-	VkCheck(vkCreatePipelineLayout(bz::device.logicalDevice, &pipelineLayoutInfo, nullptr, &bz::pipelineLayout), "Failed to create pipeline layout");
-
-	// Descriptor set for scene matrices
-	setLayouts[1] = bz::uboLayout;	// reuse setLayouts, to allocate two descriptors at once (setLayouts = { uboLayout, uboLayot })
-	VkDescriptorSetAllocateInfo allocInfo = {
-		.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
-		.descriptorPool = bz::descriptorPool,
-		.descriptorSetCount = arraysize(bz::uniformBuffers), // 1 descriptor set per uniform buffer
-		.pSetLayouts = setLayouts
-	};
-	VkCheck(vkAllocateDescriptorSets(bz::device.logicalDevice, &allocInfo, bz::uboDescriptorSets), "Failed to allocate UBO descriptor sets");
-
-	for (int i = 0; i < arraysize(bz::uniformBuffers); i++) {
-		VkDescriptorBufferInfo bufferInfo = {
-			.buffer = bz::uniformBuffers[i].buffer,
-			.offset = 0,
-			.range = sizeof(UniformBufferObject)
-		};
-
-		VkWriteDescriptorSet writeDescriptorSet = {
-			.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-			.dstSet = bz::uboDescriptorSets[i],
-			.dstBinding = 0,
-			.dstArrayElement = 0,
-			.descriptorCount = 1,
-			.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-			.pBufferInfo = &bufferInfo
-		};
-
-		vkUpdateDescriptorSets(bz::device.logicalDevice, 1, &writeDescriptorSet, 0, nullptr);
-	}
-
-	// Create descriptor sets for materials.
-	// TODO: this should probably be the done by the GLTFModel itself
-	allocInfo = {
-		.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
-		.descriptorPool = bz::descriptorPool,
-		.descriptorSetCount = 1,
-		.pSetLayouts = &bz::texturesLayout
-	};
-
-	for (auto& image : flightHelmet->images) {
-		VkCheck(vkAllocateDescriptorSets(bz::device.logicalDevice, &allocInfo, &image.descriptorSet), "Failed to allocate descriptor set for image");
-		VkWriteDescriptorSet writeDescriptorSet = {
-			.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-			.dstSet = image.descriptorSet,
-			.dstBinding = 0,
-			.dstArrayElement = 0,
-			.descriptorCount = 1,
-			.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-			.pImageInfo = &image.texture.descriptor
-		};
-		vkUpdateDescriptorSets(bz::device.logicalDevice, 1, &writeDescriptorSet, 0, nullptr);
-	}
-}
-
-void RecordCommandBuffer(VkCommandBuffer commandBuffer, u32 imageIndex) {
-	VkCommandBufferBeginInfo beginInfo = { .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO };
-
-	VkCheck(vkBeginCommandBuffer(commandBuffer, &beginInfo), "Failed to begin recording command buffer!");
-
-	bz::color.attachmentInfo.resolveMode = VK_RESOLVE_MODE_AVERAGE_BIT;
-	bz::color.attachmentInfo.resolveImageView = bz::swapchain.imageViews[imageIndex];
-	bz::color.attachmentInfo.resolveImageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-
-	VkRenderingInfo renderingInfo = {
-		.sType = VK_STRUCTURE_TYPE_RENDERING_INFO,
-		.renderArea = {
-			.offset = {0, 0},
-			.extent = bz::swapchain.extent
-		},
-		.layerCount = 1,
-		.colorAttachmentCount = 1,
-		.pColorAttachments = &bz::color.attachmentInfo,
-		.pDepthAttachment = &bz::depth.attachmentInfo,
-		.pStencilAttachment = nullptr
-	};
-
-	SetImageLayout(commandBuffer, bz::swapchain.images[imageIndex], VK_IMAGE_ASPECT_COLOR_BIT,
-		VK_IMAGE_LAYOUT_UNDEFINED,			VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-		VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,	VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT);
-
-	SetImageLayout(commandBuffer, bz::depth.image, VK_IMAGE_ASPECT_DEPTH_BIT,
-		VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL,
-		VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT,
-		VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT);
-	
-	vkCmdBeginRendering(commandBuffer, &renderingInfo);
-
-	VkViewport viewport = {
-		.x = 0.0f,
-		.y = 0.0f,
-		.width = (float)bz::swapchain.extent.width,
-		.height = (float)bz::swapchain.extent.height,
-		.minDepth = 0.0f,
-		.maxDepth = 1.0f
-	};
-	vkCmdSetViewport(commandBuffer, 0, 1, &viewport);
-
-	VkRect2D scissor = {
-		.offset = { 0, 0 },
-		.extent = bz::swapchain.extent
-	};
-	vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
-
-	vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, bz::pipelineLayout, 0, 1, &bz::uboDescriptorSets[currentFrame], 0, nullptr);
-	vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, bz::graphicsPipeline);
-
-	flightHelmet->Draw(commandBuffer, bz::pipelineLayout);
-
-	bz::Overlay.Draw(commandBuffer);
-
-	vkCmdEndRendering(commandBuffer);
-
-	SetImageLayout(commandBuffer, bz::swapchain.images[imageIndex], VK_IMAGE_ASPECT_COLOR_BIT,
-		VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,		VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
-		VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,	VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT);
-
-	VkCheck(vkEndCommandBuffer(commandBuffer), "Failed to record command buffer");
 }
 
 void CreateRenderFrames() {
@@ -1081,16 +798,11 @@ void InitVulkan() {
 
 	CreateDescriptorPool();
 
-#ifdef DEFERRED
 	SetupDescriptorSetLayout();
 	AllocateDescriptorSets();
 	UpdateRenderAttachmentDescriptorSets();
 	UpdateDescriptorSets();
 	SetupPipelines();
-#else
-	CreateDescriptorSets();
-	CreateGraphicsPipeline();
-#endif
 
 	CreateRenderFrames();
 }
@@ -1135,20 +847,12 @@ void CleanupVulkan() {
 
 	vkDestroyDescriptorPool(bz::device.logicalDevice, bz::descriptorPool, nullptr);
 
-#ifdef DEFERRED
-	vkDestroyPipeline(bz::device.logicalDevice, bozo::deferredPipeline, nullptr);
-	vkDestroyPipeline(bz::device.logicalDevice, bozo::offscreenPipeline, nullptr);
-	vkDestroyPipelineLayout(bz::device.logicalDevice, bozo::pipelineLayout, nullptr);
-
-	vkDestroyDescriptorSetLayout(bz::device.logicalDevice, bozo::descriptorSetLayout, nullptr);
-	vkDestroyDescriptorSetLayout(bz::device.logicalDevice, bozo::uboDescriptorSetLayout, nullptr);
-#else
-	vkDestroyPipeline(bz::device.logicalDevice, bz::graphicsPipeline, nullptr);
+	vkDestroyPipeline(bz::device.logicalDevice, bz::deferredPipeline, nullptr);
+	vkDestroyPipeline(bz::device.logicalDevice, bz::offscreenPipeline, nullptr);
 	vkDestroyPipelineLayout(bz::device.logicalDevice, bz::pipelineLayout, nullptr);
 
-	vkDestroyDescriptorSetLayout(bz::device.logicalDevice, bz::uboLayout, nullptr);
-	vkDestroyDescriptorSetLayout(bz::device.logicalDevice, bz::texturesLayout, nullptr);
-#endif
+	vkDestroyDescriptorSetLayout(bz::device.logicalDevice, bz::descriptorSetLayout, nullptr);
+	vkDestroyDescriptorSetLayout(bz::device.logicalDevice, bz::uboDescriptorSetLayout, nullptr);
 
 	for (int i = 0; i < arraysize(bz::renderFrames); i++) {
 		vkDestroySemaphore(bz::device.logicalDevice, bz::renderFrames[i].imageAvailable, nullptr);
@@ -1187,11 +891,7 @@ void DrawFrame() {
 	VkCheck(vkResetFences(bz::device.logicalDevice, 1, &bz::renderFrames[currentFrame].inFlight), "Failed to reset inFlight fence");
 
 	VkCheck(vkResetCommandBuffer(bz::renderFrames[currentFrame].commandBuffer, 0), "Failed to reset command buffer");
-#ifdef DEFERRED
 	RecordDeferredCommandBuffer(bz::renderFrames[currentFrame].commandBuffer, imageIndex);
-#else
-	RecordCommandBuffer(bz::renderFrames[currentFrame].commandBuffer, imageIndex);
-#endif
 
 	VkSemaphore waitSemaphores[] = { bz::renderFrames[currentFrame].imageAvailable };
 	VkSemaphore signalSemaphores[] = { bz::renderFrames[currentFrame].renderFinished };
