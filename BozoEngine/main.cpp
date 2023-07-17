@@ -390,9 +390,9 @@ void CreateDescriptorPool() {
 			.type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
 			.descriptorCount = arraysize(bz::uniformBuffers)	// 1 descriptor per uniform buffer
 		},
-		{ // combined image sampler descriptor pool per model image / texture + 1 sampler for gbuffer
+		{ // combined image sampler descriptor pool per model image / texture + 1 sampling the gbuffer
 			.type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-			.descriptorCount = (u32)flightHelmet->images.size() + 2	// why +2 instead of +1?
+			.descriptorCount = (u32)flightHelmet->images.size() + 1
 		}
 	};
 
@@ -589,21 +589,17 @@ void SetupDescriptorSetLayout() {
 }
 
 void AllocateDescriptorSets() {
-		// Deferred composition descriptor set
-	{
-		std::vector<VkDescriptorSetLayout> layouts(2, bz::descriptorSetLayout);
+	{	// Deferred composition descriptor set
 		VkDescriptorSetAllocateInfo allocInfo = {
 			.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
 			.descriptorPool = bz::descriptorPool,
-			.descriptorSetCount = u32(layouts.size()),
-			.pSetLayouts = layouts.data()
+			.descriptorSetCount = 1,
+			.pSetLayouts = &bz::descriptorSetLayout
 		};
 
 		VkCheck(vkAllocateDescriptorSets(bz::device.logicalDevice, &allocInfo, &bz::descriptorSet), "Failed to allocate descriptor sets");
-	}
-
-		// UBO buffer descriptor sets
-	{
+	}	
+	{	// UBO buffer descriptor sets
 		std::vector<VkDescriptorSetLayout> layouts(arraysize(bz::uboDescriptorSets), bz::uboDescriptorSetLayout);
 		VkDescriptorSetAllocateInfo allocInfo = {
 			.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
@@ -614,15 +610,12 @@ void AllocateDescriptorSets() {
 
 		VkCheck(vkAllocateDescriptorSets(bz::device.logicalDevice, &allocInfo, bz::uboDescriptorSets), "Failed to allocate descriptor sets");
 	}
-
-		// Material descriptor sets
-	{
-		std::vector<VkDescriptorSetLayout> layouts(1, bz::descriptorSetLayout);
+	{	// Material descriptor sets
 		VkDescriptorSetAllocateInfo allocInfo = {
 			.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
 			.descriptorPool = bz::descriptorPool,
-			.descriptorSetCount = u32(layouts.size()),
-			.pSetLayouts = layouts.data(),
+			.descriptorSetCount = 1,
+			.pSetLayouts = &bz::descriptorSetLayout,
 		};
 		for (auto& image : flightHelmet->images) {
 			VkCheck(vkAllocateDescriptorSets(bz::device.logicalDevice, &allocInfo, &image.descriptorSet), "Failed to allocate descriptor set for image");
