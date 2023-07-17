@@ -2,8 +2,6 @@
 
 #include <backends/imgui_impl_glfw.h>
 
-#include <glm/gtc/matrix_transform.hpp>		// glm::rotate
-
 #include "Device.h"
 #include "Swapchain.h"
 #include "Texture.h"
@@ -684,6 +682,9 @@ void RecordDeferredCommandBuffer(VkCommandBuffer cmd, u32 imageIndex) {
 
 	VkCheck(vkBeginCommandBuffer(cmd, &beginInfo), "Failed to begin recording command buffer!");
 
+	vkCmdSetViewport(cmd, 0, 1, &viewport);
+	vkCmdSetScissor(cmd, 0, 1, &scissor);
+
 	VkRenderingAttachmentInfo colorAttachments[] = { bz::normal.attachmentInfo, bz::albedo.attachmentInfo };
 	VkRenderingAttachmentInfo depthAttachment[] = { bz::depth.attachmentInfo };
 
@@ -713,13 +714,10 @@ void RecordDeferredCommandBuffer(VkCommandBuffer cmd, u32 imageIndex) {
 		VK_IMAGE_LAYOUT_UNDEFINED,						VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
 		VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,	VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT);
 
-	vkCmdBeginRendering(cmd, &renderingInfo);
-
-	vkCmdSetViewport(cmd, 0, 1, &viewport);
-	vkCmdSetScissor(cmd, 0, 1, &scissor);
-
 	vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, bz::offscreenPipeline);
 	vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, bz::pipelineLayout, 0, 1, &bz::uboDescriptorSets[currentFrame], 0, nullptr);
+
+	vkCmdBeginRendering(cmd, &renderingInfo);
 
 	flightHelmet->Draw(cmd, bz::pipelineLayout);
 
@@ -753,13 +751,12 @@ void RecordDeferredCommandBuffer(VkCommandBuffer cmd, u32 imageIndex) {
 		.pDepthAttachment = nullptr,
 		.pStencilAttachment = nullptr
 	};
+	
+	vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, bz::deferredPipeline);
+	vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, bz::pipelineLayout, 1, 1, &bz::descriptorSet, 0, nullptr);
 
 	vkCmdBeginRendering(cmd, &renderingInfo);
 
-	vkCmdSetViewport(cmd, 0, 1, &viewport);
-	vkCmdSetScissor(cmd, 0, 1, &scissor);
-	vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, bz::pipelineLayout, 1, 1, &bz::descriptorSet, 0, nullptr);
-	vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, bz::deferredPipeline);
 	vkCmdDraw(cmd, 3, 1, 0, 0);
 
 	bz::Overlay.Draw(cmd);
