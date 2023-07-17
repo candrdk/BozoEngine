@@ -559,7 +559,7 @@ void SetupDescriptorSetLayout() {
 			.descriptorCount = 1,
 			.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT
 		},
-		{	// Binding 2 : Depth texture target
+		{	// Binding 3 : Depth texture target
 			.binding = 3,
 			.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
 			.descriptorCount = 1,

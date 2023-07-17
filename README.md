@@ -4,14 +4,16 @@ What kinda bozo would try to write an engine from scratch???
 ![Unaware 1st year computer science students attempts to write a vulkan renderer.](https://cdn.discordapp.com/attachments/707920399752626247/1123779412769386619/vulkan_unaware.png)
 
 ## What
-Small `Vulkan 1.3` engine. Project is written in `c++20` and is exclusively targeting Windows. Error handling currently consists of violently asserting and shutting down the program whenever BozoEngine gets slightly uncomfortable, so please be nice!
+Small `Vulkan 1.3` engine/renderer written in `c++20`. Exclusively targeting Windows. The end goal is to implement a very basic deferred renderer. Error handling currently consists of violently asserting and shutting down the program whenever BozoEngine gets slightly uncomfortable. In other words: there is no error handling.
 
-The goal is just to learn vulkan implement a very basic deffered renderer along the way.
+## Why
+The goal is just to learn vulkan and simple rendering techniques.
 
 ## Features
-- Custom [Dear ImGui](https://github.com/ocornut/imgui) vulkan backend for use with dynamic rendering.
 - Reversed depth buffering for better precision.
-- Basic loading and rendering of glTF 2.0 models with [tinygltf](https://github.com/syoyo/tinygltf). Still very barebones.
+- (Very) basic loading and rendering of glTF 2.0 models with [tinygltf](https://github.com/syoyo/tinygltf).
+- (Also very) basic gbuffer: normal, albedo, depth. Plan is to add a fourth attachment for pbr values.
+- Custom [Dear ImGui](https://github.com/ocornut/imgui) vulkan backend for use with dynamic rendering.
 - Yeah thats kinda it... Don't judge mmkay.
 
 ## Dependencies
