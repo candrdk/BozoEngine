@@ -19,8 +19,7 @@ struct StringWithLocation {
 };
 
 // Assert an expresson evaluates to true. If not, the expression is printed, along with a (potentially) formatted message.
-// The _assume(expression) is just there to get rid of "pointer could be null" errors.
-#define Check(expression, message, ...) _Check(expression, #expression, message, __VA_ARGS__); _assume(expression)
+#define Check(expression, message, ...) _Check(expression, #expression, message, __VA_ARGS__); __assume(expression)
 
 // Assert result. If not true, expression and message are printed, along with source location information.
 bool _Check(bool result, const char* expression, StringWithLocation message);

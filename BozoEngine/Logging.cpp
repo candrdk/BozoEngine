@@ -17,7 +17,7 @@ bool _Check(bool result, const char* expression, StringWithLocation message) {
 		PrintCheck(expression, message.str, message.loc);
 		exit(-1);
 	}
-	return result;
+	return true;
 }
 
 VkResult VkCheck(VkResult result, StringWithLocation message) {
@@ -25,7 +25,7 @@ VkResult VkCheck(VkResult result, StringWithLocation message) {
 		PrintCheck(string_VkResult(result), message.str, message.loc);
 		exit(-1);
 	}
-	return result;
+	return VK_SUCCESS;
 }
 
 static VKAPI_ATTR VkBool32 VKAPI_CALL DebugCallback(

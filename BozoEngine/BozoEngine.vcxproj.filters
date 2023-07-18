@@ -9,23 +9,26 @@
       <UniqueIdentifier>{93995380-89BD-4b04-88EB-625FBE52EBFB}</UniqueIdentifier>
       <Extensions>h;hh;hpp;hxx;h++;hm;inl;inc;ipp;xsd</Extensions>
     </Filter>
-    <Filter Include="glfw">
-      <UniqueIdentifier>{8ca37cce-89dd-4c38-82a0-dbee24a71ba7}</UniqueIdentifier>
-    </Filter>
-    <Filter Include="volk">
-      <UniqueIdentifier>{3e366fbb-0035-405e-a6e6-ca17ed84628e}</UniqueIdentifier>
-    </Filter>
     <Filter Include="shaders">
       <UniqueIdentifier>{9fb3f89d-d67d-4ff5-885e-fab4601df355}</UniqueIdentifier>
     </Filter>
-    <Filter Include="stb">
-      <UniqueIdentifier>{d64c5770-3eb5-45b5-8653-f64077042eb0}</UniqueIdentifier>
+    <Filter Include="Extern">
+      <UniqueIdentifier>{51f947a1-f848-4316-8bb6-ae4426c8ffa8}</UniqueIdentifier>
     </Filter>
-    <Filter Include="imgui">
+    <Filter Include="Extern\imgui">
       <UniqueIdentifier>{e0bee483-b25d-4d45-9759-e89a9c367513}</UniqueIdentifier>
     </Filter>
-    <Filter Include="tinygltf">
+    <Filter Include="Extern\glfw">
+      <UniqueIdentifier>{8ca37cce-89dd-4c38-82a0-dbee24a71ba7}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Extern\stb">
+      <UniqueIdentifier>{d64c5770-3eb5-45b5-8653-f64077042eb0}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Extern\tinygltf">
       <UniqueIdentifier>{731023d8-68e1-4064-a10e-35d35b864e36}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Extern\volk">
+      <UniqueIdentifier>{3e366fbb-0035-405e-a6e6-ca17ed84628e}</UniqueIdentifier>
     </Filter>
   </ItemGroup>
   <ItemGroup>
@@ -33,91 +36,91 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="..\Extern\glfw\src\context.c">
-      <Filter>glfw</Filter>
+      <Filter>Extern\glfw</Filter>
     </ClCompile>
     <ClCompile Include="..\Extern\glfw\src\egl_context.c">
-      <Filter>glfw</Filter>
+      <Filter>Extern\glfw</Filter>
     </ClCompile>
     <ClCompile Include="..\Extern\glfw\src\init.c">
-      <Filter>glfw</Filter>
+      <Filter>Extern\glfw</Filter>
     </ClCompile>
     <ClCompile Include="..\Extern\glfw\src\input.c">
-      <Filter>glfw</Filter>
+      <Filter>Extern\glfw</Filter>
     </ClCompile>
     <ClCompile Include="..\Extern\glfw\src\monitor.c">
-      <Filter>glfw</Filter>
+      <Filter>Extern\glfw</Filter>
     </ClCompile>
     <ClCompile Include="..\Extern\glfw\src\osmesa_context.c">
-      <Filter>glfw</Filter>
+      <Filter>Extern\glfw</Filter>
     </ClCompile>
     <ClCompile Include="..\Extern\glfw\src\vulkan.c">
-      <Filter>glfw</Filter>
+      <Filter>Extern\glfw</Filter>
     </ClCompile>
     <ClCompile Include="..\Extern\glfw\src\wgl_context.c">
-      <Filter>glfw</Filter>
+      <Filter>Extern\glfw</Filter>
     </ClCompile>
     <ClCompile Include="..\Extern\glfw\src\win32_init.c">
-      <Filter>glfw</Filter>
+      <Filter>Extern\glfw</Filter>
     </ClCompile>
     <ClCompile Include="..\Extern\glfw\src\win32_joystick.c">
-      <Filter>glfw</Filter>
+      <Filter>Extern\glfw</Filter>
     </ClCompile>
     <ClCompile Include="..\Extern\glfw\src\win32_module.c">
-      <Filter>glfw</Filter>
+      <Filter>Extern\glfw</Filter>
     </ClCompile>
     <ClCompile Include="..\Extern\glfw\src\win32_monitor.c">
-      <Filter>glfw</Filter>
+      <Filter>Extern\glfw</Filter>
     </ClCompile>
     <ClCompile Include="..\Extern\glfw\src\win32_thread.c">
-      <Filter>glfw</Filter>
+      <Filter>Extern\glfw</Filter>
     </ClCompile>
     <ClCompile Include="..\Extern\glfw\src\win32_time.c">
-      <Filter>glfw</Filter>
+      <Filter>Extern\glfw</Filter>
     </ClCompile>
     <ClCompile Include="..\Extern\glfw\src\win32_window.c">
-      <Filter>glfw</Filter>
+      <Filter>Extern\glfw</Filter>
     </ClCompile>
     <ClCompile Include="..\Extern\glfw\src\window.c">
-      <Filter>glfw</Filter>
+      <Filter>Extern\glfw</Filter>
     </ClCompile>
     <ClCompile Include="..\Extern\glfw\src\platform.c">
-      <Filter>glfw</Filter>
+      <Filter>Extern\glfw</Filter>
     </ClCompile>
     <ClCompile Include="..\Extern\glfw\src\null_init.c">
-      <Filter>glfw</Filter>
+      <Filter>Extern\glfw</Filter>
     </ClCompile>
     <ClCompile Include="..\Extern\glfw\src\null_joystick.c">
-      <Filter>glfw</Filter>
+      <Filter>Extern\glfw</Filter>
     </ClCompile>
     <ClCompile Include="..\Extern\glfw\src\null_monitor.c">
-      <Filter>glfw</Filter>
+      <Filter>Extern\glfw</Filter>
     </ClCompile>
     <ClCompile Include="..\Extern\glfw\src\null_window.c">
-      <Filter>glfw</Filter>
+      <Filter>Extern\glfw</Filter>
     </ClCompile>
     <ClCompile Include="..\Extern\volk\volk.c">
-      <Filter>volk</Filter>
+      <Filter>Extern\volk</Filter>
     </ClCompile>
     <ClCompile Include="Logging.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="..\Extern\imgui\backends\imgui_impl_glfw.cpp">
-      <Filter>imgui</Filter>
+      <Filter>Extern\imgui</Filter>
     </ClCompile>
     <ClCompile Include="..\Extern\imgui\imgui.cpp">
-      <Filter>imgui</Filter>
+      <Filter>Extern\imgui</Filter>
     </ClCompile>
     <ClCompile Include="..\Extern\imgui\imgui_demo.cpp">
-      <Filter>imgui</Filter>
+      <Filter>Extern\imgui</Filter>
     </ClCompile>
     <ClCompile Include="..\Extern\imgui\imgui_draw.cpp">
-      <Filter>imgui</Filter>
+      <Filter>Extern\imgui</Filter>
     </ClCompile>
     <ClCompile Include="..\Extern\imgui\imgui_tables.cpp">
-      <Filter>imgui</Filter>
+      <Filter>Extern\imgui</Filter>
     </ClCompile>
     <ClCompile Include="..\Extern\imgui\imgui_widgets.cpp">
-      <Filter>imgui</Filter>
+      <Filter>Extern\imgui</Filter>
     </ClCompile>
     <ClCompile Include="Swapchain.cpp">
       <Filter>Source Files</Filter>
@@ -140,58 +143,58 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\Extern\glfw\src\win32_joystick.h">
-      <Filter>glfw</Filter>
+      <Filter>Extern\glfw</Filter>
     </ClInclude>
     <ClInclude Include="..\Extern\glfw\src\win32_platform.h">
-      <Filter>glfw</Filter>
+      <Filter>Extern\glfw</Filter>
     </ClInclude>
     <ClInclude Include="..\Extern\glfw\src\win32_thread.h">
-      <Filter>glfw</Filter>
+      <Filter>Extern\glfw</Filter>
     </ClInclude>
     <ClInclude Include="..\Extern\glfw\src\win32_time.h">
-      <Filter>glfw</Filter>
+      <Filter>Extern\glfw</Filter>
     </ClInclude>
     <ClInclude Include="..\Extern\glfw\src\internal.h">
-      <Filter>glfw</Filter>
+      <Filter>Extern\glfw</Filter>
     </ClInclude>
     <ClInclude Include="..\Extern\glfw\src\platform.h">
-      <Filter>glfw</Filter>
+      <Filter>Extern\glfw</Filter>
     </ClInclude>
     <ClInclude Include="..\Extern\glfw\src\null_joystick.h">
-      <Filter>glfw</Filter>
+      <Filter>Extern\glfw</Filter>
     </ClInclude>
     <ClInclude Include="..\Extern\glfw\src\null_platform.h">
-      <Filter>glfw</Filter>
+      <Filter>Extern\glfw</Filter>
     </ClInclude>
     <ClInclude Include="..\Extern\volk\volk.h">
-      <Filter>volk</Filter>
+      <Filter>Extern\volk</Filter>
     </ClInclude>
     <ClInclude Include="Logging.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="..\Extern\stb\stb_image.h">
-      <Filter>stb</Filter>
+      <Filter>Extern\stb</Filter>
     </ClInclude>
     <ClInclude Include="Camera.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="..\Extern\imgui\backends\imgui_impl_glfw.h">
-      <Filter>imgui</Filter>
+      <Filter>Extern\imgui</Filter>
     </ClInclude>
     <ClInclude Include="..\Extern\imgui\imconfig.h">
-      <Filter>imgui</Filter>
+      <Filter>Extern\imgui</Filter>
     </ClInclude>
     <ClInclude Include="..\Extern\imgui\imgui.h">
-      <Filter>imgui</Filter>
+      <Filter>Extern\imgui</Filter>
     </ClInclude>
     <ClInclude Include="..\Extern\imgui\imstb_rectpack.h">
-      <Filter>imgui</Filter>
+      <Filter>Extern\imgui</Filter>
     </ClInclude>
     <ClInclude Include="..\Extern\imgui\imstb_textedit.h">
-      <Filter>imgui</Filter>
+      <Filter>Extern\imgui</Filter>
     </ClInclude>
     <ClInclude Include="..\Extern\imgui\imstb_truetype.h">
-      <Filter>imgui</Filter>
+      <Filter>Extern\imgui</Filter>
     </ClInclude>
     <ClInclude Include="Swapchain.h">
       <Filter>Header Files</Filter>
@@ -215,10 +218,10 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="..\Extern\tinygltf\tiny_gltf.h">
-      <Filter>tinygltf</Filter>
+      <Filter>Extern\tinygltf</Filter>
     </ClInclude>
     <ClInclude Include="..\Extern\tinygltf\json.hpp">
-      <Filter>tinygltf</Filter>
+      <Filter>Extern\tinygltf</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
