@@ -1,8 +1,8 @@
 #version 450
 
+layout (set = 1, binding = 0) uniform sampler2DMS samplerAlbedo;
 layout (set = 1, binding = 1) uniform sampler2DMS samplerNormal;
-layout (set = 1, binding = 2) uniform sampler2DMS samplerAlbedo;
-layout (set = 1, binding = 3) uniform sampler2DMS samplerDepth;
+layout (set = 1, binding = 2) uniform sampler2DMS samplerDepth;
 
 layout (location = 0) in vec2 inUV;
 

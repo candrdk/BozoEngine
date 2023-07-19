@@ -353,6 +353,15 @@ void UpdateRenderAttachmentDescriptorSets() {
 	};
 
 	VkWriteDescriptorSet writeDescriptorSets[] = {
+		{	// Binding 0: Albedo texture
+			.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+			.dstSet = bz::descriptorSet,
+			.dstBinding = 0,
+			.dstArrayElement = 0,
+			.descriptorCount = 1,
+			.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+			.pImageInfo = &texDescriptorAlbedo
+		},
 		{	// Binding 1: World space normals texture
 			.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
 			.dstSet = bz::descriptorSet,
@@ -362,19 +371,10 @@ void UpdateRenderAttachmentDescriptorSets() {
 			.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
 			.pImageInfo = &texDescriptorNormal
 		},
-		{	// Binding 2: Albedo texture
+		{	// Binding 2: Depth texture
 			.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
 			.dstSet = bz::descriptorSet,
 			.dstBinding = 2,
-			.dstArrayElement = 0,
-			.descriptorCount = 1,
-			.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-			.pImageInfo = &texDescriptorAlbedo
-		},
-		{	// Binding 3: Depth texture
-			.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-			.dstSet = bz::descriptorSet,
-			.dstBinding = 3,
 			.dstArrayElement = 0,
 			.descriptorCount = 1,
 			.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
@@ -547,20 +547,20 @@ void SetupDescriptorSetLayout() {
 	VkCheck(vkCreateDescriptorSetLayout(bz::device.logicalDevice, &uboDescriptorLayout, nullptr, &bz::uboDescriptorSetLayout), "Failed to create descriptor set layout");
 
 	VkDescriptorSetLayoutBinding setLayoutBindings[] = {
-		{	// Binding 1 : Normals texture target
+		{	// Binding 0 : Albedo texture
+			.binding = 0,
+			.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+			.descriptorCount = 1,
+			.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT
+		},
+		{	// Binding 1 : Normals texture
 			.binding = 1,
 			.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
 			.descriptorCount = 1,
 			.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT
 		},
-		{	// Binding 2 : Albedo texture target
+		{	// Binding 2 : Depth texture
 			.binding = 2,
-			.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-			.descriptorCount = 1,
-			.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT
-		},
-		{	// Binding 3 : Depth texture target
-			.binding = 3,
 			.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
 			.descriptorCount = 1,
 			.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT
@@ -652,7 +652,7 @@ void UpdateDescriptorSets() {
 		VkWriteDescriptorSet writeDescriptorSet = {
 			.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
 			.dstSet = image.descriptorSet,
-			.dstBinding = 1,
+			.dstBinding = 0,
 			.dstArrayElement = 0,
 			.descriptorCount = 1,
 			.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
