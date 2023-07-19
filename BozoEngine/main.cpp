@@ -48,6 +48,16 @@ struct RenderAttachment {
 	VkRenderingAttachmentInfo attachmentInfo;
 };
 
+struct DepthAttachment {
+	VkImage image;
+	VkDeviceMemory memory;
+	VkImageView depthStencilView;
+	VkImageView depthView;
+	VkImageView stencilView;
+	VkFormat format;
+	VkRenderingAttachmentInfo attachmentInfo;
+};
+
 // Temporary namespace to contain globals
 namespace bz {
 	Camera camera(glm::vec3(0.0f, 0.0f, 0.5f), 1.0f, 90.0f, (float)WIDTH / HEIGHT, 0.01f, 0.0f, -90.0f);
@@ -58,7 +68,8 @@ namespace bz {
 
 	RenderFrame renderFrames[MAX_FRAMES_IN_FLIGHT];
 	Buffer uniformBuffers[MAX_FRAMES_IN_FLIGHT];
-	RenderAttachment depth, albedo, normal, occMetRough;
+	RenderAttachment albedo, normal, occMetRough;
+	DepthAttachment depth;
 	VkSampler attachmentSampler;
 
 	VkDescriptorPool descriptorPool;
@@ -246,23 +257,11 @@ void CreateUniformBuffers() {
 }
 
 void CreateRenderAttachment(RenderAttachment& attachment, RenderAttachmentDesc desc) {
+	Check(desc.usage & VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT, "CreateRenderAttachment can only be used to create color attachments");
 	attachment.format = desc.format;
 
-	VkImageAspectFlags aspectMask = VK_IMAGE_ASPECT_NONE;
-	VkImageLayout layout = VK_IMAGE_LAYOUT_UNDEFINED;
-	if (desc.usage & VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT) {
-		aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-		layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-	}
-	else if (desc.usage & VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT) {
-		// TODO: check if format has depth / stencil and set ASPECT_DEPTH / ASPECT_STENCIL conditionally.
-		aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
-
-		layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
-	}
-	else {
-		Check(desc.usage & (VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT), "Unsupported image usage");
-	}
+	VkImageAspectFlags aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+	VkImageLayout layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
 
 	CreateImage(desc.extent.width, desc.extent.height, 1, desc.samples, desc.format, VK_IMAGE_TILING_OPTIMAL, desc.usage, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, attachment.image, attachment.memory);
 	CreateImageView(attachment.image, attachment.format, aspectMask, 1, attachment.view);
@@ -272,15 +271,42 @@ void CreateRenderAttachment(RenderAttachment& attachment, RenderAttachmentDesc d
 		.imageView = attachment.view,
 		.imageLayout = layout,
 		.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
-		.storeOp = (desc.usage & VK_IMAGE_USAGE_SAMPLED_BIT) ? VK_ATTACHMENT_STORE_OP_STORE : VK_ATTACHMENT_STORE_OP_DONT_CARE,
-		.clearValue = {} // We use reversed depth, so clear color is 0 regardless of whether this is a depth or color attachment
+		.storeOp = (desc.usage & VK_IMAGE_USAGE_SAMPLED_BIT) ? VK_ATTACHMENT_STORE_OP_STORE : VK_ATTACHMENT_STORE_OP_DONT_CARE
+	};
+}
+
+void CreateDepthAttachment(DepthAttachment& attachment, RenderAttachmentDesc desc) {
+	Check(desc.usage & (VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT), "CreateDepthAttachment can only be used to create depth attachments");
+	attachment.format = desc.format;
+
+	VkImageAspectFlags aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
+	VkImageLayout layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+
+	if (attachment.format >= VK_FORMAT_D16_UNORM_S8_UINT) {	// if format has stencil
+		aspectMask |= VK_IMAGE_ASPECT_STENCIL_BIT;
+	}
+
+	CreateImage(desc.extent.width, desc.extent.height, 1, desc.samples, desc.format, VK_IMAGE_TILING_OPTIMAL, desc.usage, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, attachment.image, attachment.memory);
+	CreateImageView(bz::depth.image, bz::depth.format, aspectMask, 1, bz::depth.depthStencilView);
+	CreateImageView(bz::depth.image, bz::depth.format, VK_IMAGE_ASPECT_DEPTH_BIT, 1, bz::depth.depthView);
+
+	if (aspectMask & VK_IMAGE_ASPECT_STENCIL_BIT) {
+		CreateImageView(bz::depth.image, bz::depth.format, VK_IMAGE_ASPECT_STENCIL_BIT, 1, bz::depth.stencilView);
+	}
+
+	attachment.attachmentInfo = {
+		.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
+		.imageView = attachment.depthStencilView,
+		.imageLayout = layout,
+		.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
+		.storeOp = (desc.usage & VK_IMAGE_USAGE_SAMPLED_BIT) ? VK_ATTACHMENT_STORE_OP_STORE : VK_ATTACHMENT_STORE_OP_DONT_CARE
 	};
 }
 
 void CreateRenderAttachments() {
-	CreateRenderAttachment(bz::depth, {
+	CreateDepthAttachment(bz::depth, {
 		.extent = bz::swapchain.extent,
-		.format = VK_FORMAT_D32_SFLOAT,
+		.format = VK_FORMAT_D24_UNORM_S8_UINT,
 		.usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
 		.samples = bz::msaaSamples
 	});
@@ -340,7 +366,9 @@ void CleanupRenderAttachments() {
 	vkDestroyImage(bz::device.logicalDevice, bz::occMetRough.image, nullptr);
 	vkFreeMemory(bz::device.logicalDevice, bz::occMetRough.memory, nullptr);
 
-	vkDestroyImageView(bz::device.logicalDevice, bz::depth.view, nullptr);
+	vkDestroyImageView(bz::device.logicalDevice, bz::depth.depthStencilView, nullptr);
+	vkDestroyImageView(bz::device.logicalDevice, bz::depth.depthView, nullptr);
+	vkDestroyImageView(bz::device.logicalDevice, bz::depth.stencilView, nullptr);
 	vkDestroyImage(bz::device.logicalDevice, bz::depth.image, nullptr);
 	vkFreeMemory(bz::device.logicalDevice, bz::depth.memory, nullptr);
 }
@@ -365,8 +393,8 @@ void UpdateRenderAttachmentDescriptorSets() {
 
 	VkDescriptorImageInfo texDescriptorDepth = {
 		.sampler = bz::attachmentSampler,
-		.imageView = bz::depth.view,
-		.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
+		.imageView = bz::depth.depthView,
+		.imageLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL
 	};
 
 	VkWriteDescriptorSet writeDescriptorSets[] = {
@@ -491,7 +519,8 @@ void SetupPipelines() {
 		.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO,
 		.colorAttachmentCount = 1,
 		.pColorAttachmentFormats = &bz::swapchain.format,
-		.depthAttachmentFormat = bz::depth.format
+		.depthAttachmentFormat = bz::depth.format,
+		.stencilAttachmentFormat = bz::depth.format
 	};
 
 	VkGraphicsPipelineCreateInfo pipelineInfo = {
@@ -544,7 +573,8 @@ void SetupPipelines() {
 		.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO,
 		.colorAttachmentCount = arraysize(colorAttachmentFormats),
 		.pColorAttachmentFormats = colorAttachmentFormats,
-		.depthAttachmentFormat = bz::depth.format
+		.depthAttachmentFormat = bz::depth.format,
+		.stencilAttachmentFormat = bz::depth.format
 	};
 
 	VkCheck(vkCreateGraphicsPipelines(bz::device.logicalDevice, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &bz::offscreenPipeline), "Failed to create graphics pipeline");
@@ -743,11 +773,11 @@ void RecordDeferredCommandBuffer(VkCommandBuffer cmd, u32 imageIndex) {
 		.colorAttachmentCount = arraysize(colorAttachments),
 		.pColorAttachments = colorAttachments,
 		.pDepthAttachment = depthAttachment,
-		.pStencilAttachment = nullptr
+		.pStencilAttachment = depthAttachment
 	};
 
-	SetImageLayout(cmd, bz::depth.image, VK_IMAGE_ASPECT_DEPTH_BIT,
-		VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL,
+	SetImageLayout(cmd, bz::depth.image, VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT,
+		VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
 		VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT,
 		VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT);
 
@@ -776,9 +806,9 @@ void RecordDeferredCommandBuffer(VkCommandBuffer cmd, u32 imageIndex) {
 		VK_IMAGE_LAYOUT_UNDEFINED,			VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
 		VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,	VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT);
 
-	SetImageLayout(cmd, bz::depth.image, VK_IMAGE_ASPECT_DEPTH_BIT,
-		VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL,		VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-		VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT,		VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT);
+	SetImageLayout(cmd, bz::depth.image, VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT,
+		VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,	VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL,
+		VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT,			VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT);
 
 	SetImageLayout(cmd, bz::albedo.image, VK_IMAGE_ASPECT_COLOR_BIT,
 		VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,		VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
@@ -1001,7 +1031,7 @@ int main(int argc, char* argv[]) {
 	ImGui_ImplGlfw_InitForVulkan(window, true);
 	bz::Overlay.vertShader = LoadShader("shaders/uioverlay.vert.spv", VK_SHADER_STAGE_VERTEX_BIT);
 	bz::Overlay.fragShader = LoadShader("shaders/uioverlay.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT);
-	bz::Overlay.Initialize(bz::device, VK_SAMPLE_COUNT_1_BIT, bz::swapchain.format, VK_FORMAT_D32_SFLOAT);
+	bz::Overlay.Initialize(bz::device, VK_SAMPLE_COUNT_1_BIT, bz::swapchain.format, VK_FORMAT_D24_UNORM_S8_UINT);
 
 	double lastFrame = 0.0f;
 
