@@ -417,9 +417,9 @@ void CreateDescriptorPool() {
 			.type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
 			.descriptorCount = arraysize(bz::uniformBuffers)	// 1 descriptor per uniform buffer
 		},
-		{ // combined image sampler descriptor pool per model image / texture + 1 sampling the gbuffer
+		{ // combined image sampler descriptor pool per material + 1 sampling the gbuffer
 			.type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-			.descriptorCount = (u32)flightHelmet->images.size() + 1
+			.descriptorCount = (u32)flightHelmet->materials.size() + 1
 		}
 	};
 
