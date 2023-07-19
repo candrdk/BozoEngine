@@ -41,8 +41,10 @@ public:
 	};
 
 	struct Material {
-		glm::vec4 baseColorFactor;
-		u32 baseColorTextureIndex;
+		Texture albedo;
+		Texture normal;
+		Texture OccMetRough;
+		VkDescriptorSet descriptorSet;
 	};
 
 	struct Node {
@@ -57,7 +59,6 @@ public:
 	Device& device;
 
 	std::vector<Image> images;
-	std::vector<Texture> textures;
 	std::vector<Material> materials;
 	std::vector<Node*> nodes;
 
@@ -70,10 +71,7 @@ public:
 
 	void DrawNode(VkCommandBuffer cmdBuffer, VkPipelineLayout pipelineLayout, Node* node);
 
-	// TODO: we currently only handle images embedded in the gltf file
 	void LoadImages(tinygltf::Model& model);
-
-	void LoadTextures(tinygltf::Model& model);
 
 	void LoadMaterials(tinygltf::Model& model);
 

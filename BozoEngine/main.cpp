@@ -58,7 +58,7 @@ namespace bz {
 
 	RenderFrame renderFrames[MAX_FRAMES_IN_FLIGHT];
 	Buffer uniformBuffers[MAX_FRAMES_IN_FLIGHT];
-	RenderAttachment depth, albedo, normal;
+	RenderAttachment depth, albedo, normal, occMetRough;
 	VkSampler attachmentSampler;
 
 	VkDescriptorPool descriptorPool;
@@ -299,6 +299,13 @@ void CreateRenderAttachments() {
 		.samples = bz::msaaSamples
 	});
 
+	CreateRenderAttachment(bz::occMetRough, {
+		.extent = bz::swapchain.extent,
+		.format = VK_FORMAT_R8G8B8A8_UNORM,
+		.usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+		.samples = bz::msaaSamples
+	});
+
 	VkSamplerCreateInfo samplerInfo = {
 		.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
 		.magFilter = VK_FILTER_LINEAR,
@@ -329,6 +336,10 @@ void CleanupRenderAttachments() {
 	vkDestroyImage(bz::device.logicalDevice, bz::normal.image, nullptr);
 	vkFreeMemory(bz::device.logicalDevice, bz::normal.memory, nullptr);
 
+	vkDestroyImageView(bz::device.logicalDevice, bz::occMetRough.view, nullptr);
+	vkDestroyImage(bz::device.logicalDevice, bz::occMetRough.image, nullptr);
+	vkFreeMemory(bz::device.logicalDevice, bz::occMetRough.memory, nullptr);
+
 	vkDestroyImageView(bz::device.logicalDevice, bz::depth.view, nullptr);
 	vkDestroyImage(bz::device.logicalDevice, bz::depth.image, nullptr);
 	vkFreeMemory(bz::device.logicalDevice, bz::depth.memory, nullptr);
@@ -346,6 +357,12 @@ void UpdateRenderAttachmentDescriptorSets() {
 		.imageView = bz::albedo.view,
 		.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
 	};
+	VkDescriptorImageInfo texDescriptorOccMetRough = {
+		.sampler = bz::attachmentSampler,
+		.imageView = bz::occMetRough.view,
+		.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
+	};
+
 	VkDescriptorImageInfo texDescriptorDepth = {
 		.sampler = bz::attachmentSampler,
 		.imageView = bz::depth.view,
@@ -371,16 +388,26 @@ void UpdateRenderAttachmentDescriptorSets() {
 			.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
 			.pImageInfo = &texDescriptorNormal
 		},
-		{	// Binding 2: Depth texture
+		{	// Binding 2: Occlusion / metal / rough texture
 			.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
 			.dstSet = bz::descriptorSet,
 			.dstBinding = 2,
 			.dstArrayElement = 0,
 			.descriptorCount = 1,
 			.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+			.pImageInfo = &texDescriptorOccMetRough
+		},
+		{	// Binding 3: Depth texture
+			.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+			.dstSet = bz::descriptorSet,
+			.dstBinding = 3,
+			.dstArrayElement = 0,
+			.descriptorCount = 1,
+			.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
 			.pImageInfo = &texDescriptorDepth
 		}
 	};
+
 	vkUpdateDescriptorSets(bz::device.logicalDevice, arraysize(writeDescriptorSets), writeDescriptorSets, 0, nullptr);
 }
 
@@ -504,6 +531,7 @@ void SetupPipelines() {
 	VkPipelineColorBlendAttachmentState blendAttachmentStates[] = {
 		{.blendEnable = VK_FALSE, .colorWriteMask = 0xF },
 		{.blendEnable = VK_FALSE, .colorWriteMask = 0xF },
+		{.blendEnable = VK_FALSE, .colorWriteMask = 0xF },
 	};
 	colorBlendStateInfo.attachmentCount = arraysize(blendAttachmentStates);
 	colorBlendStateInfo.pAttachments = blendAttachmentStates;
@@ -511,7 +539,7 @@ void SetupPipelines() {
 	pipelineInfo.stageCount = arraysize(offscreenShaders);
 	pipelineInfo.pStages = offscreenShaders;
 
-	VkFormat colorAttachmentFormats[] = {bz::normal.format, bz::albedo.format};
+	VkFormat colorAttachmentFormats[] = { bz::albedo.format, bz::normal.format, bz::occMetRough.format };
 	renderingCreateInfo = {
 		.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO,
 		.colorAttachmentCount = arraysize(colorAttachmentFormats),
@@ -559,8 +587,14 @@ void SetupDescriptorSetLayout() {
 			.descriptorCount = 1,
 			.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT
 		},
-		{	// Binding 2 : Depth texture
+		{	// Binding 2 : Occlusion/metal/roughness texture
 			.binding = 2,
+			.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+			.descriptorCount = 1,
+			.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT
+		},
+		{	// Binding 3 : Depth texture
+			.binding = 3,
 			.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
 			.descriptorCount = 1,
 			.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT
@@ -617,9 +651,9 @@ void AllocateDescriptorSets() {
 			.descriptorSetCount = 1,
 			.pSetLayouts = &bz::descriptorSetLayout,
 		};
-		for (auto& image : flightHelmet->images) {
-			VkCheck(vkAllocateDescriptorSets(bz::device.logicalDevice, &allocInfo, &image.descriptorSet), "Failed to allocate descriptor set for image");
-		}
+
+		for (auto& material : flightHelmet->materials)
+			VkCheck(vkAllocateDescriptorSets(bz::device.logicalDevice, &allocInfo, &material.descriptorSet), "Failed to allocate descriptor set for image");
 	}
 }
 
@@ -648,18 +682,36 @@ void UpdateDescriptorSets() {
 
 	// Offscreen: Model materials
 	// TODO: this should probably be the done by the GLTFModel itself
-	for (auto& image : flightHelmet->images) {
-		VkWriteDescriptorSet writeDescriptorSet = {
-			.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-			.dstSet = image.descriptorSet,
-			.dstBinding = 0,
-			.dstArrayElement = 0,
-			.descriptorCount = 1,
-			.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-			.pImageInfo = &image.texture.descriptor
+	for (const auto& material : flightHelmet->materials) {
+		VkWriteDescriptorSet writeDescriptorSets[] = {
+			{
+				.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+				.dstSet = material.descriptorSet,
+				.dstBinding = 0,
+				.dstArrayElement = 0,
+				.descriptorCount = 1,
+				.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+				.pImageInfo = &flightHelmet->images[material.albedo.imageIndex].texture.descriptor
+			}, {
+				.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+				.dstSet = material.descriptorSet,
+				.dstBinding = 1,
+				.dstArrayElement = 0,
+				.descriptorCount = 1,
+				.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+				.pImageInfo = &flightHelmet->images[material.normal.imageIndex].texture.descriptor
+			}, {
+				.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+				.dstSet = material.descriptorSet,
+				.dstBinding = 2,
+				.dstArrayElement = 0,
+				.descriptorCount = 1,
+				.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+				.pImageInfo = &flightHelmet->images[material.OccMetRough.imageIndex].texture.descriptor
+			}
 		};
 
-		vkUpdateDescriptorSets(bz::device.logicalDevice, 1, &writeDescriptorSet, 0, nullptr);
+		vkUpdateDescriptorSets(bz::device.logicalDevice, arraysize(writeDescriptorSets), writeDescriptorSets, 0, nullptr);
 	}
 }
 
@@ -678,7 +730,7 @@ void RecordDeferredCommandBuffer(VkCommandBuffer cmd, u32 imageIndex) {
 	vkCmdSetViewport(cmd, 0, 1, &viewport);
 	vkCmdSetScissor(cmd, 0, 1, &scissor);
 
-	VkRenderingAttachmentInfo colorAttachments[] = { bz::normal.attachmentInfo, bz::albedo.attachmentInfo };
+	VkRenderingAttachmentInfo colorAttachments[] = { bz::albedo.attachmentInfo, bz::normal.attachmentInfo, bz::occMetRough.attachmentInfo };
 	VkRenderingAttachmentInfo depthAttachment[] = { bz::depth.attachmentInfo };
 
 	VkRenderingInfo renderingInfo = {
@@ -699,11 +751,15 @@ void RecordDeferredCommandBuffer(VkCommandBuffer cmd, u32 imageIndex) {
 		VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT,
 		VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT);
 
+	SetImageLayout(cmd, bz::albedo.image, VK_IMAGE_ASPECT_COLOR_BIT,
+		VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+		VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT);
+
 	SetImageLayout(cmd, bz::normal.image, VK_IMAGE_ASPECT_COLOR_BIT,
 		VK_IMAGE_LAYOUT_UNDEFINED,						VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
 		VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,	VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT);
 
-	SetImageLayout(cmd, bz::albedo.image, VK_IMAGE_ASPECT_COLOR_BIT,
+	SetImageLayout(cmd, bz::occMetRough.image, VK_IMAGE_ASPECT_COLOR_BIT,
 		VK_IMAGE_LAYOUT_UNDEFINED,						VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
 		VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,	VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT);
 
@@ -724,11 +780,15 @@ void RecordDeferredCommandBuffer(VkCommandBuffer cmd, u32 imageIndex) {
 		VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL,		VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
 		VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT,		VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT);
 
+	SetImageLayout(cmd, bz::albedo.image, VK_IMAGE_ASPECT_COLOR_BIT,
+		VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,		VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+		VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,	VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT);
+
 	SetImageLayout(cmd, bz::normal.image, VK_IMAGE_ASPECT_COLOR_BIT,
 		VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,		VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
 		VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,	VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT);
 
-	SetImageLayout(cmd, bz::albedo.image, VK_IMAGE_ASPECT_COLOR_BIT,
+	SetImageLayout(cmd, bz::occMetRough.image, VK_IMAGE_ASPECT_COLOR_BIT,
 		VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,		VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
 		VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,	VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT);
 

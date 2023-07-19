@@ -92,10 +92,8 @@ void GLTFModel::DrawNode(VkCommandBuffer cmdBuffer, VkPipelineLayout pipelineLay
 
 		for (const Primitive& primitive : node->mesh.primitives) {
 			if (primitive.indexCount > 0) {
-				Texture texture = textures[materials[primitive.materialIndex].baseColorTextureIndex];
-
-				// Bind the descriptor for the current primitives' texture
-				vkCmdBindDescriptorSets(cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 1, 1, &images[texture.imageIndex].descriptorSet, 0, nullptr);
+				// Bind the descriptor for the current primitives' material
+				vkCmdBindDescriptorSets(cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 1, 1, &materials[primitive.materialIndex].descriptorSet, 0, nullptr);
 				vkCmdDrawIndexed(cmdBuffer, primitive.indexCount, 1, primitive.firstIndex, 0, 0);
 			}
 		}
@@ -127,27 +125,18 @@ void GLTFModel::LoadImages(tinygltf::Model& model) {
 	}
 }
 
-void GLTFModel::LoadTextures(tinygltf::Model& model) {
-	textures.resize(model.textures.size());
-
-	for (size_t i = 0; i < model.textures.size(); i++) {
-		textures[i].imageIndex = model.textures[i].source;
-	}
-}
-
 void GLTFModel::LoadMaterials(tinygltf::Model& model) {
 	materials.resize(model.materials.size());
 
 	for (size_t i = 0; i < model.materials.size(); i++) {
 		tinygltf::Material gltfMaterial = model.materials[i];
 
-		if (gltfMaterial.values.find("baseColorFactor") != gltfMaterial.values.end()) {
-			materials[i].baseColorFactor = glm::make_vec4(gltfMaterial.values["baseColorFactor"].ColorFactor().data());
+		if (gltfMaterial.values.find("baseColorTexture") != gltfMaterial.values.end()) {
+			materials[i].albedo.imageIndex = gltfMaterial.values["baseColorTexture"].TextureIndex();
 		}
 
-		if (gltfMaterial.values.find("baseColorTexture") != gltfMaterial.values.end()) {
-			materials[i].baseColorTextureIndex = gltfMaterial.values["baseColorTexture"].TextureIndex();
-		}
+		materials[i].normal.imageIndex = gltfMaterial.normalTexture.index;
+		materials[i].OccMetRough.imageIndex = gltfMaterial.occlusionTexture.index;	// For this model specifically, we know occulsionTexture also contains metalic and roughness.
 	}
 }
 
@@ -293,7 +282,6 @@ void GLTFModel::LoadGLTFFile(const char* filename) {
 
 	LoadImages(gltfInput);
 	LoadMaterials(gltfInput);
-	LoadTextures(gltfInput);
 
 	std::vector<u32> indexBuffer;
 	std::vector<Vertex> vertexBuffer;
