@@ -12,7 +12,7 @@ The goal is just to learn vulkan and simple rendering techniques.
 ## Features
 - Reversed depth buffering for better precision.
 - (Very) basic loading and rendering of glTF 2.0 models with [tinygltf](https://github.com/syoyo/tinygltf).
-- (Also very) basic gbuffer: normal, albedo, depth. Plan is to add a fourth attachment for pbr values.
+- (Also very) basic gbuffer: normal, albedo, depth, occlusion/metal/roughness. Not used yet, but plan is to implement basic physically based rendering.
 - Custom [Dear ImGui](https://github.com/ocornut/imgui) vulkan backend for use with dynamic rendering.
 - Yeah thats kinda it... Don't judge mmkay.
 
