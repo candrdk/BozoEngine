@@ -5,12 +5,7 @@
 	#include <stb_image.h>
 #pragma warning(default : 26451 6262)
 
-// TODO: clean all of this up. its a mess...
-
-// TODO: there are propably quite a few issues with the current fromBuffer/loadFromFile implementations
-//		 especially relating to mipmap generation / loading... Look into this later.
-
-static void GenerateMipmaps(VkCommandBuffer commandBuffer, const Device& device, VkImage image, VkFormat imageFormat, i32 width, i32 height, u32 mipLevels) {
+static void GenerateMipmaps(VkCommandBuffer commandBuffer, const Device& device, VkImage image, VkFormat imageFormat, i32 width, i32 height, u32 mipLevels, VkImageLayout finalLayout) {
 	VkFormatProperties formatProperties;
 	vkGetPhysicalDeviceFormatProperties(device.physicalDevice, imageFormat, &formatProperties);
 	Check(formatProperties.optimalTilingFeatures & VK_FORMAT_FEATURE_SAMPLED_IMAGE_FILTER_LINEAR_BIT, "Texture image does not support linear blitting");
@@ -60,7 +55,7 @@ static void GenerateMipmaps(VkCommandBuffer commandBuffer, const Device& device,
 		ImageBarrier(commandBuffer, image, subresourceRange,
 			VK_PIPELINE_STAGE_TRANSFER_BIT,			VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
 			VK_ACCESS_TRANSFER_READ_BIT,			VK_ACCESS_2_SHADER_SAMPLED_READ_BIT_KHR,
-			VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,	VK_IMAGE_LAYOUT_READ_ONLY_OPTIMAL);
+			VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, finalLayout);
 
 		if (mipWidth > 1)	mipWidth /= 2;
 		if (mipHeight > 1)	mipHeight /= 2;
@@ -70,7 +65,7 @@ static void GenerateMipmaps(VkCommandBuffer commandBuffer, const Device& device,
 	ImageBarrier(commandBuffer, image, subresourceRange,
 		VK_PIPELINE_STAGE_TRANSFER_BIT,			VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
 		VK_ACCESS_TRANSFER_WRITE_BIT,			VK_ACCESS_2_SHADER_SAMPLED_READ_BIT_KHR,
-		VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,	VK_IMAGE_LAYOUT_READ_ONLY_OPTIMAL);
+		VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, finalLayout);
 }
 
 void Texture2D::Destroy(const Device& device) {
@@ -82,43 +77,30 @@ void Texture2D::Destroy(const Device& device) {
 
 void Texture2D::LoadFromFile(const char* path, const Device& device, VkQueue copyQueue, VkFormat format, VkImageUsageFlags usage, VkImageLayout requestedImageLayout) {
 	stbi_set_flip_vertically_on_load(true);
-	int channels;
-	stbi_uc* pixels = stbi_load(path, (int*)(&width), (int*)(&height), &channels, STBI_rgb_alpha);
+	u32 texWidth, texHeight, channels;
+	stbi_uc* pixels = stbi_load(path, (int*)(&texWidth), (int*)(&texHeight), (int*)(&channels), STBI_rgb_alpha);
 	Check(pixels != nullptr, "Failed to load: `%s`", path);
 
-	// TODO: Set mipLevels according to the file being loaded (if itcotains mip levels)
+	CreateFromBuffer(pixels, width * height * STBI_rgb_alpha, device, copyQueue, texWidth, texHeight, format, usage, requestedImageLayout);
+
+	stbi_image_free(pixels);
+}
+
+void Texture2D::CreateFromBuffer(void* buffer, VkDeviceSize bufferSize, const Device& device, VkQueue copyQueue, u32 texWidth, u32 texHeight, VkFormat format, VkImageUsageFlags usage, VkImageLayout requestedImageLayout) {
+	Check(buffer != nullptr, "Cannot create image from a null buffer");
+
+	layout = requestedImageLayout;
+	width = texWidth;
+	height = texHeight;
 	mipLevels = 1;
-	VkDeviceSize size = width * height * STBI_rgb_alpha;
 
-	// Create a host-visible staging buffer that contains the raw image data
-	VkBuffer stagingBuffer;
-	VkDeviceMemory stagingBufferMemory;
-	VkMemoryRequirements memRequirements;
+	// Generate our own mip maps
+	bool generateMipmaps = ((requestedImageLayout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL) 
+						 || (requestedImageLayout == VK_IMAGE_LAYOUT_READ_ONLY_OPTIMAL)) 
+						 && (mipLevels == 1);
 
-	VkBufferCreateInfo stagingBufferCreateInfo = {
-		.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
-		.size = size,
-		.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
-		.sharingMode = VK_SHARING_MODE_EXCLUSIVE
-	};
-	VkCheck(vkCreateBuffer(device.logicalDevice, &stagingBufferCreateInfo, nullptr, &stagingBuffer), "Failed to create staging buffer");
-
-	vkGetBufferMemoryRequirements(device.logicalDevice, stagingBuffer, &memRequirements);
-
-	VkMemoryAllocateInfo allocInfo = {
-		.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
-		.allocationSize = memRequirements.size,
-		.memoryTypeIndex = device.GetMemoryType(memRequirements.memoryTypeBits, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT)
-	};
-
-	VkCheck(vkAllocateMemory(device.logicalDevice, &allocInfo, nullptr, &stagingBufferMemory), "Failed to allocate vertex buffer memory");
-	VkCheck(vkBindBufferMemory(device.logicalDevice, stagingBuffer, stagingBufferMemory, 0), "Failed to bind DeviceMemory to VkBuffer");
-
-	// Copy texture data into the staging buffer
-	void* data;
-	VkCheck(vkMapMemory(device.logicalDevice, stagingBufferMemory, 0, memRequirements.size, 0, &data), "Failed to map staging buffer memory");
-	memcpy(data, pixels, size);
-	vkUnmapMemory(device.logicalDevice, stagingBufferMemory);
+	Buffer stagingBuffer;
+	device.CreateBuffer(VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, bufferSize, &stagingBuffer, buffer);
 
 	// Setup buffer copy regions for each mip level.
 	// (We don't use this yet, so mipLevels is always 1)
@@ -140,91 +122,8 @@ void Texture2D::LoadFromFile(const char* path, const Device& device, VkQueue cop
 				.height = glm::max(1u, (u32)height >> i),
 				.depth = 1
 			}
-		});
+			});
 	}
-
-	// If file didn't provide any mip levels, generate our own.
-	bool generateMipmaps = (requestedImageLayout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL) && (mipLevels == 1);
-	if (generateMipmaps) {
-		mipLevels = (u32)(std::floor(std::log2(std::max(width, height))) + 1);
-		usage |= VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
-	}
-
-	CreateImage(device, format, usage);
-
-	vkGetImageMemoryRequirements(device.logicalDevice, image, &memRequirements);
-
-	allocInfo = {
-		.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
-		.allocationSize = memRequirements.size,
-		.memoryTypeIndex = device.GetMemoryType(memRequirements.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT)
-	};
-	VkCheck(vkAllocateMemory(device.logicalDevice, &allocInfo, nullptr, &deviceMemory), "Failed to allocate image memory");
-	VkCheck(vkBindImageMemory(device.logicalDevice, image, deviceMemory, 0), "Failed to bind VkDeviceMemory to VkImage");
-
-	VkImageSubresourceRange subResourceRange = {
-		.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-		.baseMipLevel = 0,
-		.levelCount = mipLevels,
-		.layerCount = 1
-	};
-
-	VkCommandBuffer copyCmd = device.CreateCommandBuffer(VK_COMMAND_BUFFER_LEVEL_PRIMARY, true);
-
-	// Image barrier
-	ImageBarrier(copyCmd, image, subResourceRange, 
-		VK_PIPELINE_STAGE_NONE,		VK_PIPELINE_STAGE_TRANSFER_BIT,
-		VK_ACCESS_NONE,				VK_ACCESS_TRANSFER_WRITE_BIT,
-		VK_IMAGE_LAYOUT_UNDEFINED,	VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
-
-	// Copy mip levels from staging buffer to device local memory
-	vkCmdCopyBufferToImage(copyCmd, stagingBuffer, image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, (u32)bufferCopyRegions.size(), bufferCopyRegions.data());
-
-	// Change texture image layout to the requested image layout (often SHADER_READ) after all mip levels have been copied.
-	layout = requestedImageLayout;
-
-	if (generateMipmaps) {
-		GenerateMipmaps(copyCmd, device, image, format, width, height, mipLevels);
-	}
-	else {
-		ImageBarrier(copyCmd, image, subResourceRange,
-			VK_PIPELINE_STAGE_TRANSFER_BIT,			VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
-			VK_ACCESS_TRANSFER_WRITE_BIT,			VK_ACCESS_2_SHADER_SAMPLED_READ_BIT_KHR,
-			VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,	layout);
-	}
-
-	device.FlushCommandBuffer(copyCmd, copyQueue);
-
-	// Clean up staging resources
-	vkDestroyBuffer(device.logicalDevice, stagingBuffer, nullptr);
-	vkFreeMemory(device.logicalDevice, stagingBufferMemory, nullptr);
-	stbi_image_free(pixels);
-
-	// Create a default sampler
-	CreateDefaultSampler(device);
-
-	// Create the image view
-	CreateImageView(device, format);
-
-	// Update the descriptor image info
-	descriptor = {
-		.sampler = sampler,
-		.imageView = view,
-		.imageLayout = layout
-	};
-}
-
-void Texture2D::CreateFromBuffer(void* buffer, VkDeviceSize bufferSize, const Device& device, VkQueue copyQueue, u32 texWidth, u32 texHeight, VkFormat format, VkImageUsageFlags usage, VkImageLayout requestedImageLayout) {
-	Check(buffer != nullptr, "Cannot create image from a null buffer");
-	width = texWidth;
-	height = texHeight;
-	mipLevels = 1;
-
-	// Generate our own mip maps
-	bool generateMipmaps = (requestedImageLayout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL) && (mipLevels == 1);
-
-	Buffer stagingBuffer;
-	device.CreateBuffer(VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, bufferSize, &stagingBuffer, buffer);
 
 	// If we're generating our own mipmaps, we will be copying to the image
 	if (generateMipmaps) {
@@ -234,17 +133,6 @@ void Texture2D::CreateFromBuffer(void* buffer, VkDeviceSize bufferSize, const De
 
 	CreateImage(device, format, usage);
 
-	VkMemoryRequirements memRequirements;
-	vkGetImageMemoryRequirements(device.logicalDevice, image, &memRequirements);
-
-	VkMemoryAllocateInfo allocInfo = {
-		.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
-		.allocationSize = memRequirements.size,
-		.memoryTypeIndex = device.GetMemoryType(memRequirements.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT)
-	};
-	VkCheck(vkAllocateMemory(device.logicalDevice, &allocInfo, nullptr, &deviceMemory), "Failed to allocate image memory");
-	VkCheck(vkBindImageMemory(device.logicalDevice, image, deviceMemory, 0), "Failed to bind VkDeviceMemory to VkImage");
-
 	VkImageSubresourceRange subResourceRange = {
 		.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
 		.baseMipLevel = 0,
@@ -254,36 +142,19 @@ void Texture2D::CreateFromBuffer(void* buffer, VkDeviceSize bufferSize, const De
 
 	VkCommandBuffer copyCmd = device.CreateCommandBuffer(VK_COMMAND_BUFFER_LEVEL_PRIMARY, true);
 
-	// Image barrier
 	ImageBarrier(copyCmd, image, subResourceRange,
 		VK_PIPELINE_STAGE_NONE,		VK_PIPELINE_STAGE_TRANSFER_BIT,
 		VK_ACCESS_NONE,				VK_ACCESS_TRANSFER_WRITE_BIT,
 		VK_IMAGE_LAYOUT_UNDEFINED,	VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
 
-	// Copy mip level 0 from staging buffer to device local memory
-	VkBufferImageCopy bufferCopyRegion = {
-		.bufferOffset = 0,
-		.imageSubresource = {
-			.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-			.mipLevel = 0,
-			.baseArrayLayer = 0,
-			.layerCount = 1
-		},
-		.imageExtent = {
-			.width = width,
-			.height = height,
-			.depth = 1
-		}
-	};
-	vkCmdCopyBufferToImage(copyCmd, stagingBuffer.buffer, image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &bufferCopyRegion);
+	vkCmdCopyBufferToImage(copyCmd, stagingBuffer.buffer, image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, (u32)bufferCopyRegions.size(), bufferCopyRegions.data());
 
-	// Change texture image layout to the requested image layout (often SHADER_READ) after all mip levels have been copied.
-	layout = requestedImageLayout;
-
+	// The texture image layout is transitioned to the requested image layout only after all mip levels have been copied.
+	// If we are generating our own, then GenerateMipmaps takes care of this transition for us.
 	if (generateMipmaps) {
-		GenerateMipmaps(copyCmd, device, image, format, width, height, mipLevels);
+		GenerateMipmaps(copyCmd, device, image, format, width, height, mipLevels, layout);
 	}
-	else {
+	else { 
 		ImageBarrier(copyCmd, image, subResourceRange,
 			VK_PIPELINE_STAGE_TRANSFER_BIT,			VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
 			VK_ACCESS_TRANSFER_WRITE_BIT,			VK_ACCESS_2_SHADER_SAMPLED_READ_BIT_KHR,
@@ -293,8 +164,6 @@ void Texture2D::CreateFromBuffer(void* buffer, VkDeviceSize bufferSize, const De
 	device.FlushCommandBuffer(copyCmd, copyQueue);
 
 	// Clean up staging resources
-	//vkDestroyBuffer(device.logicalDevice, stagingBuffer, nullptr);
-	//vkFreeMemory(device.logicalDevice, stagingBufferMemory, nullptr);
 	stagingBuffer.destroy(device.logicalDevice);
 
 	// Create a default sampler
@@ -331,6 +200,18 @@ void Texture2D::CreateImage(const Device& device, VkFormat format, VkImageUsageF
 	};
 
 	VkCheck(vkCreateImage(device.logicalDevice, &imageInfo, nullptr, &image), "Failed to create image");
+
+	VkMemoryRequirements memRequirements;
+	vkGetImageMemoryRequirements(device.logicalDevice, image, &memRequirements);
+
+	VkMemoryAllocateInfo allocInfo = {
+		.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
+		.allocationSize = memRequirements.size,
+		.memoryTypeIndex = device.GetMemoryType(memRequirements.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT)
+	};
+
+	VkCheck(vkAllocateMemory(device.logicalDevice, &allocInfo, nullptr, &deviceMemory), "Failed to allocate image memory");
+	VkCheck(vkBindImageMemory(device.logicalDevice, image, deviceMemory, 0), "Failed to bind VkDeviceMemory to VkImage");
 }
 
 void Texture2D::CreateDefaultSampler(const Device& device) {
