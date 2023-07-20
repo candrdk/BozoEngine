@@ -55,7 +55,7 @@ void UIOverlay::Initialize(const Device& device, VkSampleCountFlagBits rasteriza
 	u8* fontData;
 	int texWidth, texHeight;
 	io.Fonts->GetTexDataAsRGBA32(&fontData, &texWidth, &texHeight);
-	VkDeviceSize uploadSize = texWidth * texHeight * sizeof(u32);
+	VkDeviceSize uploadSize = (u64)texWidth * (u64)texHeight * sizeof(u32);	// u64 cast to satisfy arithmetic warning
 
 	VkImageCreateInfo imageInfo = {
 		.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
@@ -110,11 +110,10 @@ void UIOverlay::Initialize(const Device& device, VkSampleCountFlagBits rasteriza
 	VkCommandBuffer copyCmd = device.CreateCommandBuffer(VK_COMMAND_BUFFER_LEVEL_PRIMARY, true);
 
 	// prepare font image for transfer
-	SetImageLayout(copyCmd, fontImage, VK_IMAGE_ASPECT_COLOR_BIT, 
-		VK_IMAGE_LAYOUT_UNDEFINED, 
-		VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 
-		VK_PIPELINE_STAGE_HOST_BIT, 
-		VK_PIPELINE_STAGE_TRANSFER_BIT);
+	ImageBarrier(copyCmd, fontImage, VK_IMAGE_ASPECT_COLOR_BIT,
+		VK_PIPELINE_STAGE_NONE,		VK_PIPELINE_STAGE_TRANSFER_BIT,
+		VK_ACCESS_NONE,				VK_ACCESS_TRANSFER_WRITE_BIT,
+		VK_IMAGE_LAYOUT_UNDEFINED,	VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
 
 	VkBufferImageCopy bufferCopyRegion = {
 		.imageSubresource = {
@@ -131,11 +130,10 @@ void UIOverlay::Initialize(const Device& device, VkSampleCountFlagBits rasteriza
 	vkCmdCopyBufferToImage(copyCmd, stagingBuffer.buffer, fontImage, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &bufferCopyRegion);
 
 	// prepare font image for shader read
-	SetImageLayout(copyCmd, fontImage, VK_IMAGE_ASPECT_COLOR_BIT, 
-		VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 
-		VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, 
-		VK_PIPELINE_STAGE_TRANSFER_BIT, 
-		VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT);
+	ImageBarrier(copyCmd, fontImage, VK_IMAGE_ASPECT_COLOR_BIT,
+		VK_PIPELINE_STAGE_TRANSFER_BIT,			VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+		VK_ACCESS_TRANSFER_WRITE_BIT,			VK_ACCESS_2_SHADER_SAMPLED_READ_BIT_KHR,
+		VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,	VK_IMAGE_LAYOUT_READ_ONLY_OPTIMAL_KHR);
 
 	device.FlushCommandBuffer(copyCmd, device.graphicsQueue);
 	

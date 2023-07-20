@@ -2,39 +2,12 @@
 
 #include "Common.h"
 
-void SetImageLayout(
-	VkCommandBuffer cmdBuffer,
-	VkImage image,
-	VkImageLayout oldLayout,
-	VkImageLayout newLayout,
-	VkImageSubresourceRange subresourceRange,
-	VkPipelineStageFlags srcStageMask,
-	VkPipelineStageFlags dstStageMask);
+void ImageBarrier(VkCommandBuffer cmdBuffer, VkImage image, VkImageSubresourceRange subresourceRange,
+	VkPipelineStageFlags2	srcStage,	VkPipelineStageFlags2	dstStage,
+	VkAccessFlags2			srcAccess,	VkAccessFlags2			dstAccess,
+	VkImageLayout			srcLayout,	VkImageLayout			dstLayout);
 
-void SetImageLayout(
-	VkCommandBuffer cmdBuffer,
-	VkImage image,
-	VkImageAspectFlags aspect,
-	VkImageLayout oldLayout,
-	VkImageLayout newLayout,
-	VkPipelineStageFlags srcStageMask,
-	VkPipelineStageFlags dstStageMask);
-
-// Deprecate this
-void SetImageLayout2(
-	VkCommandBuffer commandBuffer,
-	VkImage image,
-	VkImageLayout oldLayout,
-	VkImageLayout newLayout,
-	VkImageSubresourceRange subresourceRange);
-
-void InsertImageBarrier(
-	VkCommandBuffer cmdBuffer,
-	VkImage image,
-	VkImageAspectFlags aspectMask,
-	VkAccessFlags srcAccessMask,
-	VkAccessFlags dstAccessMask,
-	VkImageLayout oldLayout,
-	VkImageLayout newLayout,
-	VkPipelineStageFlags srcStageMask,
-	VkPipelineStageFlags dstStageMask);
+void ImageBarrier(VkCommandBuffer cmdBuffer, VkImage image, VkImageAspectFlags aspectMask,
+	VkPipelineStageFlags2	srcStage,	VkPipelineStageFlags2	dstStage,
+	VkAccessFlags2			srcAccess,	VkAccessFlags2			dstAccess,
+	VkImageLayout			srcLayout,	VkImageLayout			dstLayout);

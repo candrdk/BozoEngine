@@ -132,6 +132,7 @@ static VkDevice CreateLogicalDevice(VkPhysicalDevice physicalDevice, u32 queueFa
 	// TODO: fill these out later as needed
 	VkPhysicalDeviceVulkan13Features features13 = {
 		.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES,
+		.synchronization2 = VK_TRUE,
 		.dynamicRendering = VK_TRUE
 	};
 	VkPhysicalDeviceVulkan12Features features12 = {
@@ -257,10 +258,15 @@ void Device::FlushCommandBuffer(VkCommandBuffer commandBuffer, VkQueue queue) co
 
 	VkCheck(vkEndCommandBuffer(commandBuffer), "Failed to end command buffer");
 
-	VkSubmitInfo submitInfo = {
-		.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
-		.commandBufferCount = 1,
-		.pCommandBuffers = &commandBuffer
+	VkCommandBufferSubmitInfo commandBufferSubmitInfo = {
+		.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_SUBMIT_INFO,
+		.commandBuffer = commandBuffer
+	};
+
+	VkSubmitInfo2 submitInfo = {
+		.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO_2,
+		.commandBufferInfoCount = 1,
+		.pCommandBufferInfos = &commandBufferSubmitInfo
 	};
 
 	// Create fence to ensure the command buffer has finished executing
@@ -268,7 +274,7 @@ void Device::FlushCommandBuffer(VkCommandBuffer commandBuffer, VkQueue queue) co
 	VkFence fence;
 	VkCheck(vkCreateFence(logicalDevice, &fenceInfo, nullptr, &fence), "Failed to create fence");
 
-	VkCheck(vkQueueSubmit(queue, 1, &submitInfo, fence), "Failed to submit command buffer to queue");
+	VkCheck(vkQueueSubmit2(queue, 1, &submitInfo, fence), "Failed to submit command buffer to queue");
 
 	// Wait for the fence to signal that the command buffer has finished executing
 	VkCheck(vkWaitForFences(logicalDevice, 1, &fence, VK_TRUE, 1ull << 32), "Wait for fence failed");	// TODO: define a default timeout macro. For now, 1 << 32 ~ 5 seconds.

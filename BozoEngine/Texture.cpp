@@ -5,6 +5,8 @@
 	#include <stb_image.h>
 #pragma warning(default : 26451 6262)
 
+// TODO: clean all of this up. its a mess...
+
 // TODO: there are propably quite a few issues with the current fromBuffer/loadFromFile implementations
 //		 especially relating to mipmap generation / loading... Look into this later.
 
@@ -13,33 +15,22 @@ static void GenerateMipmaps(VkCommandBuffer commandBuffer, const Device& device,
 	vkGetPhysicalDeviceFormatProperties(device.physicalDevice, imageFormat, &formatProperties);
 	Check(formatProperties.optimalTilingFeatures & VK_FORMAT_FEATURE_SAMPLED_IMAGE_FILTER_LINEAR_BIT, "Texture image does not support linear blitting");
 
-	VkImageMemoryBarrier barrier = {
-		.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
-		.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-		.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-		.image = image,
-		.subresourceRange = {
-			.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-			.levelCount = 1,
-			.baseArrayLayer = 0,
-			.layerCount = 1,
-		}
+	VkImageSubresourceRange subresourceRange = {
+		.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+		.levelCount = 1,
+		.baseArrayLayer = 0,
+		.layerCount = 1,
 	};
 
 	i32 mipWidth = width;
 	i32 mipHeight = height;
 	for (u32 i = 1; i < mipLevels; i++) {
-		barrier.subresourceRange.baseMipLevel = i - 1;
-		barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-		barrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
-		barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-		barrier.dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
+		subresourceRange.baseMipLevel = i - 1;
 
-		vkCmdPipelineBarrier(commandBuffer,
-			VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 0,
-			0, nullptr,
-			0, nullptr,
-			1, &barrier);
+		ImageBarrier(commandBuffer, image, subresourceRange,
+			VK_PIPELINE_STAGE_TRANSFER_BIT,			VK_PIPELINE_STAGE_TRANSFER_BIT,
+			VK_ACCESS_TRANSFER_WRITE_BIT,			VK_ACCESS_TRANSFER_READ_BIT,
+			VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,	VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
 
 		VkImageBlit blit = {
 			.srcSubresource = {
@@ -66,32 +57,20 @@ static void GenerateMipmaps(VkCommandBuffer commandBuffer, const Device& device,
 
 		vkCmdBlitImage(commandBuffer, image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &blit, VK_FILTER_LINEAR);
 
-		barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
-		barrier.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-		barrier.srcAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
-		barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
-
-		vkCmdPipelineBarrier(commandBuffer,
-			VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, 0,
-			0, nullptr,
-			0, nullptr,
-			1, &barrier);
+		ImageBarrier(commandBuffer, image, subresourceRange,
+			VK_PIPELINE_STAGE_TRANSFER_BIT,			VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+			VK_ACCESS_TRANSFER_READ_BIT,			VK_ACCESS_2_SHADER_SAMPLED_READ_BIT_KHR,
+			VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,	VK_IMAGE_LAYOUT_READ_ONLY_OPTIMAL);
 
 		if (mipWidth > 1)	mipWidth /= 2;
 		if (mipHeight > 1)	mipHeight /= 2;
 	}
 
-	barrier.subresourceRange.baseMipLevel = mipLevels - 1;
-	barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-	barrier.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-	barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-	barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
-
-	vkCmdPipelineBarrier(commandBuffer,
-		VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, 0,
-		0, nullptr,
-		0, nullptr,
-		1, &barrier);
+	subresourceRange.baseMipLevel = mipLevels - 1;
+	ImageBarrier(commandBuffer, image, subresourceRange,
+		VK_PIPELINE_STAGE_TRANSFER_BIT,			VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+		VK_ACCESS_TRANSFER_WRITE_BIT,			VK_ACCESS_2_SHADER_SAMPLED_READ_BIT_KHR,
+		VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,	VK_IMAGE_LAYOUT_READ_ONLY_OPTIMAL);
 }
 
 void Texture2D::Destroy(const Device& device) {
@@ -193,7 +172,10 @@ void Texture2D::LoadFromFile(const char* path, const Device& device, VkQueue cop
 	VkCommandBuffer copyCmd = device.CreateCommandBuffer(VK_COMMAND_BUFFER_LEVEL_PRIMARY, true);
 
 	// Image barrier
-	SetImageLayout2(copyCmd, image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, subResourceRange);
+	ImageBarrier(copyCmd, image, subResourceRange, 
+		VK_PIPELINE_STAGE_NONE,		VK_PIPELINE_STAGE_TRANSFER_BIT,
+		VK_ACCESS_NONE,				VK_ACCESS_TRANSFER_WRITE_BIT,
+		VK_IMAGE_LAYOUT_UNDEFINED,	VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
 
 	// Copy mip levels from staging buffer to device local memory
 	vkCmdCopyBufferToImage(copyCmd, stagingBuffer, image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, (u32)bufferCopyRegions.size(), bufferCopyRegions.data());
@@ -205,7 +187,10 @@ void Texture2D::LoadFromFile(const char* path, const Device& device, VkQueue cop
 		GenerateMipmaps(copyCmd, device, image, format, width, height, mipLevels);
 	}
 	else {
-		SetImageLayout2(copyCmd, image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, layout, subResourceRange);
+		ImageBarrier(copyCmd, image, subResourceRange,
+			VK_PIPELINE_STAGE_TRANSFER_BIT,			VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+			VK_ACCESS_TRANSFER_WRITE_BIT,			VK_ACCESS_2_SHADER_SAMPLED_READ_BIT_KHR,
+			VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,	layout);
 	}
 
 	device.FlushCommandBuffer(copyCmd, copyQueue);
@@ -270,7 +255,10 @@ void Texture2D::CreateFromBuffer(void* buffer, VkDeviceSize bufferSize, const De
 	VkCommandBuffer copyCmd = device.CreateCommandBuffer(VK_COMMAND_BUFFER_LEVEL_PRIMARY, true);
 
 	// Image barrier
-	SetImageLayout2(copyCmd, image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, subResourceRange);
+	ImageBarrier(copyCmd, image, subResourceRange,
+		VK_PIPELINE_STAGE_NONE,		VK_PIPELINE_STAGE_TRANSFER_BIT,
+		VK_ACCESS_NONE,				VK_ACCESS_TRANSFER_WRITE_BIT,
+		VK_IMAGE_LAYOUT_UNDEFINED,	VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
 
 	// Copy mip level 0 from staging buffer to device local memory
 	VkBufferImageCopy bufferCopyRegion = {
@@ -296,7 +284,10 @@ void Texture2D::CreateFromBuffer(void* buffer, VkDeviceSize bufferSize, const De
 		GenerateMipmaps(copyCmd, device, image, format, width, height, mipLevels);
 	}
 	else {
-		SetImageLayout2(copyCmd, image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, layout, subResourceRange);
+		ImageBarrier(copyCmd, image, subResourceRange,
+			VK_PIPELINE_STAGE_TRANSFER_BIT,			VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+			VK_ACCESS_TRANSFER_WRITE_BIT,			VK_ACCESS_2_SHADER_SAMPLED_READ_BIT_KHR,
+			VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,	layout);
 	}
 
 	device.FlushCommandBuffer(copyCmd, copyQueue);
