@@ -1,4 +1,5 @@
 #include "Texture.h"
+#include "Tools.h"
 
 #pragma warning(disable : 26451 6262)
 	#define STB_IMAGE_IMPLEMENTATION

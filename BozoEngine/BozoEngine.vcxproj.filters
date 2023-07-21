@@ -101,9 +101,6 @@
     <ClCompile Include="..\Extern\volk\volk.c">
       <Filter>Extern\volk</Filter>
     </ClCompile>
-    <ClCompile Include="Logging.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
     <ClCompile Include="..\Extern\imgui\backends\imgui_impl_glfw.cpp">
       <Filter>Extern\imgui</Filter>
     </ClCompile>
@@ -168,9 +165,6 @@
     </ClInclude>
     <ClInclude Include="..\Extern\volk\volk.h">
       <Filter>Extern\volk</Filter>
-    </ClInclude>
-    <ClInclude Include="Logging.h">
-      <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="..\Extern\stb\stb_image.h">
       <Filter>Extern\stb</Filter>

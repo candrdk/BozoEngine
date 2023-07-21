@@ -108,7 +108,7 @@ public:
 		buffer->size = memRequirements.size;
 
 		if (data != nullptr) {
-			VkCheck(buffer->map(logicalDevice));
+			VkAssert(buffer->map(logicalDevice));
 			memcpy(buffer->mapped, data, size);
 			if ((properties & VK_MEMORY_PROPERTY_HOST_COHERENT_BIT) == 0) {
 				buffer->Flush(logicalDevice);

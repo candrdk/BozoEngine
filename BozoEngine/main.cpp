@@ -6,6 +6,7 @@
 #include "Swapchain.h"
 #include "Texture.h"
 #include "Camera.h"
+#include "Tools.h"
 
 #include "GLTF.h"
 #include "UIOverlay.h"

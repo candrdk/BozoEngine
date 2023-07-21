@@ -193,7 +193,6 @@
     <ClCompile Include="..\Extern\volk\volk.c" />
     <ClCompile Include="Device.cpp" />
     <ClCompile Include="GLTF.cpp" />
-    <ClCompile Include="Logging.cpp" />
     <ClCompile Include="main.cpp" />
     <ClCompile Include="Swapchain.cpp" />
     <ClCompile Include="Texture.cpp" />
@@ -223,7 +222,6 @@
     <ClInclude Include="Common.h" />
     <ClInclude Include="Device.h" />
     <ClInclude Include="GLTF.h" />
-    <ClInclude Include="Logging.h" />
     <ClInclude Include="Swapchain.h" />
     <ClInclude Include="Texture.h" />
     <ClInclude Include="Tools.h" />

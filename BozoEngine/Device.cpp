@@ -1,5 +1,48 @@
 #include "Device.h"
 
+// SGR escape sequences: https://docs.microsoft.com/en-us/windows/console/console-virtual-terminal-sequences
+#define SGR_SET_BG_GRAY  "\x1B[100;1m"
+#define SGR_SET_BG_BLUE	 "\x1B[44;1m"
+#define SGR_SET_BG_RED	 "\x1B[41;1m"
+#define SGR_SET_TXT_BLUE "\x1B[34;1m"
+#define SGR_SET_DEFAULT  "\x1B[0m"
+
+static VKAPI_ATTR VkBool32 VKAPI_CALL DebugCallback(
+	VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
+	VkDebugUtilsMessageTypeFlagsEXT messageType,
+	const VkDebugUtilsMessengerCallbackDataEXT* pCallbackData,
+	void* pUserData)
+{
+	if (messageSeverity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT)   printf(SGR_SET_BG_RED  "[ERROR]" SGR_SET_DEFAULT "   ");
+	else if (messageSeverity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT) printf(SGR_SET_BG_BLUE "[WARNING]" SGR_SET_DEFAULT " ");
+	else if (messageSeverity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT) printf("[VERBOSE] ");
+
+	const char* vkSpecLinkBegin = strstr(pCallbackData->pMessage, "https");
+	if (vkSpecLinkBegin) {
+		const char* vkSpecLinkEnd = strchr(vkSpecLinkBegin, ')');
+		printf("%.*s", (int)(vkSpecLinkBegin - pCallbackData->pMessage), pCallbackData->pMessage);
+		printf(SGR_SET_TXT_BLUE "%.*s" SGR_SET_DEFAULT ")\n", (int)(vkSpecLinkEnd - vkSpecLinkBegin), vkSpecLinkBegin);
+	}
+	else {
+		printf("%s\n", pCallbackData->pMessage);
+	}
+
+	return VK_FALSE;
+}
+
+static VkDebugUtilsMessengerCreateInfoEXT GetDebugMessengerCreateInfo() {
+	return {
+		.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT,
+		.messageSeverity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT
+						 | VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT
+						 | VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT,
+		.messageType = VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT
+					 | VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT
+					 | VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT,
+		.pfnUserCallback = DebugCallback
+	};
+}
+
 static VkInstance CreateInstance() {
 	VkApplicationInfo appInfo = {
 		.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO,
@@ -56,10 +99,10 @@ static VkSurfaceKHR CreateSurface(GLFWwindow* window, VkInstance instance) {
 
 static VkPhysicalDevice CreatePhysicalDevice(VkInstance instance) {
 	u32 deviceCount = 0;
-	VkCheck(vkEnumeratePhysicalDevices(instance, &deviceCount, nullptr));
+	VkAssert(vkEnumeratePhysicalDevices(instance, &deviceCount, nullptr));
 
 	std::vector<VkPhysicalDevice> devices(deviceCount);
-	VkCheck(vkEnumeratePhysicalDevices(instance, &deviceCount, devices.data()));
+	VkAssert(vkEnumeratePhysicalDevices(instance, &deviceCount, devices.data()));
 
 	Check(deviceCount > 0, "Failed to find GPUs with Vulkan support");
 
