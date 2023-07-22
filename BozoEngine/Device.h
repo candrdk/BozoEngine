@@ -72,19 +72,18 @@ public:
 	void CreateDevice(GLFWwindow* window);
 	void DestroyDevice();
 
-	// TODO: Should maybe allocate a separate command pool for these kinds of short-lived buffers.
-	//		 When we do, use the VK_COMMAND_POOL_CREATE_TRANSIENT_BIT flag during command pool generation.
-	// TODO: Maybe add bool param to conditionally call vkBeginCommandBuffer?
-	// TODO: If we want this method to be generic, ONE_TIME_SUBMIT should not be set.
-	//		 Likewise, we should only conditionally free the command buffer in FlushCommandBuffer.
+	// TODO: Maybe make the command pool owned by Device *_TRANSIENT_BIT to indicate that buffers allocated
+	//		 from the Device command pool usually have very short lifetimes (e.g. a single one-time transfer)
+
+	// Note: The created buffer will have the ONE_TIME_SUBMIT flag set.
 	VkCommandBuffer CreateCommandBuffer(VkCommandBufferLevel level, VkCommandPool pool, bool begin = false) const;
 
 	VkCommandBuffer CreateCommandBuffer(VkCommandBufferLevel level, bool begin = false) const;
 
+	// Note: This will also free the commandBuffer
 	void FlushCommandBuffer(VkCommandBuffer commandBuffer, VkQueue queue) const;
 
-	// TODO: Add a VkLog(VkResult, string) that simply prints if condition fails and returns VkResult
-	//		 Also add a macro for the	`if(!VkResult) return VkLog(VkResult, string);`	  pattern.
+	// TODO: move to device.cpp, or buffer.cpp
 	VkResult CreateBuffer(VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkDeviceSize size, Buffer* buffer, void* data = nullptr) const {
 		VkBufferCreateInfo bufferInfo = {
 			.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
