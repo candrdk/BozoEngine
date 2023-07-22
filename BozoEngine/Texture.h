@@ -11,8 +11,10 @@ class Texture2D {
 public:
 	VkImage image;
 	VkImageView view;
-	VkImageLayout layout;
 	VkDeviceMemory deviceMemory;
+
+	VkFormat format;
+	VkImageLayout layout;
 
 	u32 width, height;
 	u32 mipLevels;
@@ -21,15 +23,17 @@ public:
 
 	void Destroy(const Device& device);
 
-	void LoadFromFile(const char* path, const Device& device, VkQueue copyQueue, VkFormat format, VkImageUsageFlags usage, VkImageLayout requestedImageLayout);
+	void LoadFromFile(const char* path, const Device& device, VkQueue copyQueue, VkFormat requestedFormat, 
+		VkImageUsageFlags usage = VK_IMAGE_USAGE_SAMPLED_BIT, VkImageLayout requestedImageLayout = VK_IMAGE_LAYOUT_READ_ONLY_OPTIMAL);
 
 	void CreateFromBuffer(void* buffer, VkDeviceSize bufferSize, const Device& device, VkQueue copyQueue, 
-		u32 texWidth, u32 texHeight, VkFormat format, VkImageUsageFlags usage = VK_IMAGE_USAGE_SAMPLED_BIT, VkImageLayout requestedImageLayout = VK_IMAGE_LAYOUT_READ_ONLY_OPTIMAL);
+		u32 texWidth, u32 texHeight, VkFormat requestedFormat, 
+		VkImageUsageFlags usage = VK_IMAGE_USAGE_SAMPLED_BIT, VkImageLayout requestedImageLayout = VK_IMAGE_LAYOUT_READ_ONLY_OPTIMAL);
 
 private:
-	void CreateImage(const Device& device, VkFormat format, VkImageUsageFlags usage);
+	void CreateImage(const Device& device, VkImageUsageFlags usage);
 
 	void CreateDefaultSampler(const Device& device);
 
-	void CreateImageView(const Device& device, VkFormat format);
+	void CreateImageView(const Device& device);
 };

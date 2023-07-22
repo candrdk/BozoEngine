@@ -76,21 +76,22 @@ void Texture2D::Destroy(const Device& device) {
 	vkFreeMemory(device.logicalDevice, deviceMemory, nullptr);
 }
 
-void Texture2D::LoadFromFile(const char* path, const Device& device, VkQueue copyQueue, VkFormat format, VkImageUsageFlags usage, VkImageLayout requestedImageLayout) {
+void Texture2D::LoadFromFile(const char* path, const Device& device, VkQueue copyQueue, VkFormat requestedFormat, VkImageUsageFlags usage, VkImageLayout requestedImageLayout) {
 	stbi_set_flip_vertically_on_load(true);
 	u32 texWidth, texHeight, channels;
 	stbi_uc* pixels = stbi_load(path, (int*)(&texWidth), (int*)(&texHeight), (int*)(&channels), STBI_rgb_alpha);
 	Check(pixels != nullptr, "Failed to load: `%s`", path);
 
-	CreateFromBuffer(pixels, width * height * STBI_rgb_alpha, device, copyQueue, texWidth, texHeight, format, usage, requestedImageLayout);
+	CreateFromBuffer(pixels, width * height * STBI_rgb_alpha, device, copyQueue, texWidth, texHeight, requestedFormat, usage, requestedImageLayout);
 
 	stbi_image_free(pixels);
 }
 
-void Texture2D::CreateFromBuffer(void* buffer, VkDeviceSize bufferSize, const Device& device, VkQueue copyQueue, u32 texWidth, u32 texHeight, VkFormat format, VkImageUsageFlags usage, VkImageLayout requestedImageLayout) {
+void Texture2D::CreateFromBuffer(void* buffer, VkDeviceSize bufferSize, const Device& device, VkQueue copyQueue, u32 texWidth, u32 texHeight, VkFormat requestedFormat, VkImageUsageFlags usage, VkImageLayout requestedImageLayout) {
 	Check(buffer != nullptr, "Cannot create image from a null buffer");
 
 	layout = requestedImageLayout;
+	format = requestedFormat;
 	width = texWidth;
 	height = texHeight;
 	mipLevels = 1;
@@ -132,7 +133,7 @@ void Texture2D::CreateFromBuffer(void* buffer, VkDeviceSize bufferSize, const De
 		usage |= VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
 	}
 
-	CreateImage(device, format, usage);
+	CreateImage(device, usage);
 
 	VkImageSubresourceRange subResourceRange = {
 		.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
@@ -171,7 +172,7 @@ void Texture2D::CreateFromBuffer(void* buffer, VkDeviceSize bufferSize, const De
 	CreateDefaultSampler(device);
 
 	// Create the image view
-	CreateImageView(device, format);
+	CreateImageView(device);
 
 	// Update the descriptor image info
 	descriptor = {
@@ -181,7 +182,7 @@ void Texture2D::CreateFromBuffer(void* buffer, VkDeviceSize bufferSize, const De
 	};
 }
 
-void Texture2D::CreateImage(const Device& device, VkFormat format, VkImageUsageFlags usage) {
+void Texture2D::CreateImage(const Device& device, VkImageUsageFlags usage) {
 	VkImageCreateInfo imageInfo = {
 		.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
 		.imageType = VK_IMAGE_TYPE_2D,
@@ -240,7 +241,7 @@ void Texture2D::CreateDefaultSampler(const Device& device) {
 	VkCheck(vkCreateSampler(device.logicalDevice, &samplerInfo, nullptr, &sampler), "Failed to create texture sampler");
 }
 
-void Texture2D::CreateImageView(const Device& device, VkFormat format) {
+void Texture2D::CreateImageView(const Device& device) {
 	VkImageViewCreateInfo viewInfo = {
 		.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
 		.image = image,
