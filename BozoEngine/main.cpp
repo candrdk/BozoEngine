@@ -1,6 +1,5 @@
 #include "Common.h"
 
-#include <backends/imgui_impl_glfw.h>
 
 #include "Device.h"
 #include "Swapchain.h"
@@ -1034,24 +1033,13 @@ void DrawFrame() {
 	currentFrame = (currentFrame + 1) % arraysize(bz::renderFrames);
 }
 
-void UpdateImGuiFrame() {
-	ImGui_ImplGlfw_NewFrame();
-
-	ImGui::NewFrame();
-	ImGui::ShowDemoWindow();
-	ImGui::Render();
-
-	bz::Overlay.Update(bz::device);
-}
-
 int main(int argc, char* argv[]) {
 	InitWindow(WIDTH, HEIGHT);
 	InitVulkan();
 
-	ImGui_ImplGlfw_InitForVulkan(window, true);
 	bz::Overlay.vertShader = LoadShader("shaders/uioverlay.vert.spv", VK_SHADER_STAGE_VERTEX_BIT);
 	bz::Overlay.fragShader = LoadShader("shaders/uioverlay.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT);
-	bz::Overlay.Initialize(bz::device, VK_SAMPLE_COUNT_1_BIT, bz::swapchain.format, VK_FORMAT_D24_UNORM_S8_UINT);
+	bz::Overlay.Initialize(window, &bz::device, bz::swapchain.format, bz::depth.format);
 
 	double lastFrame = 0.0f;
 
@@ -1061,8 +1049,7 @@ int main(int argc, char* argv[]) {
 		lastFrame = currentFrame;
 
 		bz::camera.Update(deltaTime);
-
-		UpdateImGuiFrame();
+		bz::Overlay.Update();
 		
 		DrawFrame();
 
@@ -1072,7 +1059,7 @@ int main(int argc, char* argv[]) {
 	// Wait until all commandbuffers are done so we can safely clean up semaphores they might potentially be using.
 	vkDeviceWaitIdle(bz::device.logicalDevice);
 
-	bz::Overlay.Free(bz::device);
+	bz::Overlay.Free();
 
 	CleanupVulkan();
 	CleanupWindow();

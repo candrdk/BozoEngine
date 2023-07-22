@@ -2,52 +2,51 @@
 
 #include "Common.h"
 #include "Device.h"
+#include "Texture.h"
 
 class UIOverlay {
-public:
-	Buffer drawDataBuffer;
-	void* vertexBufferStart;
-	void* indexBufferStart;
-	VkDeviceSize vertexBufferOffset;
-	VkDeviceSize indexBufferOffset;
+	Device* device;
 
-	VkImage fontImage;
-	VkImageView fontView;
-	VkDeviceMemory fontMemory;
-	VkSampler sampler;
+	Buffer drawDataBuffer	= {};
+	Texture2D font			= {};
 
-	VkDescriptorPool descriptorPool;
-	VkDescriptorSetLayout descriptorSetLayout;
-	VkDescriptorSet descriptorSet;
+	void* vertexBufferStart			= nullptr;
+	void* indexBufferStart			= nullptr;
+	VkDeviceSize vertexBufferOffset	= {};
+	VkDeviceSize indexBufferOffset	= {};
+
+	VkDescriptorPool descriptorPool				= VK_NULL_HANDLE;
+	VkDescriptorSetLayout descriptorSetLayout	= VK_NULL_HANDLE;
+	VkDescriptorSet descriptorSet				= VK_NULL_HANDLE;
+
+	VkPipelineLayout pipelineLayout				= VK_NULL_HANDLE;
+	VkPipeline pipeline							= VK_NULL_HANDLE;
 
 	struct PushConstantBlock {
 		glm::vec2 scale;
 		glm::vec2 translate;
-	} pushConstantBlock;
+	} pushConstantBlock	= {};
 
-	VkPipelineLayout pipelineLayout;
-	VkPipeline pipeline;
-
-	union {
-		struct {
-			VkPipelineShaderStageCreateInfo vertShader;
-			VkPipelineShaderStageCreateInfo fragShader;
-		};
-		VkPipelineShaderStageCreateInfo shaders[2];
-	};
+public:
+	VkPipelineShaderStageCreateInfo vertShader	= {};
+	VkPipelineShaderStageCreateInfo fragShader	= {};
 
 	UIOverlay();
 	~UIOverlay();
 
 	// Initialize all vulkan resources needed to draw the ui overlay
-	void Initialize(const Device& device, VkSampleCountFlagBits rasterizationSamples, VkFormat colorFormat, VkFormat depthFormat);
+	void Initialize(GLFWwindow* window, Device* device, VkFormat colorFormat, VkFormat depthFormat);
 
-	// Update the ui overlay draw data. Should be called after ImGui::Render();
-	void Update(const Device& device);
+	// Update thr ui overlay draw data. Should be called every frame before Draw.
+	void Update();
 
-	// Draw the ui overlay in the specified VkCommandBuffer. 
-	// Caller must have begun rendering with VkBeginRendering();
+	// Records draw commands to render the ui overlay into the specified VkCommandBuffer.
 	void Draw(VkCommandBuffer cmdBuffer);
 
-	void Free(const Device& device);
+	void Free();
+
+private:
+	// Draws the ImGui frame. 
+	// TODO: maybe allow the user to set this with a lambda?
+	void RenderFrame();
 };

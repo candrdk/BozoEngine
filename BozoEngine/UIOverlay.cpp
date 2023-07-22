@@ -1,7 +1,7 @@
 #include "UIOverlay.h"
 #include "Tools.h"
 
-#include <imgui.h>
+#include <backends/imgui_impl_glfw.h>
 
 UIOverlay::UIOverlay() {
 	ImGui::CreateContext();
@@ -14,29 +14,6 @@ UIOverlay::UIOverlay() {
 
 	// TODO: set our own imgui style here
 	ImGui::StyleColorsDark();
-
-	// Zero initialize everything
-	drawDataBuffer = {};
-	vertexBufferStart = nullptr;
-	indexBufferStart = nullptr;
-	vertexBufferOffset = 0;
-	indexBufferOffset = 0;
-
-	fontImage = VK_NULL_HANDLE;
-	fontView = VK_NULL_HANDLE;
-	fontMemory = VK_NULL_HANDLE;
-	sampler = VK_NULL_HANDLE;
-	descriptorPool = VK_NULL_HANDLE;
-	descriptorSetLayout = VK_NULL_HANDLE;
-	descriptorSet = VK_NULL_HANDLE;
-
-	pushConstantBlock = {};
-
-	pipelineLayout = VK_NULL_HANDLE;
-	pipeline = VK_NULL_HANDLE;
-
-	shaders[0] = {};
-	shaders[1] = {};
 }
 
 UIOverlay::~UIOverlay() {
@@ -47,9 +24,13 @@ UIOverlay::~UIOverlay() {
 
 // TODO: We are repeating a lot of the texture.h code.
 // TODO: split up into smaller functions
-void UIOverlay::Initialize(const Device& device, VkSampleCountFlagBits rasterizationSamples, VkFormat colorFormat, VkFormat depthFormat) {
-	Check(vertShader.module != VK_NULL_HANDLE, "Cannot initialize ui overlay without vertex shader. Set UIOverlay.shaders before calling UIOverlay.Initialize!");
-	Check(fragShader.module != VK_NULL_HANDLE, "Cannot initialize ui overlay without fragment shader. Set UIOverlay.shaders before calling UIOverlay.Initialize!");
+void UIOverlay::Initialize(GLFWwindow* window, Device* vulkanDevice, VkFormat colorFormat, VkFormat depthFormat) {
+	Check(vertShader.module != VK_NULL_HANDLE, "Cannot initialize ui overlay without vertex shader. Set UIOverlay.vertShader before calling UIOverlay.Initialize");
+	Check(fragShader.module != VK_NULL_HANDLE, "Cannot initialize ui overlay without fragment shader. Set UIOverlay.fragShader before calling UIOverlay.Initialize");
+	Check(vulkanDevice != nullptr, "Cannot initialize ui overlay without a valid Device");
+	
+	device = vulkanDevice;
+	ImGui_ImplGlfw_InitForVulkan(window, true);
 
 	ImGuiIO& io = ImGui::GetIO();
 
@@ -58,107 +39,11 @@ void UIOverlay::Initialize(const Device& device, VkSampleCountFlagBits rasteriza
 	io.Fonts->GetTexDataAsRGBA32(&fontData, &texWidth, &texHeight);
 	VkDeviceSize uploadSize = (u64)texWidth * (u64)texHeight * sizeof(u32);	// u64 cast to satisfy arithmetic warning
 
-	VkImageCreateInfo imageInfo = {
-		.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
-		.imageType = VK_IMAGE_TYPE_2D,
-		.format = VK_FORMAT_R8G8B8A8_UNORM,
-		.extent = {
-			.width = (u32)texWidth,
-			.height = (u32)texHeight,
-			.depth = 1
-		},
-		.mipLevels = 1,
-		.arrayLayers = 1,
-		.samples = VK_SAMPLE_COUNT_1_BIT,
-		.tiling = VK_IMAGE_TILING_OPTIMAL,
-		.usage = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
-		.sharingMode = VK_SHARING_MODE_EXCLUSIVE,
-		.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
-	};
-
-	VkCheck(vkCreateImage(device.logicalDevice, &imageInfo, nullptr, &fontImage), "Failed to create font image");
-
-	VkMemoryRequirements memReqs;
-	vkGetImageMemoryRequirements(device.logicalDevice, fontImage, &memReqs);
-	VkMemoryAllocateInfo allocInfo = { 
-		.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO ,
-		.allocationSize = memReqs.size,
-		.memoryTypeIndex = device.GetMemoryType(memReqs.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT)
-	};
-
-	VkCheck(vkAllocateMemory(device.logicalDevice, &allocInfo, nullptr, &fontMemory), "Failed to allocate memory for font image");
-	VkCheck(vkBindImageMemory(device.logicalDevice, fontImage, fontMemory, 0), "Failed to bind font image to memory");
-
-	// Create font image view
-	VkImageViewCreateInfo viewInfo = {
-		.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
-		.image = fontImage,
-		.viewType = VK_IMAGE_VIEW_TYPE_2D,
-		.format = VK_FORMAT_R8G8B8A8_UNORM,
-		.subresourceRange = {
-			.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-			.levelCount = 1,
-			.layerCount = 1
-		}
-	};
-
-	VkCheck(vkCreateImageView(device.logicalDevice, &viewInfo, nullptr, &fontView), "Failed to create image view of font image");
-
-	// Create staging buffer for font data upload
-	Buffer stagingBuffer;
-	device.CreateBuffer(VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, uploadSize, &stagingBuffer, fontData);
-
-	VkCommandBuffer copyCmd = device.CreateCommandBuffer(VK_COMMAND_BUFFER_LEVEL_PRIMARY, true);
-
-	// prepare font image for transfer
-	ImageBarrier(copyCmd, fontImage, VK_IMAGE_ASPECT_COLOR_BIT,
-		VK_PIPELINE_STAGE_NONE,		VK_PIPELINE_STAGE_TRANSFER_BIT,
-		VK_ACCESS_NONE,				VK_ACCESS_TRANSFER_WRITE_BIT,
-		VK_IMAGE_LAYOUT_UNDEFINED,	VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
-
-	VkBufferImageCopy bufferCopyRegion = {
-		.imageSubresource = {
-			.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-			.layerCount = 1,
-		},
-		.imageExtent = {
-			.width = (u32)texWidth,
-			.height = (u32)texHeight,
-			.depth = 1
-		}
-	};
-
-	vkCmdCopyBufferToImage(copyCmd, stagingBuffer.buffer, fontImage, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &bufferCopyRegion);
-
-	// prepare font image for shader read
-	ImageBarrier(copyCmd, fontImage, VK_IMAGE_ASPECT_COLOR_BIT,
-		VK_PIPELINE_STAGE_TRANSFER_BIT,			VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
-		VK_ACCESS_TRANSFER_WRITE_BIT,			VK_ACCESS_2_SHADER_SAMPLED_READ_BIT_KHR,
-		VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,	VK_IMAGE_LAYOUT_READ_ONLY_OPTIMAL_KHR);
-
-	device.FlushCommandBuffer(copyCmd, device.graphicsQueue);
-	
-	// Clean up staging buffer
-	stagingBuffer.destroy(device.logicalDevice);
-
-	// Font texture sampler
-	VkSamplerCreateInfo samplerInfo = {
-		.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
-		.magFilter = VK_FILTER_LINEAR,
-		.minFilter = VK_FILTER_LINEAR,
-		.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR,
-		.addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
-		.addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
-		.addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
-		.borderColor = VK_BORDER_COLOR_FLOAT_OPAQUE_BLACK
-	};
-
-	VkCheck(vkCreateSampler(device.logicalDevice, &samplerInfo, nullptr, &sampler), "Failed to create font image sampler");
+	// TODO: currently generates mip maps - do we want that?
+	font.CreateFromBuffer(fontData, uploadSize, *device, device->graphicsQueue, texWidth, texHeight, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_USAGE_SAMPLED_BIT, VK_IMAGE_LAYOUT_READ_ONLY_OPTIMAL);
 
 	// Create descriptor pool
-	VkDescriptorPoolSize poolSizes[] = {
-		{ .type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, .descriptorCount = 1 }
-	};
+	VkDescriptorPoolSize poolSizes[] = { { .type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, .descriptorCount = 1 } };
 	VkDescriptorPoolCreateInfo descriptorPoolCreateInfo = {
 		.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
 		.maxSets = 2,
@@ -166,7 +51,7 @@ void UIOverlay::Initialize(const Device& device, VkSampleCountFlagBits rasteriza
 		.pPoolSizes = poolSizes
 	};
 
-	VkCheck(vkCreateDescriptorPool(device.logicalDevice, &descriptorPoolCreateInfo, nullptr, &descriptorPool), "Failed to create UIOverlay descriptor pool");
+	VkCheck(vkCreateDescriptorPool(device->logicalDevice, &descriptorPoolCreateInfo, nullptr, &descriptorPool), "Failed to create UIOverlay descriptor pool");
 
 	// Descriptor set layout
 	VkDescriptorSetLayoutBinding setLayoutBindings[] = {
@@ -183,7 +68,7 @@ void UIOverlay::Initialize(const Device& device, VkSampleCountFlagBits rasteriza
 		.pBindings = setLayoutBindings
 	};
 
-	VkCheck(vkCreateDescriptorSetLayout(device.logicalDevice, &descriptorLayoutCreateInfo, nullptr, &descriptorSetLayout), "Failed to create UIOverlay descriptor set layout");
+	VkCheck(vkCreateDescriptorSetLayout(device->logicalDevice, &descriptorLayoutCreateInfo, nullptr, &descriptorSetLayout), "Failed to create UIOverlay descriptor set layout");
 
 	// Descriptor set
 	VkDescriptorSetAllocateInfo descriptorSetAllocInfo = {
@@ -193,13 +78,8 @@ void UIOverlay::Initialize(const Device& device, VkSampleCountFlagBits rasteriza
 		.pSetLayouts = &descriptorSetLayout
 	};
 
-	VkCheck(vkAllocateDescriptorSets(device.logicalDevice, &descriptorSetAllocInfo, &descriptorSet), "Failed to allocate UIOverlay descriptor set");
+	VkCheck(vkAllocateDescriptorSets(device->logicalDevice, &descriptorSetAllocInfo, &descriptorSet), "Failed to allocate UIOverlay descriptor set");
 
-	VkDescriptorImageInfo fontDescriptor = {
-		.sampler = sampler,
-		.imageView = fontView,
-		.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
-	};
 	VkWriteDescriptorSet writeDescriptorSets[] = {
 		{
 			.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
@@ -208,11 +88,11 @@ void UIOverlay::Initialize(const Device& device, VkSampleCountFlagBits rasteriza
 			.dstArrayElement = 0,
 			.descriptorCount = 1,
 			.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-			.pImageInfo = &fontDescriptor
+			.pImageInfo = &font.descriptor
 		}
 	};
 
-	vkUpdateDescriptorSets(device.logicalDevice, arraysize(writeDescriptorSets), writeDescriptorSets, 0, nullptr);
+	vkUpdateDescriptorSets(device->logicalDevice, arraysize(writeDescriptorSets), writeDescriptorSets, 0, nullptr);
 
 	// Prepare a dedicated pipeline for ui overlay rendering.
 	VkPushConstantRange pushConstantRange = {
@@ -229,7 +109,7 @@ void UIOverlay::Initialize(const Device& device, VkSampleCountFlagBits rasteriza
 		.pPushConstantRanges = &pushConstantRange
 	};
 
-	VkCheck(vkCreatePipelineLayout(device.logicalDevice, &pipelineLayoutCreateInfo, nullptr, &pipelineLayout), "Failed to create UI overlay pipeline layout");
+	VkCheck(vkCreatePipelineLayout(device->logicalDevice, &pipelineLayoutCreateInfo, nullptr, &pipelineLayout), "Failed to create UI overlay pipeline layout");
 
 	VkVertexInputBindingDescription vertexInputBindings[] = {
 		{
@@ -318,7 +198,7 @@ void UIOverlay::Initialize(const Device& device, VkSampleCountFlagBits rasteriza
 
 	VkPipelineMultisampleStateCreateInfo multisampleState = {
 		.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,
-		.rasterizationSamples = rasterizationSamples
+		.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT
 	};
 
 	VkDynamicState dynamicStateEnables[] = {
@@ -338,6 +218,7 @@ void UIOverlay::Initialize(const Device& device, VkSampleCountFlagBits rasteriza
 		.depthAttachmentFormat = depthFormat
 	};
 
+	VkPipelineShaderStageCreateInfo shaders[2] = { vertShader, fragShader };
 	VkGraphicsPipelineCreateInfo pipelineCreateInfo = {
 		.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
 		.pNext = &pipelineRenderingCreateInfo,
@@ -354,22 +235,33 @@ void UIOverlay::Initialize(const Device& device, VkSampleCountFlagBits rasteriza
 		.layout = pipelineLayout
 	};
 
-	VkCheck(vkCreateGraphicsPipelines(device.logicalDevice, VK_NULL_HANDLE, 1, &pipelineCreateInfo, nullptr, &pipeline), "Failed to create UI overlay pipeline");
+	VkCheck(vkCreateGraphicsPipelines(device->logicalDevice, VK_NULL_HANDLE, 1, &pipelineCreateInfo, nullptr, &pipeline), "Failed to create UI overlay pipeline");
 
 	// Allocate draw data buffer for vertices and indides up front. Fixed size of 1 mb for now.
 	// The bottom 3/4 of the draw data is used for storing vertices. The remaining 1/4 is used for indices.
 	// [  VkDeviceMemory  ]
 	// [     VkBuffer     ]
 	// [ vertex ] [ index ]
-	device.CreateBuffer(VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT, 1 << 20, &drawDataBuffer);
-	drawDataBuffer.map(device.logicalDevice);
+	device->CreateBuffer(VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT, 1 << 20, &drawDataBuffer);
+	drawDataBuffer.map(device->logicalDevice);
 	vertexBufferOffset = 0;
 	vertexBufferStart = (u8*)drawDataBuffer.mapped + vertexBufferOffset;
 	indexBufferOffset = drawDataBuffer.size - (drawDataBuffer.size >> 2);
 	indexBufferStart = (u8*)drawDataBuffer.mapped + indexBufferOffset;
 }
 
-void UIOverlay::Update(const Device& device) {
+void UIOverlay::RenderFrame() {
+	ImGui_ImplGlfw_NewFrame();
+	ImGui::NewFrame();
+
+	ImGui::ShowDemoWindow();
+
+	ImGui::Render();
+}
+
+void UIOverlay::Update() {
+	RenderFrame();
+
 	ImDrawData* drawData = ImGui::GetDrawData();
 
 	if (!drawData) { return; }
@@ -397,7 +289,7 @@ void UIOverlay::Update(const Device& device) {
 		indexDst += cmdList->IdxBuffer.Size;
 	}
 
-	VkCheck(drawDataBuffer.Flush(device.logicalDevice), "Failed to flush ui overlay draw data buffer to device memory");
+	VkCheck(drawDataBuffer.Flush(device->logicalDevice), "Failed to flush ui overlay draw data buffer to device memory");
 }
 
 void UIOverlay::Draw(VkCommandBuffer cmdBuffer) {
@@ -443,23 +335,21 @@ void UIOverlay::Draw(VkCommandBuffer cmdBuffer) {
 	}
 }
 
-void UIOverlay::Free(const Device& device) {
+void UIOverlay::Free() {
 	if (vertShader.module) {
-		vkDestroyShaderModule(device.logicalDevice, vertShader.module, nullptr);
+		vkDestroyShaderModule(device->logicalDevice, vertShader.module, nullptr);
 	}
 	if (fragShader.module) {
-		vkDestroyShaderModule(device.logicalDevice, fragShader.module, nullptr);
+		vkDestroyShaderModule(device->logicalDevice, fragShader.module, nullptr);
 	}
 
-	drawDataBuffer.unmap(device.logicalDevice);
-	drawDataBuffer.destroy(device.logicalDevice);
+	drawDataBuffer.unmap(device->logicalDevice);
+	drawDataBuffer.destroy(device->logicalDevice);
 
-	vkDestroyImageView(device.logicalDevice, fontView, nullptr);
-	vkDestroyImage(device.logicalDevice, fontImage, nullptr);
-	vkFreeMemory(device.logicalDevice, fontMemory, nullptr);
-	vkDestroySampler(device.logicalDevice, sampler, nullptr);
-	vkDestroyDescriptorSetLayout(device.logicalDevice, descriptorSetLayout, nullptr);
-	vkDestroyDescriptorPool(device.logicalDevice, descriptorPool, nullptr);
-	vkDestroyPipelineLayout(device.logicalDevice, pipelineLayout, nullptr);
-	vkDestroyPipeline(device.logicalDevice, pipeline, nullptr);
+	font.Destroy(*device);
+
+	vkDestroyDescriptorSetLayout(device->logicalDevice, descriptorSetLayout, nullptr);
+	vkDestroyDescriptorPool(device->logicalDevice, descriptorPool, nullptr);
+	vkDestroyPipelineLayout(device->logicalDevice, pipelineLayout, nullptr);
+	vkDestroyPipeline(device->logicalDevice, pipeline, nullptr);
 }
