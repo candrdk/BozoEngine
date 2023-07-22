@@ -14,22 +14,19 @@ constexpr u32 WIDTH = 1600;
 constexpr u32 HEIGHT = 900;
 
 GLTFModel* flightHelmet;
+u32 currentFrame = 0;
 
-struct UniformBufferObject {
+struct CameraUBO {
 	alignas(16) glm::mat4 view;
 	alignas(16) glm::mat4 proj;
 };
 
-u32 currentFrame = 0;
-
-// When moving on recording multiple command buffers, every RenderFrame should
-// have its own VkCommandPool. Commandbuffers for a given frame are then allocated
-// from this pool, and the entire pool is reset every frame.
 struct RenderFrame {
 	VkSemaphore imageAvailable;
 	VkSemaphore renderFinished;
 	VkFence inFlight;
 
+	VkCommandPool commandPool;
 	VkCommandBuffer commandBuffer;
 };
 
@@ -43,7 +40,9 @@ struct RenderAttachmentDesc {
 struct RenderAttachment {
 	VkImage image;
 	VkDeviceMemory memory;
+
 	VkImageView view;
+
 	VkFormat format;
 	VkRenderingAttachmentInfo attachmentInfo;
 };
@@ -51,9 +50,11 @@ struct RenderAttachment {
 struct DepthAttachment {
 	VkImage image;
 	VkDeviceMemory memory;
+
 	VkImageView depthStencilView;
 	VkImageView depthView;
 	VkImageView stencilView;
+
 	VkFormat format;
 	VkRenderingAttachmentInfo attachmentInfo;
 };
@@ -251,7 +252,7 @@ void CreateUniformBuffers() {
 		bz::device.CreateBuffer(
 			VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
 			VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-			sizeof(UniformBufferObject), &bz::uniformBuffers[i]);
+			sizeof(CameraUBO), &bz::uniformBuffers[i]);
 		bz::uniformBuffers[i].map(bz::device.logicalDevice);
 	}
 }
@@ -694,7 +695,7 @@ void UpdateDescriptorSets() {
 		VkDescriptorBufferInfo uniformBufferDescriptor = {
 			.buffer = bz::uniformBuffers[i].buffer,
 			.offset = 0,
-			.range = sizeof(UniformBufferObject)
+			.range = sizeof(CameraUBO)
 		};
 
 		VkWriteDescriptorSet writeDescriptorSet = {	// Binding 0: Vertex shader uniform buffer
@@ -866,12 +867,14 @@ void RecordDeferredCommandBuffer(VkCommandBuffer cmd, u32 imageIndex) {
 void CreateRenderFrames() {
 	VkSemaphoreCreateInfo semaphoreInfo = { .sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO };
 	VkFenceCreateInfo fenceInfo = { .sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO, .flags = VK_FENCE_CREATE_SIGNALED_BIT };
+	VkCommandPoolCreateInfo poolInfo = { .sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO, .queueFamilyIndex = bz::device.queueIndex.graphics };
 
 	for (u32 i = 0; i < arraysize(bz::renderFrames); i++) {
 		VkCheck(vkCreateSemaphore(bz::device.logicalDevice, &semaphoreInfo, nullptr, &bz::renderFrames[i].imageAvailable), "Failed to create imageAvailable semaphore");
 		VkCheck(vkCreateSemaphore(bz::device.logicalDevice, &semaphoreInfo, nullptr, &bz::renderFrames[i].renderFinished), "Failed to create renderFinished semaphore");
 		VkCheck(vkCreateFence(bz::device.logicalDevice, &fenceInfo, nullptr, &bz::renderFrames[i].inFlight), "Failed to create inFlight fence");
-		bz::renderFrames[i].commandBuffer = bz::device.CreateCommandBuffer(VK_COMMAND_BUFFER_LEVEL_PRIMARY);
+		VkCheck(vkCreateCommandPool(bz::device.logicalDevice, &poolInfo, nullptr, &bz::renderFrames[i].commandPool), "Failed to allocate renderframe command pool");
+		bz::renderFrames[i].commandBuffer = bz::device.CreateCommandBuffer(VK_COMMAND_BUFFER_LEVEL_PRIMARY, bz::renderFrames[i].commandPool);
 	}
 }
 
@@ -952,13 +955,14 @@ void CleanupVulkan() {
 		vkDestroySemaphore(bz::device.logicalDevice, bz::renderFrames[i].imageAvailable, nullptr);
 		vkDestroySemaphore(bz::device.logicalDevice, bz::renderFrames[i].renderFinished, nullptr);
 		vkDestroyFence(bz::device.logicalDevice, bz::renderFrames[i].inFlight, nullptr);
+		vkDestroyCommandPool(bz::device.logicalDevice, bz::renderFrames[i].commandPool, nullptr);
 	}
 
 	bz::device.DestroyDevice();
 }
 
 void UpdateUniformBuffer(u32 currentImage) {
-	UniformBufferObject ubo = {
+	CameraUBO ubo = {
 		.view = bz::camera.view,
 		.proj = bz::camera.projection
 	};
@@ -984,7 +988,8 @@ void DrawFrame() {
 	// Only reset the fence if we swapchain was valid and we are actually submitting work.
 	VkCheck(vkResetFences(bz::device.logicalDevice, 1, &bz::renderFrames[currentFrame].inFlight), "Failed to reset inFlight fence");
 
-	VkCheck(vkResetCommandBuffer(bz::renderFrames[currentFrame].commandBuffer, 0), "Failed to reset command buffer");
+	//VkCheck(vkResetCommandBuffer(bz::renderFrames[currentFrame].commandBuffer, 0), "Failed to reset command buffer");
+	VkCheck(vkResetCommandPool(bz::device.logicalDevice, bz::renderFrames[currentFrame].commandPool, 0), "Failed to reset frame command pool");
 	RecordDeferredCommandBuffer(bz::renderFrames[currentFrame].commandBuffer, imageIndex);
 
 	VkSemaphoreSubmitInfo waitSemaphoreSubmitInfo = {
