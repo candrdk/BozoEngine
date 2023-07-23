@@ -1,6 +1,3 @@
-#include "Common.h"
-
-
 #include "Device.h"
 #include "Swapchain.h"
 #include "Texture.h"
@@ -82,6 +79,9 @@ namespace bz {
 
 	VkPipeline offscreenPipeline;
 	VkPipeline deferredPipeline;
+	VkPipeline albedoPipeline, normalPipeline, occMetRoughPipeline, depthPipeline;
+
+	VkPipeline currentPipeline;
 
 	VkSampleCountFlagBits msaaSamples = VK_SAMPLE_COUNT_1_BIT;
 	bool framebufferResized = false;
@@ -106,6 +106,12 @@ void KeyCallback(GLFWwindow* window, int key, int scancode, int action, int mods
 	case GLFW_KEY_D:
 		bz::camera.ProcessKeyboard(key, action);
 		break;
+
+	case GLFW_KEY_0: bz::currentPipeline = bz::deferredPipeline; break;
+	case GLFW_KEY_1: bz::currentPipeline = bz::albedoPipeline; break;
+	case GLFW_KEY_2: bz::currentPipeline = bz::normalPipeline; break;
+	case GLFW_KEY_3: bz::currentPipeline = bz::occMetRoughPipeline; break;
+	case GLFW_KEY_4: bz::currentPipeline = bz::depthPipeline; break;
 	}
 }
 
@@ -540,7 +546,30 @@ void SetupPipelines() {
 		.layout = bz::pipelineLayout
 	};
 
+	VkSpecializationMapEntry mapEntries[] = { {.size = sizeof(u32)}, {.constantID = 1, .offset = sizeof(u32), .size = sizeof(u32)} };
+	u32 specializations[] = { 0, bz::msaaSamples };
+	VkSpecializationInfo specializationInfo = {
+		.mapEntryCount = arraysize(mapEntries),
+		.pMapEntries = mapEntries,
+		.dataSize = sizeof(specializations),
+		.pData = specializations
+	};
+
+	deferredShaders[1].pSpecializationInfo = &specializationInfo;
 	VkCheck(vkCreateGraphicsPipelines(bz::device.logicalDevice, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &bz::deferredPipeline), "Failed to create graphics pipeline");
+
+	// Specialization constants for pipelines only rendering albedo, normal, occMetRough or depth.
+	specializations[0] = 1;
+	VkCheck(vkCreateGraphicsPipelines(bz::device.logicalDevice, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &bz::albedoPipeline), "Failed to create albedo-only pipeline");
+	specializations[0] = 2;
+	VkCheck(vkCreateGraphicsPipelines(bz::device.logicalDevice, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &bz::normalPipeline), "Failed to create normal-only pipeline");
+	specializations[0] = 3;
+	VkCheck(vkCreateGraphicsPipelines(bz::device.logicalDevice, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &bz::occMetRoughPipeline), "Failed to create occMetRough-only pipeline");
+	specializations[0] = 4;
+	VkCheck(vkCreateGraphicsPipelines(bz::device.logicalDevice, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &bz::depthPipeline), "Failed to create depth-only pipeline");
+
+	// Set the default pipeline
+	bz::currentPipeline = bz::deferredPipeline;
 
 	VkPipelineShaderStageCreateInfo offscreenShaders[] = {
 		LoadShader("shaders/offscreen.vert.spv", VK_SHADER_STAGE_VERTEX_BIT),
@@ -845,7 +874,7 @@ void RecordDeferredCommandBuffer(VkCommandBuffer cmd, u32 imageIndex) {
 		.pStencilAttachment = nullptr
 	};
 	
-	vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, bz::deferredPipeline);
+	vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, bz::currentPipeline);
 	vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, bz::pipelineLayout, 1, 1, &bz::descriptorSet, 0, nullptr);
 
 	vkCmdBeginRendering(cmd, &renderingInfo);
@@ -946,6 +975,12 @@ void CleanupVulkan() {
 
 	vkDestroyPipeline(bz::device.logicalDevice, bz::deferredPipeline, nullptr);
 	vkDestroyPipeline(bz::device.logicalDevice, bz::offscreenPipeline, nullptr);
+
+	vkDestroyPipeline(bz::device.logicalDevice, bz::albedoPipeline, nullptr);
+	vkDestroyPipeline(bz::device.logicalDevice, bz::normalPipeline, nullptr);
+	vkDestroyPipeline(bz::device.logicalDevice, bz::occMetRoughPipeline, nullptr);
+	vkDestroyPipeline(bz::device.logicalDevice, bz::depthPipeline, nullptr);
+
 	vkDestroyPipelineLayout(bz::device.logicalDevice, bz::pipelineLayout, nullptr);
 
 	vkDestroyDescriptorSetLayout(bz::device.logicalDevice, bz::descriptorSetLayout, nullptr);

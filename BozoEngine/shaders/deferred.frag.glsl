@@ -9,7 +9,8 @@ layout (location = 0) in vec2 inUV;
 
 layout (location = 0) out vec4 outFragcolor;
 
-#define NUM_SAMPLES 8
+layout (constant_id = 0) const int RENDER_MODE = 0;
+layout (constant_id = 1) const int NUM_SAMPLES = 1;
 
 // Manual resolve for MSAA samples 
 vec4 resolve(sampler2DMS tex, ivec2 uv) {
@@ -25,16 +26,15 @@ vec4 resolve(sampler2DMS tex, ivec2 uv) {
 void main() {
 	ivec2 uv = ivec2(inUV * textureSize(samplerAlbedo));
 
-	if (inUV.y < 0.25) {
-		outFragcolor = resolve(samplerAlbedo, uv);
-	}
-	else if (inUV.y < 0.5) {
-		outFragcolor = resolve(samplerNormal, uv);
-	}
-	else if (inUV.y < 0.75) {
-		outFragcolor = resolve(samplerOccMetRough, uv);
-	} 
-	else {
-		outFragcolor = resolve(samplerDepth, uv);
+	switch(RENDER_MODE) {
+	case 0:
+	case 1:
+		outFragcolor = resolve(samplerAlbedo, uv); break;
+	case 2:
+		outFragcolor = resolve(samplerNormal, uv); break;
+	case 3:
+		outFragcolor = resolve(samplerOccMetRough, uv); break;
+	case 4:
+		outFragcolor = resolve(samplerDepth, uv); break;
 	}
 }
