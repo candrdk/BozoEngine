@@ -622,7 +622,8 @@ void SetupDescriptorSetLayout() {
 			.binding = 0,
 			.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
 			.descriptorCount = 1,
-			.stageFlags = VK_SHADER_STAGE_VERTEX_BIT
+			// TODO: should only be used in vertex stage. Atm, we just reuse the camera ubo in the deferred pass, but it should have its own ubo.
+			.stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT
 		}
 	};
 	
@@ -718,7 +719,6 @@ void AllocateDescriptorSets() {
 }
 
 void UpdateDescriptorSets() {
-	// Offscreen: Model ubo
 	for (u32 i = 0; i < arraysize(bz::uboDescriptorSets); i++) {
 		// Buffer descriptor for the offscreen uniform buffer
 		VkDescriptorBufferInfo uniformBufferDescriptor = {
@@ -805,7 +805,6 @@ void RecordDeferredCommandBuffer(VkCommandBuffer cmd, u32 imageIndex) {
 		.pDepthAttachment = depthAttachment,
 		.pStencilAttachment = depthAttachment
 	};
-
 
 	ImageBarrier(cmd, bz::depth.image, VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT,
 		VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT,		VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT,
