@@ -50,19 +50,31 @@ vec3 reconstruct_viewpos(ivec2 uv) {
 	return viewSpacePosition.xyz / viewSpacePosition.w;
 }
 
-vec4 shade_pixel(ivec2 uv) {
-	vec3 diffuseColor = resolve(samplerAlbedo, uv).rgb;
+vec3 blinn_phong(vec3 n, vec3 l, vec3 v) {
 	vec3 ambientColor = vec3(0.25, 0.25, 0.25);
 	vec3 lightColor = vec3(1.0, 1.0, 1.0);
+	vec3 specularColor = vec3(0.25, 0.25, 0.25);
+	float alpha = 200.0;
+	
+	vec3 directColor = lightColor * clamp(dot(n, l), 0.0, 1.0);
+	vec3 diffuse = (ambientColor + directColor) * resolve(samplerAlbedo, ivec2(gl_FragCoord)).rgb;
 
+	vec3 h = normalize(l + v);
+	float highlight = pow(clamp(dot(n, h), 0.0, 1.0), alpha) * float(dot(n, l) > 0.0);
+	vec3 specular = lightColor * specularColor * highlight;
+
+	return specular + diffuse;
+}
+
+vec4 shade_pixel(ivec2 uv) {
 	vec3 pixelpos = reconstruct_viewpos(uv);
 	vec3 lightpos = (uboScene.view * vec4(0.5, 0.0, 0.5, 1.0)).xyz;
 
 	vec3 n = normalize((uboScene.view * vec4(resolve(samplerNormal, uv).xyz, 0.0)).xyz);
 	vec3 l = normalize(lightpos - pixelpos);
+	vec3 v = vec3(0.0, 0.0, 1.0);	// TODO: get camera view dir (normalized)
 
-	vec3 directColor = lightColor * clamp(dot(n, l), 0.0, 1.0);
-	return vec4((ambientColor + directColor) * diffuseColor, 1.0);
+	return vec4(blinn_phong(n, l, v), 1.0);
 }
 
 void main() {
@@ -76,7 +88,10 @@ void main() {
 	case 2:
 		outFragcolor = resolve(samplerNormal, uv); break;
 	case 3:
-		outFragcolor = resolve(samplerOccMetRough, uv); break;
+		int channel = int(inUV.x < 0.5) + 2 * int(inUV.y < 0.5);
+		outFragcolor = vec4(0.0, 0.0, 0.0, 1.0);
+		outFragcolor[channel] = resolve(samplerOccMetRough, uv)[channel];
+		break;
 	case 4:
 		outFragcolor = vec4(resolve_depth(uv), 0.0, 0.0, 1.0); break;
 	}
