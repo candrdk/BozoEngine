@@ -17,8 +17,8 @@ void main() {
 
     // We use vertex normals for now - will figure out proper transforms for the normal map later on, 
     // but this is ok for the basic lighting being used now.
-    outNormal = vec4(inNormal, 1.0);    
-    //outNormal = vec4(texture(samplerNormal, inUV).rgb, 1.0);
+    outNormal = vec4(normalize(inNormal), 1.0);
+    //outNormal = vec4(texture(samplerNormal, inUV).rgb, 0.0);
 
     outOccMetRough = vec4(texture(samplerOccMetRough, inUV).xyz, 1.0);
 }

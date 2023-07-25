@@ -468,7 +468,185 @@ void CreateDescriptorPool() {
 	VkCheck(vkCreateDescriptorPool(bz::device.logicalDevice, &poolInfo, nullptr, &bz::descriptorPool), "Failed to create descriptor pool");
 }
 
+// TODO: Temporary
+struct Program {
+	u32 stageCount;
+	VkPipelineShaderStageCreateInfo pipelineShaderStageCreateInfos[2];
+
+	~Program() {
+		vkDestroyShaderModule(bz::device.logicalDevice, pipelineShaderStageCreateInfos[0].module, nullptr);
+		vkDestroyShaderModule(bz::device.logicalDevice, pipelineShaderStageCreateInfos[1].module, nullptr);
+	}
+};
+
+void CreatePipeline(VkPipeline* pipeline, VkPipelineLayout pipelineLayout, const Program& shaders,
+	std::vector<VkVertexInputBindingDescription> vertexBindingDescription, std::vector<VkVertexInputAttributeDescription> vertexAttributeDescriptions,
+	VkPrimitiveTopology primitiveTopology,
+	VkCullModeFlags triangleCullMode, VkFrontFace triangleFrontFace,
+	VkSampleCountFlagBits msaaSampleCount,
+	std::vector<VkPipelineColorBlendAttachmentState> colorBlendAttachments,
+	std::vector<VkFormat> colorAttachmentFormats, VkFormat depthAttachmentFormat, VkFormat stencilAttachmentFormat)
+{
+	VkDynamicState dynamicState[] = { VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR };
+	VkPipelineDynamicStateCreateInfo dynamicStateInfo = { .sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO, .dynamicStateCount = arraysize(dynamicState), .pDynamicStates = dynamicState };
+	VkPipelineViewportStateCreateInfo viewportStateInfo = { .sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO, .viewportCount = 1, .scissorCount = 1 };
+
+	VkPipelineVertexInputStateCreateInfo vertexInputInfo = {
+		.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
+		.vertexBindingDescriptionCount = (u32)vertexBindingDescription.size(),
+		.pVertexBindingDescriptions = vertexBindingDescription.data(),
+		.vertexAttributeDescriptionCount = (u32)vertexAttributeDescriptions.size(),
+		.pVertexAttributeDescriptions = vertexAttributeDescriptions.data()
+	};
+
+	VkPipelineInputAssemblyStateCreateInfo inputAssemblyInfo = {
+		.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,
+		.topology = primitiveTopology,
+		.primitiveRestartEnable = VK_FALSE
+	};
+
+	VkPipelineRasterizationStateCreateInfo rasterizationInfo = {
+		.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
+		.depthClampEnable = VK_FALSE,		// depth clamp discards fragments outside the near/far planes. Usefull for shadow maps, requires enabling a GPU feature.
+		.rasterizerDiscardEnable = VK_FALSE,
+		.polygonMode = VK_POLYGON_MODE_FILL,
+		.cullMode = triangleCullMode,
+		.frontFace = triangleFrontFace,
+		.depthBiasEnable = VK_FALSE,
+		.lineWidth = 1.0f,
+	};
+
+	VkPipelineMultisampleStateCreateInfo multisampeInfo = {
+		.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,
+		.rasterizationSamples = msaaSampleCount,
+		.sampleShadingEnable = VK_FALSE
+	};
+
+	VkPipelineDepthStencilStateCreateInfo depthStencilInfo = {
+		.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO,
+		.depthTestEnable = VK_TRUE,
+		.depthWriteEnable = VK_TRUE,
+		.depthCompareOp = VK_COMPARE_OP_GREATER_OR_EQUAL, // inverse z
+		.depthBoundsTestEnable = VK_FALSE,
+		.stencilTestEnable = VK_FALSE,
+		.minDepthBounds = 0.0f,
+		.maxDepthBounds = 1.0f
+	};
+
+	VkPipelineColorBlendStateCreateInfo colorBlendStateInfo = {
+		.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO,
+		.logicOpEnable = VK_FALSE,
+		.attachmentCount = (u32)colorBlendAttachments.size(),
+		.pAttachments = colorBlendAttachments.data()
+	};
+
+	VkPipelineRenderingCreateInfo renderingCreateInfo = {
+		.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO,
+		.colorAttachmentCount = (u32)colorAttachmentFormats.size(),
+		.pColorAttachmentFormats = colorAttachmentFormats.data(),
+		.depthAttachmentFormat = depthAttachmentFormat,
+		.stencilAttachmentFormat = stencilAttachmentFormat
+	};
+
+	VkGraphicsPipelineCreateInfo pipelineInfo = {
+		.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
+		.pNext = &renderingCreateInfo,
+		.stageCount = shaders.stageCount,
+		.pStages = shaders.pipelineShaderStageCreateInfos,
+		.pVertexInputState = &vertexInputInfo,
+		.pInputAssemblyState = &inputAssemblyInfo,
+		.pViewportState = &viewportStateInfo,
+		.pRasterizationState = &rasterizationInfo,
+		.pMultisampleState = &multisampeInfo,
+		.pDepthStencilState = &depthStencilInfo,
+		.pColorBlendState = &colorBlendStateInfo,
+		.pDynamicState = &dynamicStateInfo,
+		.layout = pipelineLayout
+	};
+
+	VkCheck(vkCreateGraphicsPipelines(bz::device.logicalDevice, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, pipeline), "Failed to create graphics pipeline");
+}
+
 void SetupPipelines() {
+	Program offscreen = {
+		.stageCount = 2,
+		.pipelineShaderStageCreateInfos = {
+			LoadShader("shaders/offscreen.vert.spv", VK_SHADER_STAGE_VERTEX_BIT),
+			LoadShader("shaders/offscreen.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT)
+		}
+	};
+
+	CreatePipeline(&bz::offscreenPipeline, bz::pipelineLayout, offscreen,
+		{ GLTFModel::Vertex::GetBindingDescription() }, GLTFModel::Vertex::GetAttributeDescriptions(),
+		VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST, VK_CULL_MODE_BACK_BIT, VK_FRONT_FACE_COUNTER_CLOCKWISE,
+		bz::msaaSamples, {
+			{.blendEnable = VK_FALSE, .colorWriteMask = 0xF },
+			{.blendEnable = VK_FALSE, .colorWriteMask = 0xF },
+			{.blendEnable = VK_FALSE, .colorWriteMask = 0xF },
+		}, { bz::albedo.format, bz::normal.format, bz::occMetRough.format }, bz::depth.format, bz::depth.format);
+
+	Program deferred = {
+		.stageCount = 2,
+		.pipelineShaderStageCreateInfos = {
+			LoadShader("shaders/deferred.vert.spv", VK_SHADER_STAGE_VERTEX_BIT),
+			LoadShader("shaders/deferred.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT)
+		}
+	};
+
+	// TODO: shader reflection etc.
+	// optional `std::vector<const void*> specializations` parameter should be passed to CreateShader
+	// CreateShader then asserts that `specializations.size()` matches the expected size
+	// if no specializations were found during reflection, `specializations` is untouched and can be omitted when creating a shader
+	VkSpecializationMapEntry mapEntries[] = { {.size = sizeof(u32)}, {.constantID = 1, .offset = sizeof(u32), .size = sizeof(u32)} };
+	u32 specializations[] = { 0, (u32)bz::msaaSamples };
+	VkSpecializationInfo specializationInfo = {
+		.mapEntryCount = arraysize(mapEntries),
+		.pMapEntries = mapEntries,
+		.dataSize = sizeof(specializations),
+		.pData = specializations
+	};
+	deferred.pipelineShaderStageCreateInfos[1].pSpecializationInfo = &specializationInfo;
+
+	CreatePipeline(&bz::deferredPipeline, bz::pipelineLayout, deferred, {}, {},
+		VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST, VK_CULL_MODE_FRONT_BIT, VK_FRONT_FACE_COUNTER_CLOCKWISE,
+		VK_SAMPLE_COUNT_1_BIT,
+		{ {.blendEnable = VK_FALSE, .colorWriteMask = 0xF } },
+		{ bz::swapchain.format }, bz::depth.format, bz::depth.format);
+
+	// TODO: this should just be done w/ an integer in the ubo. separate pipelines is overkill.
+	specializations[0] = 1;
+	CreatePipeline(&bz::albedoPipeline, bz::pipelineLayout, deferred, {}, {},
+		VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST, VK_CULL_MODE_FRONT_BIT, VK_FRONT_FACE_COUNTER_CLOCKWISE,
+		VK_SAMPLE_COUNT_1_BIT,
+		{ {.blendEnable = VK_FALSE, .colorWriteMask = 0xF } },
+		{ bz::swapchain.format }, bz::depth.format, bz::depth.format);
+
+	specializations[0] = 2;
+	CreatePipeline(&bz::normalPipeline, bz::pipelineLayout, deferred, {}, {},
+		VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST, VK_CULL_MODE_FRONT_BIT, VK_FRONT_FACE_COUNTER_CLOCKWISE,
+		VK_SAMPLE_COUNT_1_BIT,
+		{ {.blendEnable = VK_FALSE, .colorWriteMask = 0xF } },
+		{ bz::swapchain.format }, bz::depth.format, bz::depth.format);
+
+	specializations[0] = 3;
+	CreatePipeline(&bz::occMetRoughPipeline, bz::pipelineLayout, deferred, {}, {},
+		VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST, VK_CULL_MODE_FRONT_BIT, VK_FRONT_FACE_COUNTER_CLOCKWISE,
+		VK_SAMPLE_COUNT_1_BIT,
+		{ {.blendEnable = VK_FALSE, .colorWriteMask = 0xF } },
+		{ bz::swapchain.format }, bz::depth.format, bz::depth.format);
+
+	specializations[0] = 4;
+	CreatePipeline(&bz::depthPipeline, bz::pipelineLayout, deferred, {}, {},
+		VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST, VK_CULL_MODE_FRONT_BIT, VK_FRONT_FACE_COUNTER_CLOCKWISE,
+		VK_SAMPLE_COUNT_1_BIT,
+		{ {.blendEnable = VK_FALSE, .colorWriteMask = 0xF } },
+		{ bz::swapchain.format }, bz::depth.format, bz::depth.format);
+
+	bz::currentPipeline = bz::deferredPipeline;
+}
+
+#if 0
+void SetupPipelines2() {
 	VkPipelineShaderStageCreateInfo deferredShaders[] = {
 		LoadShader("shaders/deferred.vert.spv", VK_SHADER_STAGE_VERTEX_BIT),
 		LoadShader("shaders/deferred.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT)
@@ -547,7 +725,7 @@ void SetupPipelines() {
 	};
 
 	VkSpecializationMapEntry mapEntries[] = { {.size = sizeof(u32)}, {.constantID = 1, .offset = sizeof(u32), .size = sizeof(u32)} };
-	u32 specializations[] = { 0, bz::msaaSamples };
+	u32 specializations[] = { 0, (u32)bz::msaaSamples };
 	VkSpecializationInfo specializationInfo = {
 		.mapEntryCount = arraysize(mapEntries),
 		.pMapEntries = mapEntries,
@@ -615,6 +793,7 @@ void SetupPipelines() {
 	vkDestroyShaderModule(bz::device.logicalDevice, offscreenShaders[0].module, nullptr);
 	vkDestroyShaderModule(bz::device.logicalDevice, offscreenShaders[1].module, nullptr);
 }
+#endif
 
 void SetupDescriptorSetLayout() {
 	VkDescriptorSetLayoutBinding uboLayoutBinding[] = {
