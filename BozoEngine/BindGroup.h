@@ -80,7 +80,7 @@ struct BindGroup {
     BindGroupLayout layout;
     VkDescriptorSet descriptorSet = VK_NULL_HANDLE;
 
-    static BindGroup Create(const Device& device, VkDescriptorPool descriptorPool, BindGroupLayout layout, const BindGroupDesc& desc) {
+    static BindGroup Create(const Device& device, VkDescriptorPool descriptorPool, BindGroupLayout layout, const BindGroupDesc&& desc) {
         VkDescriptorSetAllocateInfo allocInfo = {
             .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
             .descriptorPool = descriptorPool,
@@ -91,11 +91,11 @@ struct BindGroup {
         BindGroup bindGroup = { .layout = layout };
         vkAllocateDescriptorSets(device.logicalDevice, &allocInfo, &bindGroup.descriptorSet);
 
-        bindGroup.Update(device, desc);
+        bindGroup.Update(device, std::forward<const BindGroupDesc&&>(desc));
         return bindGroup;
     }
 
-    void Update(const Device& device, const BindGroupDesc& desc) {
+    void Update(const Device& device, const BindGroupDesc&& desc) {
         for (const auto& bufferBinding : desc.buffers) {
             VkDescriptorBufferInfo bufferInfo = {
                 .buffer = bufferBinding.buffer.buffer,

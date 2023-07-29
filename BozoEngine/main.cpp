@@ -966,54 +966,65 @@ void InitVulkan() {
 	Shader deferredVert = Shader::Create(bz::device, "shaders/deferred.vert.spv");
 	Shader deferredFrag = Shader::Create(bz::device, "shaders/deferred.frag.spv");
 
-	Pipeline offscreenPipeline = Pipeline::Create(bz::device, VK_PIPELINE_BIND_POINT_GRAPHICS, PipelineDesc{
+	BindGroupLayout globalsLayout = BindGroupLayout::Create(bz::device, { 
+		{ .binding = 0, .type = Binding::BUFFER } 
+	});
+
+	BindGroupLayout materialLayout = BindGroupLayout::Create(bz::device, {
+		{ .binding = 0, .type = Binding::TEXTURE, .stages = Binding::FRAGMENT },
+		{ .binding = 1, .type = Binding::TEXTURE, .stages = Binding::FRAGMENT },
+		{ .binding = 2, .type = Binding::TEXTURE, .stages = Binding::FRAGMENT }
+	});
+
+	Pipeline offscreenPipeline = Pipeline::Create(bz::device, VK_PIPELINE_BIND_POINT_GRAPHICS, {
+		.debugName = "Offscreen pipeline",
 		.shaders = { offscreenVert, offscreenFrag },
-		.attachments = {
-			.formats = { bz::albedo.format, bz::normal.format, bz::occMetRough.format },
-			.depthStencilFormat = bz::depth.format,
-			.blendEnable = VK_FALSE,
-			.blendStates = {
-				{.blendEnable = VK_FALSE, .colorWriteMask = 0xF },
-				{.blendEnable = VK_FALSE, .colorWriteMask = 0xF },
-				{.blendEnable = VK_FALSE, .colorWriteMask = 0xF },
+		.bindGroups = { globalsLayout, materialLayout },
+		.graphicsState = {
+			.attachments = {
+				.formats = { bz::albedo.format, bz::normal.format, bz::occMetRough.format },
+				.depthStencilFormat = bz::depth.format
 			},
-		},
-		.rasterization = {
-			.cullMode = VK_CULL_MODE_BACK_BIT,
-			.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE
-		},
-		.sampleCount = bz::msaaSamples,
-		.vertexInput = { 
-			.bindingDesc = { GLTFModel::Vertex::GetBindingDescription() },
-			.attributeDesc = GLTFModel::Vertex::GetAttributeDescriptions()
+			.rasterization = {
+				.cullMode = VK_CULL_MODE_BACK_BIT,
+				.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE
+			},
+			.sampleCount = bz::msaaSamples,
+			.vertexInput = {
+				.bindingDesc = { GLTFModel::Vertex::GetBindingDescription() },
+				.attributeDesc = GLTFModel::Vertex::GetAttributeDescriptions()
+			}
 		}
 	});
 
-	Pipeline deferredPipeline = Pipeline::Create(bz::device, VK_PIPELINE_BIND_POINT_GRAPHICS, PipelineDesc{
+	Pipeline deferredPipeline = Pipeline::Create(bz::device, VK_PIPELINE_BIND_POINT_GRAPHICS, {
+		.debugName = "Deferred pipeline",
 		.shaders = { deferredVert, deferredFrag },
-		.attachments = {
-			.formats = { bz::swapchain.format },
-			.depthStencilFormat = bz::depth.format,
-			.blendEnable = VK_FALSE,
-			.blendStates = { {.blendEnable = VK_FALSE, .colorWriteMask = 0xF } },
-		},
-		.rasterization = {
-			.cullMode = VK_CULL_MODE_FRONT_BIT,
-			.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE
-		},
-		.sampleCount = VK_SAMPLE_COUNT_1_BIT
+		.graphicsState = {
+			.attachments = {
+				.formats = { bz::swapchain.format },
+				.depthStencilFormat = bz::depth.format,
+				.blendEnable = VK_FALSE,
+				.blendStates = { {.blendEnable = VK_FALSE, .colorWriteMask = 0xF } },
+			},
+			.rasterization = {
+				.cullMode = VK_CULL_MODE_FRONT_BIT,
+				.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE
+			},
+			.sampleCount = VK_SAMPLE_COUNT_1_BIT
+		}
 	});
 
 	// TODO: Sample api.
-	// make BINDGROUP strongly typed (enum class), and take it as a param for createBindGroup
-	// Union sampler, view, layout into a descriptor / allow us to just give a Texture2D directly
-	// instead of having to manually extract samler,view,layout information from it...
+	// * Maybe make BINDGROUP strongly typed, and take it as a param for createBindGroup?
+	// * Find a way to create buffer/texture bindings by just giving a Buffer/Texture2D directly.
 	// TODO: figure out if user should be responsible for freeing bindgroups / how to handle their reuse
+#if 0
 	enum BINDGROUP {
 		GLOBALS = 0,
 		MATERIAL = 1
 	};
-#if 0
+
 	BindGroup cameraUBO_0 = offscreenPipeline.CreateBindGroup(bz::device, bz::descriptorPool, BINDGROUP::GLOBALS, {
 		.buffers = { { .binding = 0, .buffer = bz::uniformBuffers[0], .offset = 0, .size = 0 }}
 	});
@@ -1031,6 +1042,9 @@ void InitVulkan() {
 	offscreenFrag.Destroy(bz::device);
 	deferredVert.Destroy(bz::device);
 	deferredFrag.Destroy(bz::device);
+
+	offscreenPipeline.Destroy(bz::device);
+	deferredPipeline.Destroy(bz::device);
 
 	CreateRenderFrames();
 }

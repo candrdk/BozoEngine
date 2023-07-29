@@ -6,40 +6,46 @@
 #include "Shader.h"
 
 struct PipelineDesc {
-    std::vector<Shader> shaders;
-
     // TODO: fix these up as needed - this is just a rough estimate of what PipelineDesc might look like.
-    struct {
-        std::vector<VkFormat> formats;
-        VkFormat depthStencilFormat;
+    struct GraphicsPipelineStateDesc {
+        struct {
+            std::vector<VkFormat> formats;
+            VkFormat depthStencilFormat;
 
-        VkBool32 blendEnable;
-        std::vector<VkPipelineColorBlendAttachmentState> blendStates;
-    } attachments;
+            VkBool32 blendEnable = VK_FALSE;
+            std::vector<VkPipelineColorBlendAttachmentState> blendStates = std::vector<VkPipelineColorBlendAttachmentState>(formats.size(), { .blendEnable = blendEnable, .colorWriteMask = 0xF });
+        } attachments;
 
-    struct {
-        VkCullModeFlags cullMode;
-        VkFrontFace frontFace;
-    } rasterization;
+        struct {
+            VkCullModeFlags cullMode;
+            VkFrontFace frontFace;
+        } rasterization;
 
-    VkSampleCountFlagBits sampleCount = VK_SAMPLE_COUNT_1_BIT;
+        VkSampleCountFlagBits sampleCount = VK_SAMPLE_COUNT_1_BIT;
 
-    struct {
-        std::vector<VkVertexInputBindingDescription> bindingDesc = {};
-        std::vector<VkVertexInputAttributeDescription> attributeDesc = {};
-    } vertexInput = {};
+        struct {
+            std::vector<VkVertexInputBindingDescription> bindingDesc = {};
+            std::vector<VkVertexInputAttributeDescription> attributeDesc = {};
+        } vertexInput = {};
 
-    struct {
-        bool depthTestEnable = true;
-        bool depthWriteEnable = true;
-        VkCompareOp depthCompareOp = VK_COMPARE_OP_GREATER_OR_EQUAL;
-    } depthStencil = {};
+        struct {
+            bool depthTestEnable = true;
+            bool depthWriteEnable = true;
+            VkCompareOp depthCompareOp = VK_COMPARE_OP_GREATER_OR_EQUAL;
+        } depthStencil = {};
 
-    struct {
-        std::vector<VkSpecializationMapEntry> mapEntries = {};
-        size_t dataSize = 0;
-        void* pData = nullptr;
-    } specialization = {};
+        struct {
+            std::vector<VkSpecializationMapEntry> mapEntries = {};
+            size_t dataSize = 0;
+            void* pData = nullptr;
+        } specialization = {};
+    };
+
+    const char* debugName = nullptr;
+    std::vector<Shader> shaders;
+    std::vector<BindGroupLayout> bindGroups;
+
+    GraphicsPipelineStateDesc graphicsState;
 };
 
 struct Pipeline {
@@ -49,15 +55,29 @@ struct Pipeline {
     VkPipeline pipeline;
     VkPushConstantRange pushConstants;
 
-    static Pipeline Create(const Device& device, VkPipelineBindPoint bindPoint, PipelineDesc desc) {
-        std::vector<ShaderBinding> mergedShaderBindings = MergeShaderBindings(device, desc.shaders);
-        std::vector<BindGroupLayout> bindGroupLayouts = CreatePipelineBindGroupLayouts(device, mergedShaderBindings);
+    static Pipeline Create(const Device& device, VkPipelineBindPoint bindPoint, const PipelineDesc&& desc) {
+        std::vector<BindGroupLayout> bindGroupLayouts = desc.bindGroups;
+        if (bindGroupLayouts.size() == 0) {
+            std::vector<ShaderBinding> mergedShaderBindings = MergeShaderBindings(device, desc.shaders);
+            bindGroupLayouts = CreatePipelineBindGroupLayouts(device, mergedShaderBindings);
+        }
+
         VkPushConstantRange pushConstants = MergePushConstants(desc.shaders);
 
         VkPipelineLayout pipelineLayout = CreatePipelineLayout(device, bindGroupLayouts, &pushConstants);
-        VkPipeline pipeline = CreatePipeline(device, pipelineLayout, desc);
+        VkPipeline pipeline = CreatePipeline(device, pipelineLayout, desc.shaders, desc.graphicsState);
 
-        return Pipeline{
+        if (desc.debugName) {
+            VkDebugUtilsObjectNameInfoEXT nameInfo = {
+                .sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
+                .objectType = VK_OBJECT_TYPE_PIPELINE,
+                .objectHandle = (u64)pipeline,
+                .pObjectName = desc.debugName
+            };
+            VkCheck(vkSetDebugUtilsObjectNameEXT(device.logicalDevice, &nameInfo), "Failed to set debug name for pipeline");
+        }
+
+        return {
             .type = bindPoint,
             .bindGroupLayouts = bindGroupLayouts,
             .pipelineLayout = pipelineLayout,
@@ -67,15 +87,17 @@ struct Pipeline {
     }
 
     void Destroy(const Device& device) {
-        for (BindGroupLayout& bindGroupLayout : bindGroupLayouts) {
-            bindGroupLayout.Destroy(device);
+        for (BindGroupLayout& layout : bindGroupLayouts) {
+            layout.Destroy(device);
         }
+
         vkDestroyPipelineLayout(device.logicalDevice, pipelineLayout, nullptr);
         vkDestroyPipeline(device.logicalDevice, pipeline, nullptr);
     }
 
-    BindGroup CreateBindGroup(const Device& device, VkDescriptorPool descriptorPool, u32 slotIdx, const BindGroupDesc& desc) {
-        return BindGroup::Create(device, descriptorPool, bindGroupLayouts[slotIdx], desc);
+    BindGroup CreateBindGroup(const Device& device, VkDescriptorPool descriptorPool, u32 bindGroupSlot, const BindGroupDesc&& desc) {
+        Check(bindGroupSlot < bindGroupLayouts.size(), "Pipeline does not support bindgroups for slot %i", bindGroupSlot);
+        return BindGroup::Create(device, descriptorPool, bindGroupLayouts[bindGroupSlot], std::forward<const BindGroupDesc&&>(desc));
     }
 
 private:
@@ -122,26 +144,28 @@ private:
 
     static std::vector<BindGroupLayout> CreatePipelineBindGroupLayouts(const Device& device, std::vector<ShaderBinding> shaderBindings) {
         std::vector<Binding> bindings[4];
-        for (u32 i = 0; i < 4; i++) {
+        u32 maxBindGroupSlot = 0;
+        for (u32 i = 0; i < arraysize(bindings); i++) {
             for (const ShaderBinding& shaderBinding : shaderBindings) {
                 if (shaderBinding.slot == i) {
                     bindings[i].push_back(shaderBinding.desc);
+                    maxBindGroupSlot = i + 1;
                 }
             }
         }
 
-        std::vector<BindGroupLayout> bindGroupLayouts;
-        for (u32 i = 0; i < 4; i++) {
-            bindGroupLayouts.push_back(BindGroupLayout::Create(device, bindings[i]));
+        std::vector<BindGroupLayout> bindGroupLayouts(maxBindGroupSlot);
+        for (u32 i = 0; i < maxBindGroupSlot; i++) {
+            bindGroupLayouts[i] = BindGroupLayout::Create(device, bindings[i]);
         }
 
         return bindGroupLayouts;
     }
 
     static VkPipelineLayout CreatePipelineLayout(const Device& device, std::vector<BindGroupLayout> bindGroupLayouts, VkPushConstantRange* pushConstants) {
-        std::vector<VkDescriptorSetLayout> setLayouts(bindGroupLayouts.size());
-        for (u32 i = 0; i < bindGroupLayouts.size(); i++) {
-            setLayouts[i] = bindGroupLayouts[i].descriptorSetLayout;
+        std::vector<VkDescriptorSetLayout> setLayouts;
+        for (const BindGroupLayout& layout : bindGroupLayouts) {
+            setLayouts.push_back(layout.descriptorSetLayout);
         }
         
         VkPipelineLayoutCreateInfo pipelineLayoutInfo = {
@@ -158,7 +182,7 @@ private:
         return pipelineLayout;
     }
     
-    static VkPipeline CreatePipeline(const Device& device, VkPipelineLayout pipelineLayout, PipelineDesc desc) {
+    static VkPipeline CreatePipeline(const Device& device, VkPipelineLayout pipelineLayout, std::vector<Shader> shaders, PipelineDesc::GraphicsPipelineStateDesc desc) {
         VkDynamicState dynamicState[] = { VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR };
         VkPipelineDynamicStateCreateInfo dynamicStateInfo = { .sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO, .dynamicStateCount = arraysize(dynamicState), .pDynamicStates = dynamicState };
         VkPipelineViewportStateCreateInfo viewportStateInfo = { .sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO, .viewportCount = 1, .scissorCount = 1 };
@@ -174,7 +198,7 @@ private:
         };
 
         std::vector<VkPipelineShaderStageCreateInfo> shaderStageCreateInfos;
-        for (const Shader& shader : desc.shaders) {
+        for (const Shader& shader : shaders) {
             shaderStageCreateInfos.push_back({
                 .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
                 .stage = shader.stage,
