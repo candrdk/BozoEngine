@@ -88,7 +88,7 @@ struct BindGroup {
             .pSetLayouts = &layout.descriptorSetLayout
         };
 
-        BindGroup bindGroup;
+        BindGroup bindGroup = { .layout = layout };
         vkAllocateDescriptorSets(device.logicalDevice, &allocInfo, &bindGroup.descriptorSet);
 
         bindGroup.Update(device, desc);

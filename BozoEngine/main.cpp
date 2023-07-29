@@ -1013,7 +1013,7 @@ void InitVulkan() {
 		GLOBALS = 0,
 		MATERIAL = 1
 	};
-
+#if 0
 	BindGroup cameraUBO_0 = offscreenPipeline.CreateBindGroup(bz::device, bz::descriptorPool, BINDGROUP::GLOBALS, {
 		.buffers = { { .binding = 0, .buffer = bz::uniformBuffers[0], .offset = 0, .size = 0 }}
 	});
@@ -1025,6 +1025,7 @@ void InitVulkan() {
 			{ .binding = 2, .sampler = flightHelmet->images[2].texture.sampler, .view = flightHelmet->images[2].texture.view, .layout = flightHelmet->images[2].texture.layout }
 		}
 	});
+#endif
 
 	offscreenVert.Destroy(bz::device);
 	offscreenFrag.Destroy(bz::device);
