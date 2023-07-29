@@ -30,6 +30,9 @@
     <Filter Include="Extern\volk">
       <UniqueIdentifier>{3e366fbb-0035-405e-a6e6-ca17ed84628e}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Extern\SPIRV-Reflect">
+      <UniqueIdentifier>{703e81da-c357-401f-979d-e930ceb77026}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="main.cpp">
@@ -140,6 +143,9 @@
     <ClCompile Include="Common.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="..\Extern\SPIRV-Reflect\spirv_reflect.c">
+      <Filter>Extern\SPIRV-Reflect</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\Extern\glfw\src\win32_joystick.h">
@@ -219,6 +225,18 @@
     </ClInclude>
     <ClInclude Include="..\Extern\tinygltf\json.hpp">
       <Filter>Extern\tinygltf</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Extern\SPIRV-Reflect\spirv_reflect.h">
+      <Filter>Extern\SPIRV-Reflect</Filter>
+    </ClInclude>
+    <ClInclude Include="Shader.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="BindGroup.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="Pipeline.h">
+      <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

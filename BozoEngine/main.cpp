@@ -7,6 +7,8 @@
 #include "GLTF.h"
 #include "UIOverlay.h"
 
+#include "Pipeline.h"
+
 constexpr u32 WIDTH = 1600;
 constexpr u32 HEIGHT = 900;
 
@@ -645,156 +647,6 @@ void SetupPipelines() {
 	bz::currentPipeline = bz::deferredPipeline;
 }
 
-#if 0
-void SetupPipelines2() {
-	VkPipelineShaderStageCreateInfo deferredShaders[] = {
-		LoadShader("shaders/deferred.vert.spv", VK_SHADER_STAGE_VERTEX_BIT),
-		LoadShader("shaders/deferred.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT)
-	};
-
-	VkDynamicState dynamicState[] = { VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR };
-	VkPipelineDynamicStateCreateInfo dynamicStateInfo = { .sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO, .dynamicStateCount = arraysize(dynamicState), .pDynamicStates = dynamicState };
-	VkPipelineViewportStateCreateInfo viewportStateInfo = { .sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO, .viewportCount = 1, .scissorCount = 1 };
-	VkPipelineVertexInputStateCreateInfo vertexInputInfo = { .sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO };
-
-	VkPipelineInputAssemblyStateCreateInfo inputAssemblyInfo = {
-		.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,
-		.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
-		.primitiveRestartEnable = VK_FALSE
-	};
-
-	VkPipelineRasterizationStateCreateInfo rasterizationInfo = {
-		.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
-		.depthClampEnable = VK_FALSE,		// depth clamp discards fragments outside the near/far planes. Usefull for shadow maps, requires enabling a GPU feature.
-		.rasterizerDiscardEnable = VK_FALSE,
-		.polygonMode = VK_POLYGON_MODE_FILL,
-		.cullMode = VK_CULL_MODE_FRONT_BIT,
-		.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE,
-		.depthBiasEnable = VK_FALSE,
-		.lineWidth = 1.0f,
-	};
-
-	VkPipelineMultisampleStateCreateInfo multisampeInfo = {
-		.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,
-		.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT,
-		.sampleShadingEnable = VK_FALSE
-	};
-
-	VkPipelineDepthStencilStateCreateInfo depthStencilInfo = {
-		.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO,
-		.depthTestEnable = VK_TRUE,
-		.depthWriteEnable = VK_TRUE,
-		.depthCompareOp = VK_COMPARE_OP_GREATER_OR_EQUAL, // inverse z
-		.depthBoundsTestEnable = VK_FALSE,
-		.stencilTestEnable = VK_FALSE,
-		.minDepthBounds = 0.0f,
-		.maxDepthBounds = 1.0f
-	};
-
-	VkPipelineColorBlendAttachmentState colorBlendAttachment = { .blendEnable = VK_FALSE, .colorWriteMask = 0xF };
-
-	VkPipelineColorBlendStateCreateInfo colorBlendStateInfo = {
-		.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO,
-		.logicOpEnable = VK_FALSE,
-		.attachmentCount = 1,
-		.pAttachments = &colorBlendAttachment
-	};
-
-	VkPipelineRenderingCreateInfo renderingCreateInfo = {
-		.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO,
-		.colorAttachmentCount = 1,
-		.pColorAttachmentFormats = &bz::swapchain.format,
-		.depthAttachmentFormat = bz::depth.format,
-		.stencilAttachmentFormat = bz::depth.format
-	};
-
-	VkGraphicsPipelineCreateInfo pipelineInfo = {
-		.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
-		.pNext = &renderingCreateInfo,
-		.stageCount = arraysize(deferredShaders),
-		.pStages = deferredShaders,
-		.pVertexInputState = &vertexInputInfo,
-		.pInputAssemblyState = &inputAssemblyInfo,
-		.pViewportState = &viewportStateInfo,
-		.pRasterizationState = &rasterizationInfo,
-		.pMultisampleState = &multisampeInfo,
-		.pDepthStencilState = &depthStencilInfo,
-		.pColorBlendState = &colorBlendStateInfo,
-		.pDynamicState = &dynamicStateInfo,
-		.layout = bz::pipelineLayout
-	};
-
-	VkSpecializationMapEntry mapEntries[] = { {.size = sizeof(u32)}, {.constantID = 1, .offset = sizeof(u32), .size = sizeof(u32)} };
-	u32 specializations[] = { 0, (u32)bz::msaaSamples };
-	VkSpecializationInfo specializationInfo = {
-		.mapEntryCount = arraysize(mapEntries),
-		.pMapEntries = mapEntries,
-		.dataSize = sizeof(specializations),
-		.pData = specializations
-	};
-
-	deferredShaders[1].pSpecializationInfo = &specializationInfo;
-	VkCheck(vkCreateGraphicsPipelines(bz::device.logicalDevice, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &bz::deferredPipeline), "Failed to create graphics pipeline");
-
-	// Specialization constants for pipelines only rendering albedo, normal, occMetRough or depth.
-	specializations[0] = 1;
-	VkCheck(vkCreateGraphicsPipelines(bz::device.logicalDevice, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &bz::albedoPipeline), "Failed to create albedo-only pipeline");
-	specializations[0] = 2;
-	VkCheck(vkCreateGraphicsPipelines(bz::device.logicalDevice, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &bz::normalPipeline), "Failed to create normal-only pipeline");
-	specializations[0] = 3;
-	VkCheck(vkCreateGraphicsPipelines(bz::device.logicalDevice, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &bz::occMetRoughPipeline), "Failed to create occMetRough-only pipeline");
-	specializations[0] = 4;
-	VkCheck(vkCreateGraphicsPipelines(bz::device.logicalDevice, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &bz::depthPipeline), "Failed to create depth-only pipeline");
-
-	// Set the default pipeline
-	bz::currentPipeline = bz::deferredPipeline;
-
-	VkPipelineShaderStageCreateInfo offscreenShaders[] = {
-		LoadShader("shaders/offscreen.vert.spv", VK_SHADER_STAGE_VERTEX_BIT),
-		LoadShader("shaders/offscreen.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT)
-	};
-
-	VkVertexInputBindingDescription bindingDescription = GLTFModel::Vertex::GetBindingDescription();
-	std::vector<VkVertexInputAttributeDescription> attributeDescriptions = GLTFModel::Vertex::GetAttributeDescriptions();
-	vertexInputInfo.vertexBindingDescriptionCount = 1;
-	vertexInputInfo.pVertexBindingDescriptions = &bindingDescription;
-	vertexInputInfo.vertexAttributeDescriptionCount = (u32)attributeDescriptions.size();
-	vertexInputInfo.pVertexAttributeDescriptions = attributeDescriptions.data();
-
-	rasterizationInfo.cullMode = VK_CULL_MODE_BACK_BIT;
-
-	multisampeInfo.rasterizationSamples = bz::msaaSamples;
-
-	VkPipelineColorBlendAttachmentState blendAttachmentStates[] = {
-		{.blendEnable = VK_FALSE, .colorWriteMask = 0xF },
-		{.blendEnable = VK_FALSE, .colorWriteMask = 0xF },
-		{.blendEnable = VK_FALSE, .colorWriteMask = 0xF },
-	};
-	colorBlendStateInfo.attachmentCount = arraysize(blendAttachmentStates);
-	colorBlendStateInfo.pAttachments = blendAttachmentStates;
-
-	pipelineInfo.stageCount = arraysize(offscreenShaders);
-	pipelineInfo.pStages = offscreenShaders;
-
-	VkFormat colorAttachmentFormats[] = { bz::albedo.format, bz::normal.format, bz::occMetRough.format };
-	renderingCreateInfo = {
-		.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO,
-		.colorAttachmentCount = arraysize(colorAttachmentFormats),
-		.pColorAttachmentFormats = colorAttachmentFormats,
-		.depthAttachmentFormat = bz::depth.format,
-		.stencilAttachmentFormat = bz::depth.format
-	};
-
-	VkCheck(vkCreateGraphicsPipelines(bz::device.logicalDevice, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &bz::offscreenPipeline), "Failed to create graphics pipeline");
-
-	vkDestroyShaderModule(bz::device.logicalDevice, deferredShaders[0].module, nullptr);
-	vkDestroyShaderModule(bz::device.logicalDevice, deferredShaders[1].module, nullptr);
-
-	vkDestroyShaderModule(bz::device.logicalDevice, offscreenShaders[0].module, nullptr);
-	vkDestroyShaderModule(bz::device.logicalDevice, offscreenShaders[1].module, nullptr);
-}
-#endif
-
 void SetupDescriptorSetLayout() {
 	VkDescriptorSetLayoutBinding uboLayoutBinding[] = {
 		{	// Binding 0 : Vertex shader uniform buffer
@@ -1107,6 +959,77 @@ void InitVulkan() {
 	UpdateRenderAttachmentDescriptorSets();
 	UpdateDescriptorSets();
 	SetupPipelines();
+
+	Shader offscreenVert = Shader::Create(bz::device, "shaders/offscreen.vert.spv");
+	Shader offscreenFrag = Shader::Create(bz::device, "shaders/offscreen.frag.spv");
+
+	Shader deferredVert = Shader::Create(bz::device, "shaders/deferred.vert.spv");
+	Shader deferredFrag = Shader::Create(bz::device, "shaders/deferred.frag.spv");
+
+	Pipeline offscreenPipeline = Pipeline::Create(bz::device, VK_PIPELINE_BIND_POINT_GRAPHICS, PipelineDesc{
+		.shaders = { offscreenVert, offscreenFrag },
+		.attachments = {
+			.formats = { bz::albedo.format, bz::normal.format, bz::occMetRough.format },
+			.depthStencilFormat = bz::depth.format,
+			.blendEnable = VK_FALSE,
+			.blendStates = {
+				{.blendEnable = VK_FALSE, .colorWriteMask = 0xF },
+				{.blendEnable = VK_FALSE, .colorWriteMask = 0xF },
+				{.blendEnable = VK_FALSE, .colorWriteMask = 0xF },
+			},
+		},
+		.rasterization = {
+			.cullMode = VK_CULL_MODE_BACK_BIT,
+			.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE
+		},
+		.sampleCount = bz::msaaSamples,
+		.vertexInput = { 
+			.bindingDesc = { GLTFModel::Vertex::GetBindingDescription() },
+			.attributeDesc = GLTFModel::Vertex::GetAttributeDescriptions()
+		}
+	});
+
+	Pipeline deferredPipeline = Pipeline::Create(bz::device, VK_PIPELINE_BIND_POINT_GRAPHICS, PipelineDesc{
+		.shaders = { deferredVert, deferredFrag },
+		.attachments = {
+			.formats = { bz::swapchain.format },
+			.depthStencilFormat = bz::depth.format,
+			.blendEnable = VK_FALSE,
+			.blendStates = { {.blendEnable = VK_FALSE, .colorWriteMask = 0xF } },
+		},
+		.rasterization = {
+			.cullMode = VK_CULL_MODE_FRONT_BIT,
+			.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE
+		},
+		.sampleCount = VK_SAMPLE_COUNT_1_BIT
+	});
+
+	// TODO: Sample api.
+	// make BINDGROUP strongly typed (enum class), and take it as a param for createBindGroup
+	// Union sampler, view, layout into a descriptor / allow us to just give a Texture2D directly
+	// instead of having to manually extract samler,view,layout information from it...
+	// TODO: figure out if user should be responsible for freeing bindgroups / how to handle their reuse
+	enum BINDGROUP {
+		GLOBALS = 0,
+		MATERIAL = 1
+	};
+
+	BindGroup cameraUBO_0 = offscreenPipeline.CreateBindGroup(bz::device, bz::descriptorPool, BINDGROUP::GLOBALS, {
+		.buffers = { { .binding = 0, .buffer = bz::uniformBuffers[0], .offset = 0, .size = 0 }}
+	});
+
+	BindGroup material_0 = offscreenPipeline.CreateBindGroup(bz::device, bz::descriptorPool, BINDGROUP::MATERIAL, {
+		.textures = {
+			{ .binding = 0, .sampler = flightHelmet->images[0].texture.sampler, .view = flightHelmet->images[0].texture.view, .layout = flightHelmet->images[0].texture.layout },
+			{ .binding = 1, .sampler = flightHelmet->images[1].texture.sampler, .view = flightHelmet->images[1].texture.view, .layout = flightHelmet->images[1].texture.layout },
+			{ .binding = 2, .sampler = flightHelmet->images[2].texture.sampler, .view = flightHelmet->images[2].texture.view, .layout = flightHelmet->images[2].texture.layout }
+		}
+	});
+
+	offscreenVert.Destroy(bz::device);
+	offscreenFrag.Destroy(bz::device);
+	deferredVert.Destroy(bz::device);
+	deferredFrag.Destroy(bz::device);
 
 	CreateRenderFrames();
 }
