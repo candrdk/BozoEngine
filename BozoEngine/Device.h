@@ -57,6 +57,7 @@ public:
 	VkDevice logicalDevice = VK_NULL_HANDLE;
 	VkQueue graphicsQueue = VK_NULL_HANDLE;
 	VkCommandPool commandPool = VK_NULL_HANDLE;
+	VkDescriptorPool descriptorPool = VK_NULL_HANDLE;
 
 	struct {
 		u32 graphics;

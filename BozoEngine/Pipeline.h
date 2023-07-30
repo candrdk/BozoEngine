@@ -95,9 +95,9 @@ struct Pipeline {
         vkDestroyPipeline(device.logicalDevice, pipeline, nullptr);
     }
 
-    BindGroup CreateBindGroup(const Device& device, VkDescriptorPool descriptorPool, u32 bindGroupSlot, const BindGroupDesc&& desc) {
+    BindGroup CreateBindGroup(const Device& device, u32 bindGroupSlot, const BindGroupDesc&& desc) {
         Check(bindGroupSlot < bindGroupLayouts.size(), "Pipeline does not support bindgroups for slot %i", bindGroupSlot);
-        return BindGroup::Create(device, descriptorPool, bindGroupLayouts[bindGroupSlot], std::forward<const BindGroupDesc&&>(desc));
+        return BindGroup::Create(device, bindGroupLayouts[bindGroupSlot], std::forward<const BindGroupDesc&&>(desc));
     }
 
 private:

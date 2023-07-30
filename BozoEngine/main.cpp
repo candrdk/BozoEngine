@@ -72,7 +72,6 @@ namespace bz {
 	DepthAttachment depth;
 	VkSampler attachmentSampler;
 
-	VkDescriptorPool descriptorPool;
 	VkDescriptorSetLayout uboDescriptorSetLayout, descriptorSetLayout;
 	VkPipelineLayout pipelineLayout;
 
@@ -448,28 +447,6 @@ void UpdateRenderAttachmentDescriptorSets() {
 	vkUpdateDescriptorSets(bz::device.logicalDevice, arraysize(writeDescriptorSets), writeDescriptorSets, 0, nullptr);
 }
 
-void CreateDescriptorPool() {
-	VkDescriptorPoolSize poolSizes[2] = {
-		{ // uniform buffer descriptor pool
-			.type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-			.descriptorCount = arraysize(bz::uniformBuffers)	// 1 descriptor per uniform buffer
-		},
-		{ // combined image sampler descriptor pool per material + 1 sampling the gbuffer
-			.type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-			.descriptorCount = (u32)flightHelmet->materials.size() + 1
-		}
-	};
-
-	VkDescriptorPoolCreateInfo poolInfo = {
-		.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
-		.maxSets = poolSizes[0].descriptorCount + poolSizes[1].descriptorCount,
-		.poolSizeCount = arraysize(poolSizes),
-		.pPoolSizes = poolSizes
-	};
-
-	VkCheck(vkCreateDescriptorPool(bz::device.logicalDevice, &poolInfo, nullptr, &bz::descriptorPool), "Failed to create descriptor pool");
-}
-
 // TODO: Temporary
 struct Program {
 	u32 stageCount;
@@ -718,34 +695,23 @@ void AllocateDescriptorSets() {
 	{	// Deferred composition descriptor set
 		VkDescriptorSetAllocateInfo allocInfo = {
 			.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
-			.descriptorPool = bz::descriptorPool,
+			.descriptorPool = bz::device.descriptorPool,
 			.descriptorSetCount = 1,
 			.pSetLayouts = &bz::descriptorSetLayout
 		};
 
 		VkCheck(vkAllocateDescriptorSets(bz::device.logicalDevice, &allocInfo, &bz::descriptorSet), "Failed to allocate descriptor sets");
-	}	
+	}
 	{	// UBO buffer descriptor sets
 		std::vector<VkDescriptorSetLayout> layouts(arraysize(bz::uboDescriptorSets), bz::uboDescriptorSetLayout);
 		VkDescriptorSetAllocateInfo allocInfo = {
 			.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
-			.descriptorPool = bz::descriptorPool,
+			.descriptorPool = bz::device.descriptorPool,
 			.descriptorSetCount = u32(layouts.size()),
 			.pSetLayouts = layouts.data(),
 		};
 
 		VkCheck(vkAllocateDescriptorSets(bz::device.logicalDevice, &allocInfo, bz::uboDescriptorSets), "Failed to allocate descriptor sets");
-	}
-	{	// Material descriptor sets
-		VkDescriptorSetAllocateInfo allocInfo = {
-			.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
-			.descriptorPool = bz::descriptorPool,
-			.descriptorSetCount = 1,
-			.pSetLayouts = &bz::descriptorSetLayout,
-		};
-
-		for (auto& material : flightHelmet->materials)
-			VkCheck(vkAllocateDescriptorSets(bz::device.logicalDevice, &allocInfo, &material.descriptorSet), "Failed to allocate descriptor set for image");
 	}
 }
 
@@ -769,40 +735,6 @@ void UpdateDescriptorSets() {
 		};
 
 		vkUpdateDescriptorSets(bz::device.logicalDevice, 1, &writeDescriptorSet, 0, nullptr);
-	}
-
-	// Offscreen: Model materials
-	// TODO: this should probably be the done by the GLTFModel itself
-	for (const auto& material : flightHelmet->materials) {
-		VkWriteDescriptorSet writeDescriptorSets[] = {
-			{
-				.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-				.dstSet = material.descriptorSet,
-				.dstBinding = 0,
-				.dstArrayElement = 0,
-				.descriptorCount = 1,
-				.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-				.pImageInfo = &flightHelmet->images[material.albedo.imageIndex].texture.descriptor
-			}, {
-				.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-				.dstSet = material.descriptorSet,
-				.dstBinding = 1,
-				.dstArrayElement = 0,
-				.descriptorCount = 1,
-				.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-				.pImageInfo = &flightHelmet->images[material.normal.imageIndex].texture.descriptor
-			}, {
-				.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-				.dstSet = material.descriptorSet,
-				.dstBinding = 2,
-				.dstArrayElement = 0,
-				.descriptorCount = 1,
-				.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-				.pImageInfo = &flightHelmet->images[material.OccMetRough.imageIndex].texture.descriptor
-			}
-		};
-
-		vkUpdateDescriptorSets(bz::device.logicalDevice, arraysize(writeDescriptorSets), writeDescriptorSets, 0, nullptr);
 	}
 }
 
@@ -946,13 +878,8 @@ void InitVulkan() {
 		.oldSwapchain = VK_NULL_HANDLE 
 	});
 
-	flightHelmet = new GLTFModel(bz::device);
-	flightHelmet->LoadGLTFFile("assets/FlightHelmet/FlightHelmet.gltf");
-
 	CreateUniformBuffers();
 	CreateRenderAttachments();
-
-	CreateDescriptorPool();
 
 	SetupDescriptorSetLayout();
 	AllocateDescriptorSets();
@@ -960,6 +887,7 @@ void InitVulkan() {
 	UpdateDescriptorSets();
 	SetupPipelines();
 
+#if 0	// Testing the new api. Eventually everything will be created like this
 	Shader offscreenVert = Shader::Create(bz::device, "shaders/offscreen.vert.spv");
 	Shader offscreenFrag = Shader::Create(bz::device, "shaders/offscreen.frag.spv");
 
@@ -971,9 +899,9 @@ void InitVulkan() {
 	});
 
 	BindGroupLayout materialLayout = BindGroupLayout::Create(bz::device, {
-		{ .binding = 0, .type = Binding::TEXTURE, .stages = Binding::FRAGMENT },
-		{ .binding = 1, .type = Binding::TEXTURE, .stages = Binding::FRAGMENT },
-		{ .binding = 2, .type = Binding::TEXTURE, .stages = Binding::FRAGMENT }
+		{.binding = 0, .type = Binding::TEXTURE, .stages = Binding::FRAGMENT },
+		{.binding = 1, .type = Binding::TEXTURE, .stages = Binding::FRAGMENT },
+		{.binding = 2, .type = Binding::TEXTURE, .stages = Binding::FRAGMENT }
 	});
 
 	Pipeline offscreenPipeline = Pipeline::Create(bz::device, VK_PIPELINE_BIND_POINT_GRAPHICS, {
@@ -1015,29 +943,6 @@ void InitVulkan() {
 		}
 	});
 
-	// TODO: Sample api.
-	// * Maybe make BINDGROUP strongly typed, and take it as a param for createBindGroup?
-	// * Find a way to create buffer/texture bindings by just giving a Buffer/Texture2D directly.
-	// TODO: figure out if user should be responsible for freeing bindgroups / how to handle their reuse
-#if 0
-	enum BINDGROUP {
-		GLOBALS = 0,
-		MATERIAL = 1
-	};
-
-	BindGroup cameraUBO_0 = offscreenPipeline.CreateBindGroup(bz::device, bz::descriptorPool, BINDGROUP::GLOBALS, {
-		.buffers = { { .binding = 0, .buffer = bz::uniformBuffers[0], .offset = 0, .size = 0 }}
-	});
-
-	BindGroup material_0 = offscreenPipeline.CreateBindGroup(bz::device, bz::descriptorPool, BINDGROUP::MATERIAL, {
-		.textures = {
-			{ .binding = 0, .sampler = flightHelmet->images[0].texture.sampler, .view = flightHelmet->images[0].texture.view, .layout = flightHelmet->images[0].texture.layout },
-			{ .binding = 1, .sampler = flightHelmet->images[1].texture.sampler, .view = flightHelmet->images[1].texture.view, .layout = flightHelmet->images[1].texture.layout },
-			{ .binding = 2, .sampler = flightHelmet->images[2].texture.sampler, .view = flightHelmet->images[2].texture.view, .layout = flightHelmet->images[2].texture.layout }
-		}
-	});
-#endif
-
 	offscreenVert.Destroy(bz::device);
 	offscreenFrag.Destroy(bz::device);
 	deferredVert.Destroy(bz::device);
@@ -1045,6 +950,7 @@ void InitVulkan() {
 
 	offscreenPipeline.Destroy(bz::device);
 	deferredPipeline.Destroy(bz::device);
+#endif
 
 	CreateRenderFrames();
 }
@@ -1080,14 +986,10 @@ void RecreateSwapchain() {
 void CleanupVulkan() {
 	CleanupSwapchain();
 
-	delete flightHelmet;
-
 	for (int i = 0; i < arraysize(bz::uniformBuffers); i++) {
 		bz::uniformBuffers[i].unmap(bz::device.logicalDevice);
 		bz::uniformBuffers[i].destroy(bz::device.logicalDevice);
 	}
-
-	vkDestroyDescriptorPool(bz::device.logicalDevice, bz::descriptorPool, nullptr);
 
 	vkDestroyPipeline(bz::device.logicalDevice, bz::deferredPipeline, nullptr);
 	vkDestroyPipeline(bz::device.logicalDevice, bz::offscreenPipeline, nullptr);
@@ -1197,6 +1099,15 @@ int main(int argc, char* argv[]) {
 	bz::Overlay.fragShader = LoadShader("shaders/uioverlay.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT);
 	bz::Overlay.Initialize(window, &bz::device, bz::swapchain.format, bz::depth.format);
 
+	BindGroupLayout materialLayout = BindGroupLayout::Create(bz::device, {
+		{.binding = 0, .type = Binding::TEXTURE, .stages = Binding::FRAGMENT },
+		{.binding = 1, .type = Binding::TEXTURE, .stages = Binding::FRAGMENT },
+		{.binding = 2, .type = Binding::TEXTURE, .stages = Binding::FRAGMENT },
+		{.binding = 3, .type = Binding::TEXTURE, .stages = Binding::FRAGMENT }
+	});
+	
+	flightHelmet = new GLTFModel(bz::device, materialLayout, "assets/FlightHelmet/FlightHelmet.gltf");
+
 	double lastFrame = 0.0f;
 
 	while (!glfwWindowShouldClose(window)) {
@@ -1215,8 +1126,11 @@ int main(int argc, char* argv[]) {
 	// Wait until all commandbuffers are done so we can safely clean up semaphores they might potentially be using.
 	vkDeviceWaitIdle(bz::device.logicalDevice);
 
-	bz::Overlay.Free();
+	delete flightHelmet;
+	materialLayout.Destroy(bz::device);
 
+	bz::Overlay.Free();
+	
 	CleanupVulkan();
 	CleanupWindow();
 

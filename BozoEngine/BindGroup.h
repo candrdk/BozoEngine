@@ -3,6 +3,17 @@
 #include "Common.h"
 #include "Device.h"
 
+// TODO: Sample api.
+// * Maybe make BINDGROUP strongly typed, and take it as a param for createBindGroup?
+// * Find a way to create buffer/texture bindings by just giving a Buffer/Texture2D directly.
+// TODO: figure out if user should be responsible for freeing bindgroups / how to handle their reuse
+#if 0
+enum BINDGROUP {
+    GLOBALS = 0,
+    MATERIAL = 1
+};
+#endif
+
 struct Binding {
     enum Type {
         TEXTURE = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
@@ -80,10 +91,10 @@ struct BindGroup {
     BindGroupLayout layout;
     VkDescriptorSet descriptorSet = VK_NULL_HANDLE;
 
-    static BindGroup Create(const Device& device, VkDescriptorPool descriptorPool, BindGroupLayout layout, const BindGroupDesc&& desc) {
+    static BindGroup Create(const Device& device, BindGroupLayout layout, const BindGroupDesc&& desc) {
         VkDescriptorSetAllocateInfo allocInfo = {
             .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
-            .descriptorPool = descriptorPool,
+            .descriptorPool = device.descriptorPool,
             .descriptorSetCount = 1,
             .pSetLayouts = &layout.descriptorSetLayout
         };
@@ -126,7 +137,7 @@ struct BindGroup {
                 .dstBinding = texture.binding,
                 .dstArrayElement = 0,
                 .descriptorCount = 1,
-                .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+                .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
                 .pImageInfo = &imageInfo
             };
             vkUpdateDescriptorSets(device.logicalDevice, 1, &write, 0, nullptr);

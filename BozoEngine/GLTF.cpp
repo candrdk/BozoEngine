@@ -54,6 +54,12 @@ GLTFModel::Node::~Node() {
 	}
 }
 
+GLTFModel::GLTFModel(Device& device, BindGroupLayout materialLayout, const char* path)
+	: device{ device }, materialBindGroupLayout{ materialLayout }
+{
+	LoadGLTFFile(path);
+}
+
 GLTFModel::~GLTFModel() {
 	for (auto node : nodes) {
 		delete node;
@@ -62,8 +68,8 @@ GLTFModel::~GLTFModel() {
 	vertices.destroy(device.logicalDevice);
 	indices.destroy(device.logicalDevice);
 
-	for (Image image : images) {
-		image.texture.Destroy(device);
+	for (Texture2D image : images) {
+		image.Destroy(device);
 	}
 }
 
@@ -93,7 +99,7 @@ void GLTFModel::DrawNode(VkCommandBuffer cmdBuffer, VkPipelineLayout pipelineLay
 		for (const Primitive& primitive : node->mesh.primitives) {
 			if (primitive.indexCount > 0) {
 				// Bind the descriptor for the current primitives' material
-				vkCmdBindDescriptorSets(cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 1, 1, &materials[primitive.materialIndex].descriptorSet, 0, nullptr);
+				vkCmdBindDescriptorSets(cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 1, 1, &materials[primitive.materialIndex].bindGroup.descriptorSet, 0, nullptr);
 				vkCmdDrawIndexed(cmdBuffer, primitive.indexCount, 1, primitive.firstIndex, 0, 0);
 			}
 		}
@@ -121,7 +127,7 @@ void GLTFModel::LoadImages(tinygltf::Model& model) {
 			bufferSize = gltfImage.image.size();
 		}
 
-		images[i].texture.CreateFromBuffer(buffer, bufferSize, device, device.graphicsQueue, gltfImage.width, gltfImage.height, VK_FORMAT_R8G8B8A8_SRGB);
+		images[i].CreateFromBuffer(buffer, bufferSize, device, device.graphicsQueue, gltfImage.width, gltfImage.height, VK_FORMAT_R8G8B8A8_SRGB);
 	}
 }
 
@@ -130,13 +136,22 @@ void GLTFModel::LoadMaterials(tinygltf::Model& model) {
 
 	for (size_t i = 0; i < model.materials.size(); i++) {
 		tinygltf::Material gltfMaterial = model.materials[i];
+		GLTFModel::Material& material = materials[i];
 
 		if (gltfMaterial.values.find("baseColorTexture") != gltfMaterial.values.end()) {
-			materials[i].albedo.imageIndex = gltfMaterial.values["baseColorTexture"].TextureIndex();
+			material.albedo = &images[gltfMaterial.values["baseColorTexture"].TextureIndex()];
 		}
 
-		materials[i].normal.imageIndex = gltfMaterial.normalTexture.index;
-		materials[i].OccMetRough.imageIndex = gltfMaterial.occlusionTexture.index;	// For this model specifically, we know occulsionTexture also contains metalic and roughness.
+		material.normal = &images[gltfMaterial.normalTexture.index];
+		material.OccMetRough = &images[gltfMaterial.occlusionTexture.index];	// For this model specifically, we know occulsionTexture also contains metalic and roughness.
+
+		material.bindGroup = BindGroup::Create(device, materialBindGroupLayout, {
+			.textures = {
+				{.binding = 0, .sampler = material.albedo->sampler, .view = material.albedo->view, .layout = material.albedo->layout },
+				{.binding = 1, .sampler = material.normal->sampler, .view = material.normal->view, .layout = material.normal->layout },
+				{.binding = 2, .sampler = material.OccMetRough->sampler, .view = material.OccMetRough->view, .layout = material.OccMetRough->layout },
+			}
+		});
 	}
 }
 

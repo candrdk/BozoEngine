@@ -222,6 +222,25 @@ static VkCommandPool CreateCommandPool(VkDevice device, u32 queueFamilyIndex) {
 	return commandPool;
 }
 
+static VkDescriptorPool CreateDescriptorPool(VkDevice device, u32 maxBufferDescriptors, u32 maxImageDescriptors) {
+	VkDescriptorPoolSize poolSizes[] = {
+		{ .type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,			.descriptorCount = maxBufferDescriptors },
+		{ .type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,	.descriptorCount = maxImageDescriptors }
+	};
+
+	VkDescriptorPoolCreateInfo poolInfo = {
+		.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
+		.maxSets = maxBufferDescriptors + maxImageDescriptors,
+		.poolSizeCount = arraysize(poolSizes),
+		.pPoolSizes = poolSizes
+	};
+
+	VkDescriptorPool descriptorPool;
+	VkCheck(vkCreateDescriptorPool(device, &poolInfo, nullptr, &descriptorPool), "Failed to create descriptor pool");
+
+	return descriptorPool;
+}
+
 void Device::CreateDevice(GLFWwindow* window) {
 	VkCheck(volkInitialize(), "Failed to initialize volk");
 
@@ -255,9 +274,11 @@ void Device::CreateDevice(GLFWwindow* window) {
 	graphicsQueue = CreateQueue(logicalDevice, queueIndex.graphics);
 
 	commandPool = CreateCommandPool(logicalDevice, queueIndex.graphics);
+	descriptorPool = CreateDescriptorPool(logicalDevice, 100, 100);
 }
 
 void Device::DestroyDevice() {
+	vkDestroyDescriptorPool(logicalDevice, descriptorPool, nullptr);
 	vkDestroyCommandPool(logicalDevice, commandPool, nullptr);
 	vkDestroyDevice(logicalDevice, nullptr);
 

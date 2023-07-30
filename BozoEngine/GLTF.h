@@ -3,6 +3,7 @@
 
 #include "Device.h"
 #include "Texture.h"
+#include "BindGroup.h"
 
 #pragma warning(push, 0)
 #include <tiny_gltf.h>
@@ -31,20 +32,11 @@ public:
 		std::vector<Primitive> primitives;
 	};
 
-	struct Image {
-		Texture2D texture;
-		VkDescriptorSet descriptorSet;
-	};
-
-	struct Texture {
-		u32 imageIndex;
-	};
-
 	struct Material {
-		Texture albedo;
-		Texture normal;
-		Texture OccMetRough;
-		VkDescriptorSet descriptorSet;
+		Texture2D* albedo;
+		Texture2D* normal;
+		Texture2D* OccMetRough;
+		BindGroup bindGroup;
 	};
 
 	struct Node {
@@ -57,18 +49,20 @@ public:
 	};
 
 	Device& device;
+	BindGroupLayout materialBindGroupLayout;
 
-	std::vector<Image> images;
+	std::vector<Texture2D> images;
 	std::vector<Material> materials;
 	std::vector<Node*> nodes;
 
 	Buffer vertices, indices;
 
-	GLTFModel(Device& device) : device{ device } {}
+	GLTFModel(Device& device, BindGroupLayout materialLayout, const char* path);
 	~GLTFModel();
 
 	void Draw(VkCommandBuffer cmdBuffer, VkPipelineLayout pipelineLayout);
 
+private:
 	void DrawNode(VkCommandBuffer cmdBuffer, VkPipelineLayout pipelineLayout, Node* node);
 
 	void LoadImages(tinygltf::Model& model);
