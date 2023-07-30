@@ -12,29 +12,28 @@ struct PipelineDesc {
             std::vector<VkFormat> formats;
             VkFormat depthStencilFormat;
 
-            VkBool32 blendEnable = VK_FALSE;
-            std::vector<VkPipelineColorBlendAttachmentState> blendStates = std::vector<VkPipelineColorBlendAttachmentState>(formats.size(), { .blendEnable = blendEnable, .colorWriteMask = 0xF });
+            std::vector<VkPipelineColorBlendAttachmentState> blendStates = std::vector<VkPipelineColorBlendAttachmentState>(formats.size(), { .blendEnable = VK_FALSE, .colorWriteMask = 0xF });
         } attachments;
 
-        struct {
+        struct RasterizationState {
             VkCullModeFlags cullMode;
             VkFrontFace frontFace;
         } rasterization;
 
         VkSampleCountFlagBits sampleCount = VK_SAMPLE_COUNT_1_BIT;
 
-        struct {
+        struct VertexInputState {
             std::vector<VkVertexInputBindingDescription> bindingDesc = {};
             std::vector<VkVertexInputAttributeDescription> attributeDesc = {};
-        } vertexInput = {};
+        } vertexInput;
 
-        struct {
+        struct DepthState {
             bool depthTestEnable = true;
             bool depthWriteEnable = true;
             VkCompareOp depthCompareOp = VK_COMPARE_OP_GREATER_OR_EQUAL;
         } depthStencil = {};
 
-        struct {
+        struct SpecializationState {
             std::vector<VkSpecializationMapEntry> mapEntries = {};
             size_t dataSize = 0;
             void* pData = nullptr;
@@ -269,7 +268,6 @@ private:
 
         VkPipelineColorBlendStateCreateInfo colorBlendStateInfo = {
             .sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO,
-            .logicOpEnable = desc.attachments.blendEnable,
             .attachmentCount = (u32)desc.attachments.blendStates.size(),
             .pAttachments = desc.attachments.blendStates.data()
         };

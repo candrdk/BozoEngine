@@ -64,7 +64,7 @@ namespace bz {
 
 	Device device;
 	Swapchain swapchain;
-	UIOverlay Overlay;
+	UIOverlay* overlay;
 
 	RenderFrame renderFrames[MAX_FRAMES_IN_FLIGHT];
 	Buffer uniformBuffers[MAX_FRAMES_IN_FLIGHT];
@@ -75,13 +75,15 @@ namespace bz {
 	BindGroupLayout materialLayout, globalsLayout;
 	BindGroup gbufferBindings;
 	BindGroup globalsBindings[arraysize(bz::uniformBuffers)];
-	Pipeline offscreenPipeline2, deferredPipeline2;
+	Pipeline offscreenPipeline, deferredPipeline;
 
 
 	VkSampleCountFlagBits msaaSamples = VK_SAMPLE_COUNT_1_BIT;
 	bool framebufferResized = false;
 }
 
+double lastXpos = WIDTH / 2.0f;
+double lastYpos = WIDTH / 2.0f;
 void FramebufferSizeCallback(GLFWwindow* window, int width, int height) {
 	bz::framebufferResized = true;
 }
@@ -104,8 +106,6 @@ void KeyCallback(GLFWwindow* window, int key, int scancode, int action, int mods
 	}
 }
 
-double lastXpos = WIDTH / 2.0f;
-double lastYpos = WIDTH / 2.0f;
 void CursorPosCallback(GLFWwindow* window, double xpos, double ypos) {
 	if (glfwGetInputMode(window, GLFW_CURSOR) == GLFW_CURSOR_NORMAL)
 		return;
@@ -200,46 +200,6 @@ void CreateImageView(VkImage image, VkFormat format, VkImageAspectFlags aspectFl
 	};
 
 	VkCheck(vkCreateImageView(bz::device.logicalDevice, &viewInfo, nullptr, &imageView), "Failed to create image view");
-}
-
-VkShaderModule CreateShaderModule(const char* path) {
-	FILE* fp = fopen(path, "rb");
-	Check(fp != nullptr, "File: `%s` failed to open", path);
-
-	fseek(fp, 0, SEEK_END);
-	long length = ftell(fp);
-	fseek(fp, 0, SEEK_SET);
-	Check(length > 0, "File: `%s` was empty", path);
-
-	char* buffer = new char[length];
-	Check(buffer, "Failed to allocate buffer");
-
-	size_t read = fread(buffer, 1, length, fp);
-	Check(read == length, "Failed to read all contents of `%s`", path);
-	fclose(fp);
-
-	VkShaderModuleCreateInfo createInfo = {
-		.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
-		.codeSize = read,
-		.pCode = (u32*)buffer
-	};
-
-	VkShaderModule shaderModule;
-	VkCheck(vkCreateShaderModule(bz::device.logicalDevice, &createInfo, nullptr, &shaderModule), "Failed to create shader module");
-
-	delete[] buffer;
-
-	return shaderModule;
-}
-
-VkPipelineShaderStageCreateInfo LoadShader(const char* path, VkShaderStageFlagBits stage) {
-	return {
-		.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
-		.stage = stage,
-		.module = CreateShaderModule(path),
-		.pName = "main",
-		.pSpecializationInfo = 0
-	};
 }
 
 void CreateUniformBuffers() {
@@ -420,12 +380,12 @@ void RecordDeferredCommandBuffer(VkCommandBuffer cmd, u32 imageIndex) {
 		VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,			VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
 		VK_IMAGE_LAYOUT_UNDEFINED,						VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL);
 
-	vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, bz::offscreenPipeline2.pipeline);
-	vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, bz::offscreenPipeline2.pipelineLayout, 0, 1, &bz::globalsBindings[currentFrame].descriptorSet, 0, nullptr);
+	vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, bz::offscreenPipeline.pipeline);
+	vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, bz::offscreenPipeline.pipelineLayout, 0, 1, &bz::globalsBindings[currentFrame].descriptorSet, 0, nullptr);
 
 	vkCmdBeginRendering(cmd, &renderingInfo);
 
-	flightHelmet->Draw(cmd, bz::offscreenPipeline2.pipelineLayout);
+	flightHelmet->Draw(cmd, bz::offscreenPipeline.pipelineLayout);
 
 	vkCmdEndRendering(cmd);
 
@@ -467,15 +427,15 @@ void RecordDeferredCommandBuffer(VkCommandBuffer cmd, u32 imageIndex) {
 		.pStencilAttachment = nullptr
 	};
 	
-	vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, bz::deferredPipeline2.pipeline);
-	vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, bz::deferredPipeline2.pipelineLayout, 0, 1, &bz::globalsBindings[currentFrame].descriptorSet, 0, nullptr);
-	vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, bz::deferredPipeline2.pipelineLayout, 1, 1, &bz::gbufferBindings.descriptorSet, 0, nullptr);
+	vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, bz::deferredPipeline.pipeline);
+	vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, bz::deferredPipeline.pipelineLayout, 0, 1, &bz::globalsBindings[currentFrame].descriptorSet, 0, nullptr);
+	vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, bz::deferredPipeline.pipelineLayout, 1, 1, &bz::gbufferBindings.descriptorSet, 0, nullptr);
 
 	vkCmdBeginRendering(cmd, &renderingInfo);
 
 	vkCmdDraw(cmd, 3, 1, 0, 0);
 
-	bz::Overlay.Draw(cmd);
+	bz::overlay->Draw(cmd);
 
 	vkCmdEndRendering(cmd);
 
@@ -501,7 +461,7 @@ void CreateRenderFrames() {
 	}
 }
 
-void SetupDescriptorSetLayout2() {
+void CreateBindGroupLayouts() {
 	bz::materialLayout = BindGroupLayout::Create(bz::device, {
 		{.binding = 0, .type = Binding::TEXTURE, .stages = Binding::FRAGMENT },
 		{.binding = 1, .type = Binding::TEXTURE, .stages = Binding::FRAGMENT },
@@ -514,9 +474,9 @@ void SetupDescriptorSetLayout2() {
 	});
 }
 
-void AllocateDescriptorSets2() {
+void CreateBindGroups() {
 	bz::gbufferBindings = BindGroup::Create(bz::device, bz::materialLayout, {
-		.textures = { 
+		.textures = {
 			{.binding = 0, .sampler = bz::attachmentSampler, .view = bz::albedo.view, .layout = VK_IMAGE_LAYOUT_READ_ONLY_OPTIMAL },
 			{.binding = 1, .sampler = bz::attachmentSampler, .view = bz::normal.view, .layout = VK_IMAGE_LAYOUT_READ_ONLY_OPTIMAL },
 			{.binding = 2, .sampler = bz::attachmentSampler, .view = bz::occMetRough.view, .layout = VK_IMAGE_LAYOUT_READ_ONLY_OPTIMAL },
@@ -531,7 +491,7 @@ void AllocateDescriptorSets2() {
 	}
 }
 
-void UpdateRenderAttachmentDescriptorSets2() {
+void UpdateGBufferBindGroup() {
 	bz::gbufferBindings.Update(bz::device, {
 		.textures = {
 			{.binding = 0, .sampler = bz::attachmentSampler, .view = bz::albedo.view, .layout = VK_IMAGE_LAYOUT_READ_ONLY_OPTIMAL },
@@ -542,14 +502,14 @@ void UpdateRenderAttachmentDescriptorSets2() {
 	});
 }
 
-void SetupPipelines2() {
+void CreatePipelines() {
 	Shader offscreenVert = Shader::Create(bz::device, "shaders/offscreen.vert.spv");
 	Shader offscreenFrag = Shader::Create(bz::device, "shaders/offscreen.frag.spv");
 
 	Shader deferredVert = Shader::Create(bz::device, "shaders/deferred.vert.spv");
 	Shader deferredFrag = Shader::Create(bz::device, "shaders/deferred.frag.spv");
 
-	bz::offscreenPipeline2 = Pipeline::Create(bz::device, VK_PIPELINE_BIND_POINT_GRAPHICS, {
+	bz::offscreenPipeline = Pipeline::Create(bz::device, VK_PIPELINE_BIND_POINT_GRAPHICS, {
 		.debugName = "Offscreen pipeline",
 		.shaders = { offscreenVert, offscreenFrag },
 		.bindGroups = { bz::globalsLayout, bz::materialLayout },
@@ -570,7 +530,7 @@ void SetupPipelines2() {
 		}
 	});
 
-	bz::deferredPipeline2 = Pipeline::Create(bz::device, VK_PIPELINE_BIND_POINT_GRAPHICS, {
+	bz::deferredPipeline = Pipeline::Create(bz::device, VK_PIPELINE_BIND_POINT_GRAPHICS, {
 		.debugName = "Deferred pipeline",
 		.shaders = { deferredVert, deferredFrag },
 		.bindGroups = { bz::globalsLayout, bz::materialLayout },
@@ -605,9 +565,9 @@ void InitVulkan() {
 	CreateUniformBuffers();
 	CreateRenderAttachments();
 
-	SetupDescriptorSetLayout2();
-	AllocateDescriptorSets2();
-	SetupPipelines2();
+	CreateBindGroupLayouts();
+	CreateBindGroups();
+	CreatePipelines();
 
 	CreateRenderFrames();
 }
@@ -637,7 +597,7 @@ void RecreateSwapchain() {
 	});
 
 	CreateRenderAttachments();
-	UpdateRenderAttachmentDescriptorSets2();
+	UpdateGBufferBindGroup();
 }
 
 void CleanupVulkan() {
@@ -739,9 +699,7 @@ int main(int argc, char* argv[]) {
 	InitWindow(WIDTH, HEIGHT);
 	InitVulkan();
 
-	bz::Overlay.vertShader = LoadShader("shaders/uioverlay.vert.spv", VK_SHADER_STAGE_VERTEX_BIT);
-	bz::Overlay.fragShader = LoadShader("shaders/uioverlay.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT);
-	bz::Overlay.Initialize(window, &bz::device, bz::swapchain.format, bz::depth.format);
+	bz::overlay = new UIOverlay(window, bz::device, bz::swapchain.format, bz::depth.format);
 
 	flightHelmet = new GLTFModel(bz::device, bz::materialLayout, "assets/FlightHelmet/FlightHelmet.gltf");
 
@@ -752,7 +710,7 @@ int main(int argc, char* argv[]) {
 		lastFrame = currentFrame;
 
 		bz::camera.Update(deltaTime);
-		bz::Overlay.Update();
+		bz::overlay->Update();
 		
 		DrawFrame();
 
@@ -763,13 +721,14 @@ int main(int argc, char* argv[]) {
 	vkDeviceWaitIdle(bz::device.logicalDevice);
 
 	delete flightHelmet;
-	bz::offscreenPipeline2.Destroy(bz::device);
-	bz::deferredPipeline2.Destroy(bz::device);
+	
+	delete bz::overlay;
+
+	bz::offscreenPipeline.Destroy(bz::device);
+	bz::deferredPipeline.Destroy(bz::device);
 	bz::globalsLayout.Destroy(bz::device);
 	bz::materialLayout.Destroy(bz::device);
 
-	bz::Overlay.Free();
-	
 	CleanupVulkan();
 	CleanupWindow();
 

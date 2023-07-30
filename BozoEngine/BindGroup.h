@@ -91,7 +91,7 @@ struct BindGroup {
     BindGroupLayout layout;
     VkDescriptorSet descriptorSet = VK_NULL_HANDLE;
 
-    static BindGroup Create(const Device& device, BindGroupLayout layout, const BindGroupDesc&& desc) {
+    static BindGroup Create(const Device& device, const BindGroupLayout& layout, const BindGroupDesc&& desc) {
         VkDescriptorSetAllocateInfo allocInfo = {
             .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
             .descriptorPool = device.descriptorPool,

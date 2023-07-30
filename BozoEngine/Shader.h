@@ -67,6 +67,15 @@ struct Shader {
         vkDestroyShaderModule(device.logicalDevice, module, nullptr);
     }
 
+    VkPipelineShaderStageCreateInfo GetShaderStageCreateInfo() const {
+        return {
+            .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+            .stage = stage,
+            .module = module,
+            .pName = pEntry
+        };
+    }
+
     //TODO: move this to tools/util header
 private:
     static std::vector<u8> ReadFile(const char* path) {

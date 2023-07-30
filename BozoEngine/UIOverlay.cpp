@@ -3,7 +3,7 @@
 
 #include <backends/imgui_impl_glfw.h>
 
-UIOverlay::UIOverlay() {
+UIOverlay::UIOverlay(GLFWwindow* window, Device& device, VkFormat colorFormat, VkFormat depthFormat) : device{ device } {
 	ImGui::CreateContext();
 
 	// TODO: Check if these configFlags are necessary
@@ -14,24 +14,36 @@ UIOverlay::UIOverlay() {
 
 	// TODO: set our own imgui style here
 	ImGui::StyleColorsDark();
+
+	// Create shaders
+	vertShader = Shader::Create(device, "shaders/uioverlay.vert.spv");
+	fragShader = Shader::Create(device, "shaders/uioverlay.frag.spv");
+
+	ImGui_ImplGlfw_InitForVulkan(window, true);
+
+	InitializeVulkanResources();
+	InitializeVulkanPipeline(colorFormat, depthFormat);
 }
 
 UIOverlay::~UIOverlay() {
+	ImGui_ImplGlfw_Shutdown();
+
 	if (ImGui::GetCurrentContext()) {
 		ImGui::DestroyContext();
 	}
+
+	vertShader.Destroy(device);
+	fragShader.Destroy(device);
+
+	drawDataBuffer.unmap(device.logicalDevice);
+	drawDataBuffer.destroy(device.logicalDevice);
+
+	font.Destroy(device);
+	bindGroupLayout.Destroy(device);
+	pipeline.Destroy(device);
 }
 
-// TODO: We are repeating a lot of the texture.h code.
-// TODO: split up into smaller functions
-void UIOverlay::Initialize(GLFWwindow* window, Device* vulkanDevice, VkFormat colorFormat, VkFormat depthFormat) {
-	Check(vertShader.module != VK_NULL_HANDLE, "Cannot initialize ui overlay without vertex shader. Set UIOverlay.vertShader before calling UIOverlay.Initialize");
-	Check(fragShader.module != VK_NULL_HANDLE, "Cannot initialize ui overlay without fragment shader. Set UIOverlay.fragShader before calling UIOverlay.Initialize");
-	Check(vulkanDevice != nullptr, "Cannot initialize ui overlay without a valid Device");
-	
-	device = vulkanDevice;
-	ImGui_ImplGlfw_InitForVulkan(window, true);
-
+void UIOverlay::InitializeVulkanResources() {
 	ImGuiIO& io = ImGui::GetIO();
 
 	u8* fontData;
@@ -40,86 +52,37 @@ void UIOverlay::Initialize(GLFWwindow* window, Device* vulkanDevice, VkFormat co
 	VkDeviceSize uploadSize = (u64)texWidth * (u64)texHeight * sizeof(u32);	// u64 cast to satisfy arithmetic warning
 
 	// TODO: currently generates mip maps - do we want that?
-	font.CreateFromBuffer(fontData, uploadSize, *device, device->graphicsQueue, texWidth, texHeight, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_USAGE_SAMPLED_BIT, VK_IMAGE_LAYOUT_READ_ONLY_OPTIMAL);
+	font.CreateFromBuffer(fontData, uploadSize, device, device.graphicsQueue, texWidth, texHeight, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_USAGE_SAMPLED_BIT, VK_IMAGE_LAYOUT_READ_ONLY_OPTIMAL);
 
-	// Create descriptor pool
-	VkDescriptorPoolSize poolSizes[] = { { .type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, .descriptorCount = 1 } };
-	VkDescriptorPoolCreateInfo descriptorPoolCreateInfo = {
-		.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
-		.maxSets = 2,
-		.poolSizeCount = arraysize(poolSizes),
-		.pPoolSizes = poolSizes
-	};
+	bindGroupLayout = BindGroupLayout::Create(device, {
+		{.binding = 0, .type = Binding::TEXTURE, .stages = Binding::FRAGMENT }
+	});
 
-	VkCheck(vkCreateDescriptorPool(device->logicalDevice, &descriptorPoolCreateInfo, nullptr, &descriptorPool), "Failed to create UIOverlay descriptor pool");
+	bindGroup = BindGroup::Create(device, bindGroupLayout, {
+		.textures = { {.binding = 0, .sampler = font.sampler, .view = font.view, .layout = font.layout} }
+	});
 
-	// Descriptor set layout
-	VkDescriptorSetLayoutBinding setLayoutBindings[] = {
-		{
-			.binding = 0,
-			.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-			.descriptorCount = 1,
-			.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT
-		}
-	};
-	VkDescriptorSetLayoutCreateInfo descriptorLayoutCreateInfo = {
-		.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
-		.bindingCount = arraysize(setLayoutBindings),
-		.pBindings = setLayoutBindings
-	};
+	// Allocate draw data buffer for vertices and indides up front. Fixed size of 1 mb for now.
+	// The bottom 3/4 of the draw data is used for storing vertices. The remaining 1/4 is used for indices.
+	// [  VkDeviceMemory  ]
+	// [     VkBuffer     ]
+	// [ vertex ] [ index ]
+	device.CreateBuffer(VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT, 1 << 20, &drawDataBuffer);
+	drawDataBuffer.map(device.logicalDevice);
+	vertexBufferOffset = 0;
+	vertexBufferStart = (u8*)drawDataBuffer.mapped + vertexBufferOffset;
+	indexBufferOffset = drawDataBuffer.size - (drawDataBuffer.size >> 2);
+	indexBufferStart = (u8*)drawDataBuffer.mapped + indexBufferOffset;
+}
 
-	VkCheck(vkCreateDescriptorSetLayout(device->logicalDevice, &descriptorLayoutCreateInfo, nullptr, &descriptorSetLayout), "Failed to create UIOverlay descriptor set layout");
+void UIOverlay::InitializeVulkanPipeline(VkFormat colorFormat, VkFormat depthFormat) {
+	std::vector<VkVertexInputBindingDescription> vertexInputBindings = {{
+		.binding = 0,
+		.stride = sizeof(ImDrawVert),
+		.inputRate = VK_VERTEX_INPUT_RATE_VERTEX
+	}};
 
-	// Descriptor set
-	VkDescriptorSetAllocateInfo descriptorSetAllocInfo = {
-		.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
-		.descriptorPool = descriptorPool,
-		.descriptorSetCount = 1,
-		.pSetLayouts = &descriptorSetLayout
-	};
-
-	VkCheck(vkAllocateDescriptorSets(device->logicalDevice, &descriptorSetAllocInfo, &descriptorSet), "Failed to allocate UIOverlay descriptor set");
-
-	VkWriteDescriptorSet writeDescriptorSets[] = {
-		{
-			.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-			.dstSet = descriptorSet,
-			.dstBinding = 0,
-			.dstArrayElement = 0,
-			.descriptorCount = 1,
-			.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-			.pImageInfo = &font.descriptor
-		}
-	};
-
-	vkUpdateDescriptorSets(device->logicalDevice, arraysize(writeDescriptorSets), writeDescriptorSets, 0, nullptr);
-
-	// Prepare a dedicated pipeline for ui overlay rendering.
-	VkPushConstantRange pushConstantRange = {
-		.stageFlags = VK_SHADER_STAGE_VERTEX_BIT,
-		.offset = 0,
-		.size = sizeof(PushConstantBlock)
-	};
-
-	VkPipelineLayoutCreateInfo pipelineLayoutCreateInfo = {
-		.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
-		.setLayoutCount = 1,
-		.pSetLayouts = &descriptorSetLayout,
-		.pushConstantRangeCount = 1,
-		.pPushConstantRanges = &pushConstantRange
-	};
-
-	VkCheck(vkCreatePipelineLayout(device->logicalDevice, &pipelineLayoutCreateInfo, nullptr, &pipelineLayout), "Failed to create UI overlay pipeline layout");
-
-	VkVertexInputBindingDescription vertexInputBindings[] = {
-		{
-			.binding = 0,
-			.stride = sizeof(ImDrawVert),
-			.inputRate = VK_VERTEX_INPUT_RATE_VERTEX
-		}
-	};
-
-	VkVertexInputAttributeDescription vertexAttributes[] = {
+	std::vector<VkVertexInputAttributeDescription> vertexAttributes = {
 		{
 			.location = 0,
 			.binding = 0,
@@ -140,114 +103,36 @@ void UIOverlay::Initialize(GLFWwindow* window, Device* vulkanDevice, VkFormat co
 		},
 	};
 
-	VkPipelineVertexInputStateCreateInfo vertexInputState = {
-		.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
-		.vertexBindingDescriptionCount = arraysize(vertexInputBindings),
-		.pVertexBindingDescriptions = vertexInputBindings,
-		.vertexAttributeDescriptionCount = arraysize(vertexAttributes),
-		.pVertexAttributeDescriptions = vertexAttributes
-	};
-
-	VkPipelineInputAssemblyStateCreateInfo inputAssemblyState = {
-		.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,
-		.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
-		.primitiveRestartEnable = VK_FALSE
-	};
-
-	VkPipelineRasterizationStateCreateInfo rasterizationState = {
-		.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
-		.depthClampEnable = VK_FALSE,
-		.polygonMode = VK_POLYGON_MODE_FILL,
-		.cullMode = VK_CULL_MODE_NONE,
-		.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE,
-		.lineWidth = 1.0f
-	};
-
-	VkPipelineColorBlendAttachmentState blendAttachmentState = {
-		.blendEnable = VK_TRUE,
-		.srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA,
-		.dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA,
-		.colorBlendOp = VK_BLEND_OP_ADD,
-		.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA,
-		.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO,
-		.alphaBlendOp = VK_BLEND_OP_ADD,
-		.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT,
-	};
-
-	VkPipelineColorBlendStateCreateInfo colorBlendState = {
-		.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO,
-		.attachmentCount = 1,
-		.pAttachments = &blendAttachmentState
-	};
-
-	VkPipelineDepthStencilStateCreateInfo depthStencilState = {
-		.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO,
-		.depthTestEnable = VK_FALSE,
-		.depthWriteEnable = VK_FALSE,
-		.depthCompareOp = VK_COMPARE_OP_ALWAYS,
-		.back = {
-			.compareOp = VK_COMPARE_OP_ALWAYS
+	pipeline = Pipeline::Create(device, VK_PIPELINE_BIND_POINT_GRAPHICS, {
+		.debugName = "UI overlay pipeline",
+		.shaders = { vertShader, fragShader},
+		.bindGroups = { bindGroupLayout },
+		.graphicsState = {
+			.attachments = {
+				.formats = { colorFormat },
+				.depthStencilFormat = depthFormat,
+				.blendStates = {{
+					.blendEnable = VK_TRUE,
+					.srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA,
+					.dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA,
+					.colorBlendOp = VK_BLEND_OP_ADD,
+					.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA,
+					.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO,
+					.alphaBlendOp = VK_BLEND_OP_ADD,
+					.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT,
+				}}
+			},
+			.rasterization = {
+				.cullMode = VK_CULL_MODE_NONE,
+				.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE
+			},
+			.sampleCount = VK_SAMPLE_COUNT_1_BIT,
+			.vertexInput = {
+				.bindingDesc = vertexInputBindings,
+				.attributeDesc = vertexAttributes
+			}
 		}
-	};
-
-	VkPipelineViewportStateCreateInfo viewportState = {
-		.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO,
-		.viewportCount = 1,
-		.scissorCount = 1
-	};
-
-	VkPipelineMultisampleStateCreateInfo multisampleState = {
-		.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,
-		.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT
-	};
-
-	VkDynamicState dynamicStateEnables[] = {
-		VK_DYNAMIC_STATE_VIEWPORT,
-		VK_DYNAMIC_STATE_SCISSOR
-	};
-	VkPipelineDynamicStateCreateInfo dynamicState = {
-		.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO,
-		.dynamicStateCount = arraysize(dynamicStateEnables),
-		.pDynamicStates = dynamicStateEnables
-	};
-
-	VkPipelineRenderingCreateInfo pipelineRenderingCreateInfo = {
-		.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO,
-		.colorAttachmentCount = 1,
-		.pColorAttachmentFormats = &colorFormat,
-		.depthAttachmentFormat = depthFormat
-	};
-
-	VkPipelineShaderStageCreateInfo shaders[2] = { vertShader, fragShader };
-	VkGraphicsPipelineCreateInfo pipelineCreateInfo = {
-		.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
-		.pNext = &pipelineRenderingCreateInfo,
-		.stageCount = arraysize(shaders),
-		.pStages = shaders,
-		.pVertexInputState = &vertexInputState,
-		.pInputAssemblyState = &inputAssemblyState,
-		.pViewportState = &viewportState,
-		.pRasterizationState = &rasterizationState,
-		.pMultisampleState = &multisampleState,
-		.pDepthStencilState = &depthStencilState,
-		.pColorBlendState = &colorBlendState,
-		.pDynamicState = &dynamicState,
-		.layout = pipelineLayout
-	};
-
-	VkCheck(vkCreateGraphicsPipelines(device->logicalDevice, VK_NULL_HANDLE, 1, &pipelineCreateInfo, nullptr, &pipeline), "Failed to create UI overlay pipeline");
-
-	// Allocate draw data buffer for vertices and indides up front. Fixed size of 1 mb for now.
-	// The bottom 3/4 of the draw data is used for storing vertices. The remaining 1/4 is used for indices.
-	// [  VkDeviceMemory  ]
-	// [     VkBuffer     ]
-	// [ vertex ] [ index ]
-	device->CreateBuffer(VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT, 1 << 20, &drawDataBuffer);
-	drawDataBuffer.map(device->logicalDevice);
-	vertexBufferOffset = 0;
-	vertexBufferStart = (u8*)drawDataBuffer.mapped + vertexBufferOffset;
-	indexBufferOffset = drawDataBuffer.size - (drawDataBuffer.size >> 2);
-	indexBufferStart = (u8*)drawDataBuffer.mapped + indexBufferOffset;
+	});
 }
 
 void UIOverlay::RenderFrame() {
@@ -289,7 +174,7 @@ void UIOverlay::Update() {
 		indexDst += cmdList->IdxBuffer.Size;
 	}
 
-	VkCheck(drawDataBuffer.Flush(device->logicalDevice), "Failed to flush ui overlay draw data buffer to device memory");
+	VkCheck(drawDataBuffer.Flush(device.logicalDevice), "Failed to flush ui overlay draw data buffer to device memory");
 }
 
 void UIOverlay::Draw(VkCommandBuffer cmdBuffer) {
@@ -303,12 +188,12 @@ void UIOverlay::Draw(VkCommandBuffer cmdBuffer) {
 
 	ImGuiIO& io = ImGui::GetIO();
 
-	vkCmdBindPipeline(cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
-	vkCmdBindDescriptorSets(cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, 1, &descriptorSet, 0, 0);
+	vkCmdBindPipeline(cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline.pipeline);
+	vkCmdBindDescriptorSets(cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline.pipelineLayout, 0, 1, &bindGroup.descriptorSet, 0, 0);
 
 	pushConstantBlock.scale = glm::vec2(2.0f / io.DisplaySize.x, 2.0f / io.DisplaySize.y);
 	pushConstantBlock.translate = glm::vec2(-1.0f);
-	vkCmdPushConstants(cmdBuffer, pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(PushConstantBlock), &pushConstantBlock);
+	vkCmdPushConstants(cmdBuffer, pipeline.pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(PushConstantBlock), &pushConstantBlock);
 
 	vkCmdBindVertexBuffers(cmdBuffer, 0, 1, &drawDataBuffer.buffer, &vertexBufferOffset);
 	vkCmdBindIndexBuffer(cmdBuffer, drawDataBuffer.buffer, indexBufferOffset, VK_INDEX_TYPE_UINT16);
@@ -333,23 +218,4 @@ void UIOverlay::Draw(VkCommandBuffer cmdBuffer) {
 		}
 		vertexOffset += cmdList->VtxBuffer.Size;
 	}
-}
-
-void UIOverlay::Free() {
-	if (vertShader.module) {
-		vkDestroyShaderModule(device->logicalDevice, vertShader.module, nullptr);
-	}
-	if (fragShader.module) {
-		vkDestroyShaderModule(device->logicalDevice, fragShader.module, nullptr);
-	}
-
-	drawDataBuffer.unmap(device->logicalDevice);
-	drawDataBuffer.destroy(device->logicalDevice);
-
-	font.Destroy(*device);
-
-	vkDestroyDescriptorSetLayout(device->logicalDevice, descriptorSetLayout, nullptr);
-	vkDestroyDescriptorPool(device->logicalDevice, descriptorPool, nullptr);
-	vkDestroyPipelineLayout(device->logicalDevice, pipelineLayout, nullptr);
-	vkDestroyPipeline(device->logicalDevice, pipeline, nullptr);
 }
