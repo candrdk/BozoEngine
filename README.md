@@ -1,7 +1,7 @@
 # Bozo Engine
 What kinda bozo would try to write an engine from scratch???
 
-<img src="https://cdn.discordapp.com/attachments/707920399752626247/1123779412769386619/vulkan_unaware.png" alt="Unaware 1st year computer science students attempts to write a vulkan renderer." width="400">
+<img src="https://cdn.discordapp.com/attachments/707920399752626247/1123779412769386619/vulkan_unaware.png" alt="Unaware 1st year computer science students attempts to write a vulkan renderer." width="400" onclick="return false;">
 
 ## What
 Small `Vulkan 1.3` engine/renderer written in `c++20`. Exclusively targeting Windows. The end goal is to implement a very basic deferred renderer. Error handling currently consists of violently asserting and shutting down the program whenever BozoEngine gets slightly uncomfortable. In other words: there is no error handling.
