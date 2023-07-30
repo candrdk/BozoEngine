@@ -57,7 +57,22 @@ struct Pipeline {
 
     static Pipeline Create(const Device& device, VkPipelineBindPoint bindPoint, const PipelineDesc&& desc) {
         std::vector<BindGroupLayout> bindGroupLayouts = desc.bindGroups;
+
+        // TODO: If bindgroup layouts are passed in the desc, we don't need to generate layouts ourselves,
+        //       and it is the responsibility of the caller to destroy the bindgroup layouts given in the desc.
+        //       However, if they aren't passed in the desc, we have to generate them *and* destroy them on
+        //       pipeline destruction. This feels like a bad way to do this, so for now we just don't generate
+        //       bindgroup layouts from reflection data - the caller has to pass valid bindgroup layouts in the desc.
+        //       
+        //       Possible solutions:
+        //       * Forego descriptor set layout creation based on shader reflection entirely
+        //       * Move the descriptor set layout creation code to the BindGroupLayout class
+        //          - BindGroupLayout::Create(std::vector<Shader> shaders)
+        //
+        //       Idk what the best solution is here, so just going to force the user to specify bindgroup layouts for now.
         if (bindGroupLayouts.size() == 0) {
+            Check(bindGroupLayouts.size() > 0, "Generating bindgroup layouts from shader reflection data is disabled until a cleaner interface is figured out. User code should manually create bindgroup layouts that match the shaders and pass them in PipelineDesc.");
+
             std::vector<ShaderBinding> mergedShaderBindings = MergeShaderBindings(device, desc.shaders);
             bindGroupLayouts = CreatePipelineBindGroupLayouts(device, mergedShaderBindings);
         }
@@ -87,9 +102,11 @@ struct Pipeline {
     }
 
     void Destroy(const Device& device) {
+#if 0   // TODO: see comment in Create
         for (BindGroupLayout& layout : bindGroupLayouts) {
             layout.Destroy(device);
         }
+#endif
 
         vkDestroyPipelineLayout(device.logicalDevice, pipelineLayout, nullptr);
         vkDestroyPipeline(device.logicalDevice, pipeline, nullptr);

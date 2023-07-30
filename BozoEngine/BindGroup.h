@@ -78,9 +78,9 @@ struct BindGroupDesc {
     struct BufferBinding {
         u32 binding;
 
-        Buffer buffer;
-        u32 offset;
-        u32 size;
+        VkBuffer buffer;
+        VkDeviceSize offset;
+        VkDeviceSize size;
     };
 
     std::vector<BufferBinding> buffers;
@@ -109,7 +109,7 @@ struct BindGroup {
     void Update(const Device& device, const BindGroupDesc&& desc) {
         for (const auto& bufferBinding : desc.buffers) {
             VkDescriptorBufferInfo bufferInfo = {
-                .buffer = bufferBinding.buffer.buffer,
+                .buffer = bufferBinding.buffer,
                 .offset = bufferBinding.offset,
                 .range = bufferBinding.size
             };

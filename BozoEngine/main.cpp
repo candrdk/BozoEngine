@@ -9,6 +9,8 @@
 
 #include "Pipeline.h"
 
+#define USE_OLD_API
+
 constexpr u32 WIDTH = 1600;
 constexpr u32 HEIGHT = 900;
 
@@ -72,6 +74,7 @@ namespace bz {
 	DepthAttachment depth;
 	VkSampler attachmentSampler;
 
+
 	VkDescriptorSetLayout uboDescriptorSetLayout, descriptorSetLayout;
 	VkPipelineLayout pipelineLayout;
 
@@ -81,8 +84,13 @@ namespace bz {
 	VkPipeline offscreenPipeline;
 	VkPipeline deferredPipeline;
 	VkPipeline albedoPipeline, normalPipeline, occMetRoughPipeline, depthPipeline;
-
 	VkPipeline currentPipeline;
+
+	BindGroupLayout materialLayout, globalsLayout;
+	BindGroup gbufferBindings;
+	BindGroup globalsBindings[arraysize(bz::uniformBuffers)];
+	Pipeline offscreenPipeline2, deferredPipeline2;
+
 
 	VkSampleCountFlagBits msaaSamples = VK_SAMPLE_COUNT_1_BIT;
 	bool framebufferResized = false;
@@ -789,12 +797,21 @@ void RecordDeferredCommandBuffer(VkCommandBuffer cmd, u32 imageIndex) {
 		VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,			VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
 		VK_IMAGE_LAYOUT_UNDEFINED,						VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL);
 
+#ifdef USE_OLD_API
 	vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, bz::offscreenPipeline);
 	vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, bz::pipelineLayout, 0, 1, &bz::uboDescriptorSets[currentFrame], 0, nullptr);
+#else
+	vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, bz::offscreenPipeline2.pipeline);
+	vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, bz::offscreenPipeline2.pipelineLayout, 0, 1, &bz::globalsBindings[currentFrame].descriptorSet, 0, nullptr);
+#endif
 
 	vkCmdBeginRendering(cmd, &renderingInfo);
 
+#ifdef USE_OLD_API
 	flightHelmet->Draw(cmd, bz::pipelineLayout);
+#else
+	flightHelmet->Draw(cmd, bz::offscreenPipeline2.pipelineLayout);
+#endif
 
 	vkCmdEndRendering(cmd);
 
@@ -836,8 +853,14 @@ void RecordDeferredCommandBuffer(VkCommandBuffer cmd, u32 imageIndex) {
 		.pStencilAttachment = nullptr
 	};
 	
+#ifdef USE_OLD_API
 	vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, bz::currentPipeline);
 	vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, bz::pipelineLayout, 1, 1, &bz::descriptorSet, 0, nullptr);
+#else
+	vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, bz::deferredPipeline2.pipeline);
+	vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, bz::deferredPipeline2.pipelineLayout, 0, 1, &bz::globalsBindings[currentFrame].descriptorSet, 0, nullptr);
+	vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, bz::deferredPipeline2.pipelineLayout, 1, 1, &bz::gbufferBindings.descriptorSet, 0, nullptr);
+#endif
 
 	vkCmdBeginRendering(cmd, &renderingInfo);
 
@@ -869,6 +892,98 @@ void CreateRenderFrames() {
 	}
 }
 
+void SetupDescriptorSetLayout2() {
+	bz::materialLayout = BindGroupLayout::Create(bz::device, {
+		{.binding = 0, .type = Binding::TEXTURE, .stages = Binding::FRAGMENT },
+		{.binding = 1, .type = Binding::TEXTURE, .stages = Binding::FRAGMENT },
+		{.binding = 2, .type = Binding::TEXTURE, .stages = Binding::FRAGMENT },
+		{.binding = 3, .type = Binding::TEXTURE, .stages = Binding::FRAGMENT }
+	});
+
+	bz::globalsLayout = BindGroupLayout::Create(bz::device, {
+		{.binding = 0, .type = Binding::BUFFER }
+	});
+}
+
+void AllocateDescriptorSets2() {
+	bz::gbufferBindings = BindGroup::Create(bz::device, bz::materialLayout, {
+		.textures = { 
+			{.binding = 0, .sampler = bz::attachmentSampler, .view = bz::albedo.view, .layout = VK_IMAGE_LAYOUT_READ_ONLY_OPTIMAL },
+			{.binding = 1, .sampler = bz::attachmentSampler, .view = bz::normal.view, .layout = VK_IMAGE_LAYOUT_READ_ONLY_OPTIMAL },
+			{.binding = 2, .sampler = bz::attachmentSampler, .view = bz::occMetRough.view, .layout = VK_IMAGE_LAYOUT_READ_ONLY_OPTIMAL },
+			{.binding = 3, .sampler = bz::attachmentSampler, .view = bz::depth.depthView, .layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL }
+		}
+	});
+
+	for (u32 i = 0; i < arraysize(bz::globalsBindings); i++) {
+		bz::globalsBindings[i] = BindGroup::Create(bz::device, bz::globalsLayout, {
+			.buffers = { {.binding = 0, .buffer = bz::uniformBuffers[i].buffer, .offset = 0, .size = sizeof(CameraUBO)}}
+		});
+	}
+}
+
+void UpdateRenderAttachmentDescriptorSets2() {
+	bz::gbufferBindings.Update(bz::device, {
+		.textures = {
+			{.binding = 0, .sampler = bz::attachmentSampler, .view = bz::albedo.view, .layout = VK_IMAGE_LAYOUT_READ_ONLY_OPTIMAL },
+			{.binding = 1, .sampler = bz::attachmentSampler, .view = bz::normal.view, .layout = VK_IMAGE_LAYOUT_READ_ONLY_OPTIMAL },
+			{.binding = 2, .sampler = bz::attachmentSampler, .view = bz::occMetRough.view, .layout = VK_IMAGE_LAYOUT_READ_ONLY_OPTIMAL },
+			{.binding = 3, .sampler = bz::attachmentSampler, .view = bz::depth.depthView, .layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL }
+		}
+	});
+}
+
+void SetupPipelines2() {
+	Shader offscreenVert = Shader::Create(bz::device, "shaders/offscreen.vert.spv");
+	Shader offscreenFrag = Shader::Create(bz::device, "shaders/offscreen.frag.spv");
+
+	Shader deferredVert = Shader::Create(bz::device, "shaders/deferred.vert.spv");
+	Shader deferredFrag = Shader::Create(bz::device, "shaders/deferred.frag.spv");
+
+	bz::offscreenPipeline2 = Pipeline::Create(bz::device, VK_PIPELINE_BIND_POINT_GRAPHICS, {
+		.debugName = "Offscreen pipeline",
+		.shaders = { offscreenVert, offscreenFrag },
+		.bindGroups = { bz::globalsLayout, bz::materialLayout },
+		.graphicsState = {
+			.attachments = {
+				.formats = { bz::albedo.format, bz::normal.format, bz::occMetRough.format },
+				.depthStencilFormat = bz::depth.format
+			},
+			.rasterization = {
+				.cullMode = VK_CULL_MODE_BACK_BIT,
+				.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE
+			},
+			.sampleCount = bz::msaaSamples,
+			.vertexInput = {
+				.bindingDesc = { GLTFModel::Vertex::GetBindingDescription() },
+				.attributeDesc = GLTFModel::Vertex::GetAttributeDescriptions()
+			}
+		}
+	});
+
+	bz::deferredPipeline2 = Pipeline::Create(bz::device, VK_PIPELINE_BIND_POINT_GRAPHICS, {
+		.debugName = "Deferred pipeline",
+		.shaders = { deferredVert, deferredFrag },
+		.bindGroups = { bz::globalsLayout, bz::materialLayout },
+		.graphicsState = {
+			.attachments = {
+				.formats = { bz::swapchain.format },
+				.depthStencilFormat = bz::depth.format
+			},
+			.rasterization = {
+				.cullMode = VK_CULL_MODE_FRONT_BIT,
+				.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE
+			},
+			.sampleCount = VK_SAMPLE_COUNT_1_BIT
+		}
+	});
+
+	offscreenVert.Destroy(bz::device);
+	offscreenFrag.Destroy(bz::device);
+	deferredVert.Destroy(bz::device);
+	deferredFrag.Destroy(bz::device);
+}
+
 void InitVulkan() {
 	bz::device.CreateDevice(window);
 	bz::msaaSamples = bz::device.GetMaxUsableSampleCount();
@@ -887,70 +1002,10 @@ void InitVulkan() {
 	UpdateDescriptorSets();
 	SetupPipelines();
 
-#if 0	// Testing the new api. Eventually everything will be created like this
-	Shader offscreenVert = Shader::Create(bz::device, "shaders/offscreen.vert.spv");
-	Shader offscreenFrag = Shader::Create(bz::device, "shaders/offscreen.frag.spv");
-
-	Shader deferredVert = Shader::Create(bz::device, "shaders/deferred.vert.spv");
-	Shader deferredFrag = Shader::Create(bz::device, "shaders/deferred.frag.spv");
-
-	BindGroupLayout globalsLayout = BindGroupLayout::Create(bz::device, { 
-		{ .binding = 0, .type = Binding::BUFFER } 
-	});
-
-	BindGroupLayout materialLayout = BindGroupLayout::Create(bz::device, {
-		{.binding = 0, .type = Binding::TEXTURE, .stages = Binding::FRAGMENT },
-		{.binding = 1, .type = Binding::TEXTURE, .stages = Binding::FRAGMENT },
-		{.binding = 2, .type = Binding::TEXTURE, .stages = Binding::FRAGMENT }
-	});
-
-	Pipeline offscreenPipeline = Pipeline::Create(bz::device, VK_PIPELINE_BIND_POINT_GRAPHICS, {
-		.debugName = "Offscreen pipeline",
-		.shaders = { offscreenVert, offscreenFrag },
-		.bindGroups = { globalsLayout, materialLayout },
-		.graphicsState = {
-			.attachments = {
-				.formats = { bz::albedo.format, bz::normal.format, bz::occMetRough.format },
-				.depthStencilFormat = bz::depth.format
-			},
-			.rasterization = {
-				.cullMode = VK_CULL_MODE_BACK_BIT,
-				.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE
-			},
-			.sampleCount = bz::msaaSamples,
-			.vertexInput = {
-				.bindingDesc = { GLTFModel::Vertex::GetBindingDescription() },
-				.attributeDesc = GLTFModel::Vertex::GetAttributeDescriptions()
-			}
-		}
-	});
-
-	Pipeline deferredPipeline = Pipeline::Create(bz::device, VK_PIPELINE_BIND_POINT_GRAPHICS, {
-		.debugName = "Deferred pipeline",
-		.shaders = { deferredVert, deferredFrag },
-		.graphicsState = {
-			.attachments = {
-				.formats = { bz::swapchain.format },
-				.depthStencilFormat = bz::depth.format,
-				.blendEnable = VK_FALSE,
-				.blendStates = { {.blendEnable = VK_FALSE, .colorWriteMask = 0xF } },
-			},
-			.rasterization = {
-				.cullMode = VK_CULL_MODE_FRONT_BIT,
-				.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE
-			},
-			.sampleCount = VK_SAMPLE_COUNT_1_BIT
-		}
-	});
-
-	offscreenVert.Destroy(bz::device);
-	offscreenFrag.Destroy(bz::device);
-	deferredVert.Destroy(bz::device);
-	deferredFrag.Destroy(bz::device);
-
-	offscreenPipeline.Destroy(bz::device);
-	deferredPipeline.Destroy(bz::device);
-#endif
+	//NEWAPI
+	SetupDescriptorSetLayout2();
+	AllocateDescriptorSets2();
+	SetupPipelines2();
 
 	CreateRenderFrames();
 }
@@ -981,6 +1036,9 @@ void RecreateSwapchain() {
 
 	CreateRenderAttachments();
 	UpdateRenderAttachmentDescriptorSets();
+
+	//NEWAPI
+	UpdateRenderAttachmentDescriptorSets2();
 }
 
 void CleanupVulkan() {
@@ -1099,17 +1157,9 @@ int main(int argc, char* argv[]) {
 	bz::Overlay.fragShader = LoadShader("shaders/uioverlay.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT);
 	bz::Overlay.Initialize(window, &bz::device, bz::swapchain.format, bz::depth.format);
 
-	BindGroupLayout materialLayout = BindGroupLayout::Create(bz::device, {
-		{.binding = 0, .type = Binding::TEXTURE, .stages = Binding::FRAGMENT },
-		{.binding = 1, .type = Binding::TEXTURE, .stages = Binding::FRAGMENT },
-		{.binding = 2, .type = Binding::TEXTURE, .stages = Binding::FRAGMENT },
-		{.binding = 3, .type = Binding::TEXTURE, .stages = Binding::FRAGMENT }
-	});
-	
-	flightHelmet = new GLTFModel(bz::device, materialLayout, "assets/FlightHelmet/FlightHelmet.gltf");
+	flightHelmet = new GLTFModel(bz::device, bz::materialLayout, "assets/FlightHelmet/FlightHelmet.gltf");
 
 	double lastFrame = 0.0f;
-
 	while (!glfwWindowShouldClose(window)) {
 		double currentFrame = glfwGetTime();
 		float deltaTime = float(currentFrame - lastFrame);
@@ -1127,7 +1177,10 @@ int main(int argc, char* argv[]) {
 	vkDeviceWaitIdle(bz::device.logicalDevice);
 
 	delete flightHelmet;
-	materialLayout.Destroy(bz::device);
+	bz::offscreenPipeline2.Destroy(bz::device);
+	bz::deferredPipeline2.Destroy(bz::device);
+	bz::globalsLayout.Destroy(bz::device);
+	bz::materialLayout.Destroy(bz::device);
 
 	bz::Overlay.Free();
 	
