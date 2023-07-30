@@ -13,13 +13,13 @@ UIOverlay::UIOverlay(GLFWwindow* window, Device& device, VkFormat colorFormat, V
 	// TODO: set our own imgui style here
 	ImGui::StyleColorsDark();
 
-	// Create shaders
-	vertShader = Shader::Create(device, "shaders/uioverlay.vert.spv");
-	fragShader = Shader::Create(device, "shaders/uioverlay.frag.spv");
-
+	// Initialize glfw callbacks
 	ImGui_ImplGlfw_InitForVulkan(window, true);
 
+	// Initialize vulkan resources for the ui overlay such as the font texture + vertex/index buffers.
 	InitializeVulkanResources();
+
+	// Load the ui overlay shaders and initialize the vulkan pipeline used for rendering the overlay
 	InitializeVulkanPipeline(colorFormat, depthFormat);
 }
 
@@ -30,8 +30,6 @@ UIOverlay::~UIOverlay() {
 		ImGui::DestroyContext();
 	}
 
-	vertShader.Destroy(device);
-	fragShader.Destroy(device);
 
 	drawDataBuffer.unmap(device.logicalDevice);
 	drawDataBuffer.destroy(device.logicalDevice);
@@ -74,6 +72,9 @@ void UIOverlay::InitializeVulkanResources() {
 }
 
 void UIOverlay::InitializeVulkanPipeline(VkFormat colorFormat, VkFormat depthFormat) {
+	Shader vertShader = Shader::Create(device, "shaders/uioverlay.vert.spv");
+	Shader fragShader = Shader::Create(device, "shaders/uioverlay.frag.spv");
+
 	std::vector<VkVertexInputBindingDescription> vertexInputBindings = {{
 		.binding = 0,
 		.stride = sizeof(ImDrawVert),
@@ -86,14 +87,12 @@ void UIOverlay::InitializeVulkanPipeline(VkFormat colorFormat, VkFormat depthFor
 			.binding = 0,
 			.format = VK_FORMAT_R32G32_SFLOAT,
 			.offset = offsetof(ImDrawVert, pos)
-		},
-		{
+		}, {
 			.location = 1,
 			.binding = 0,
 			.format = VK_FORMAT_R32G32_SFLOAT,
 			.offset = offsetof(ImDrawVert, uv)
-		},
-		{
+		}, {
 			.location = 2,
 			.binding = 0,
 			.format = VK_FORMAT_R8G8B8A8_UNORM,
@@ -131,6 +130,10 @@ void UIOverlay::InitializeVulkanPipeline(VkFormat colorFormat, VkFormat depthFor
 			}
 		}
 	});
+
+	// We don't need to keep the shaders around once the pipeline has been created.
+	vertShader.Destroy(device);
+	fragShader.Destroy(device);
 }
 
 void UIOverlay::RenderFrame() {

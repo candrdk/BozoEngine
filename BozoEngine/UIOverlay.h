@@ -8,9 +8,6 @@
 class UIOverlay {
 	Device& device;
 
-	Shader vertShader = {};
-	Shader fragShader = {};
-
 	Buffer drawDataBuffer	= {};
 	Texture2D font			= {};
 
