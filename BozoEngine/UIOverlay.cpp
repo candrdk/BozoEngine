@@ -6,8 +6,6 @@
 UIOverlay::UIOverlay(GLFWwindow* window, Device& device, VkFormat colorFormat, VkFormat depthFormat) : device{ device } {
 	ImGui::CreateContext();
 
-	// TODO: Check if these configFlags are necessary
-	// Also, check if io.FontGlobalScale should be changed.
 	ImGuiIO& io = ImGui::GetIO();
 	io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
 	io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;

@@ -203,7 +203,7 @@ private:
         VkPipelineDynamicStateCreateInfo dynamicStateInfo = { .sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO, .dynamicStateCount = arraysize(dynamicState), .pDynamicStates = dynamicState };
         VkPipelineViewportStateCreateInfo viewportStateInfo = { .sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO, .viewportCount = 1, .scissorCount = 1 };
 
-        // TODO: MapEntries should not b passed through desc, but reflected from the shader spir-v. This is not supported by SPIRV-Reflect yet...
+        // TODO: MapEntries should not be passed through desc, but reflected from the shader spir-v. This is not supported by SPIRV-Reflect yet...
         // TODO: Once we start generating these entries, we should add some asserts to make sure mapentries match the specialization data from desc.
         // std::vector<VkSpecializationMapEntry> specializationEntries = MergeSpecializationEntries(desc.shaders);
         VkSpecializationInfo specializationInfo = {

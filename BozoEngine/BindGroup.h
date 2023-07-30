@@ -7,6 +7,8 @@
 // * Maybe make BINDGROUP strongly typed, and take it as a param for createBindGroup?
 // * Find a way to create buffer/texture bindings by just giving a Buffer/Texture2D directly.
 // TODO: figure out if user should be responsible for freeing bindgroups / how to handle their reuse
+// TODO: should BindGroup keep a reference/pointer to the BindGroupLayout instead?
+//          - want to make ownership/responsibility for destroying the layout clearer.
 #if 0
 enum BINDGROUP {
     GLOBALS = 0,
