@@ -292,10 +292,6 @@
     <None Include="shaders\deferred.vert.glsl" />
     <None Include="shaders\offscreen.frag.glsl" />
     <None Include="shaders\offscreen.vert.glsl" />
-    <None Include="shaders\triangle.frag.glsl" />
-    <None Include="shaders\triangle.vert.glsl">
-      <FileType>Document</FileType>
-    </None>
     <None Include="shaders\uioverlay.frag.glsl" />
     <None Include="shaders\uioverlay.vert.glsl" />
   </ItemGroup>
