@@ -3,18 +3,10 @@
 #include "Common.h"
 #include "Device.h"
 
-// TODO: Sample api.
-// * Maybe make BINDGROUP strongly typed, and take it as a param for createBindGroup?
-// * Find a way to create buffer/texture bindings by just giving a Buffer/Texture2D directly.
-// TODO: figure out if user should be responsible for freeing bindgroups / how to handle their reuse
+// TODO: Find a way to create buffer/texture bindings by just giving a Buffer/Texture2D directly.
+// TODO: Figure out if user should be responsible for freeing bindgroups / how to handle their reuse
 // TODO: should BindGroup keep a reference/pointer to the BindGroupLayout instead?
 //          - want to make ownership/responsibility for destroying the layout clearer.
-#if 0
-enum BINDGROUP {
-    GLOBALS = 0,
-    MATERIAL = 1
-};
-#endif
 
 struct Binding {
     enum Type {
@@ -37,35 +29,9 @@ struct BindGroupLayout {
     std::vector<Binding> bindingDescs;
     VkDescriptorSetLayout descriptorSetLayout = VK_NULL_HANDLE;
 
-    static BindGroupLayout Create(const Device& device, std::vector<Binding> bindings) {
-        std::vector<VkDescriptorSetLayoutBinding> descriptorBindings;
-        for (u32 i = 0; i < bindings.size(); i++) {
-            descriptorBindings.push_back({
-                .binding = bindings[i].binding,
-                .descriptorType = (VkDescriptorType)bindings[i].type,
-                .descriptorCount = bindings[i].count,
-                .stageFlags = bindings[i].stages
-            });
-        }
+    static BindGroupLayout Create(const Device& device, std::vector<Binding> bindings);
 
-        VkDescriptorSetLayoutCreateInfo createInfo = {
-            .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
-            .bindingCount = (u32)descriptorBindings.size(),
-            .pBindings = descriptorBindings.data()
-        };
-
-        VkDescriptorSetLayout descriptorSetLayout;
-        vkCreateDescriptorSetLayout(device.logicalDevice, &createInfo, nullptr, &descriptorSetLayout);
-
-        return BindGroupLayout{
-            .bindingDescs = bindings,
-            .descriptorSetLayout = descriptorSetLayout
-        };
-    }
-
-    void Destroy(const Device& device) {
-        vkDestroyDescriptorSetLayout(device.logicalDevice, descriptorSetLayout, nullptr);
-    }
+    void Destroy(const Device& device);
 };
 
 struct BindGroupDesc {
@@ -93,56 +59,7 @@ struct BindGroup {
     BindGroupLayout layout;
     VkDescriptorSet descriptorSet = VK_NULL_HANDLE;
 
-    static BindGroup Create(const Device& device, const BindGroupLayout& layout, const BindGroupDesc&& desc) {
-        VkDescriptorSetAllocateInfo allocInfo = {
-            .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
-            .descriptorPool = device.descriptorPool,
-            .descriptorSetCount = 1,
-            .pSetLayouts = &layout.descriptorSetLayout
-        };
+    static BindGroup Create(const Device& device, const BindGroupLayout& layout, const BindGroupDesc&& desc);
 
-        BindGroup bindGroup = { .layout = layout };
-        vkAllocateDescriptorSets(device.logicalDevice, &allocInfo, &bindGroup.descriptorSet);
-
-        bindGroup.Update(device, std::forward<const BindGroupDesc&&>(desc));
-        return bindGroup;
-    }
-
-    void Update(const Device& device, const BindGroupDesc&& desc) {
-        for (const auto& bufferBinding : desc.buffers) {
-            VkDescriptorBufferInfo bufferInfo = {
-                .buffer = bufferBinding.buffer,
-                .offset = bufferBinding.offset,
-                .range = bufferBinding.size
-            };
-            VkWriteDescriptorSet write = {
-                .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-                .dstSet = descriptorSet,
-                .dstBinding = bufferBinding.binding,
-                .dstArrayElement = 0,
-                .descriptorCount = 1,
-                .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-                .pBufferInfo = &bufferInfo
-            };
-            vkUpdateDescriptorSets(device.logicalDevice, 1, &write, 0, nullptr);
-        }
-
-        for (const auto& texture : desc.textures) {
-            VkDescriptorImageInfo imageInfo = {
-                .sampler = texture.sampler,
-                .imageView = texture.view,
-                .imageLayout = texture.layout
-            };
-            VkWriteDescriptorSet write = {
-                .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-                .dstSet = descriptorSet,
-                .dstBinding = texture.binding,
-                .dstArrayElement = 0,
-                .descriptorCount = 1,
-                .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-                .pImageInfo = &imageInfo
-            };
-            vkUpdateDescriptorSets(device.logicalDevice, 1, &write, 0, nullptr);
-        }
-    }
+    void Update(const Device& device, const BindGroupDesc&& desc);
 };

@@ -146,6 +146,15 @@
     <ClCompile Include="..\Extern\SPIRV-Reflect\spirv_reflect.c">
       <Filter>Extern\SPIRV-Reflect</Filter>
     </ClCompile>
+    <ClCompile Include="BindGroup.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="Pipeline.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="Shader.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\Extern\glfw\src\win32_joystick.h">
