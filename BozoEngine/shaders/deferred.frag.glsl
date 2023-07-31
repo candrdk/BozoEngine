@@ -5,6 +5,10 @@ layout(set = 0, binding = 0) uniform UniformBufferObject {
     mat4 proj;
 } uboScene;
 
+layout(push_constant) uniform PushConstants {
+    uint renderMode;
+};
+
 layout (set = 1, binding = 0) uniform sampler2DMS samplerAlbedo;
 layout (set = 1, binding = 1) uniform sampler2DMS samplerNormal;
 layout (set = 1, binding = 2) uniform sampler2DMS samplerOccMetRough;
@@ -14,18 +18,17 @@ layout (location = 0) in vec2 inUV;
 
 layout (location = 0) out vec4 outFragcolor;
 
-layout (constant_id = 0) const int RENDER_MODE = 0;
-layout (constant_id = 1) const int NUM_SAMPLES = 1;
+layout (constant_id = 0) const int MSAA_SAMPLES = 1;
 
 // Manual resolve for MSAA samples 
 vec4 resolve(sampler2DMS tex, ivec2 uv) {
 	vec4 result = vec4(0.0);	   
-	for (int i = 0; i < NUM_SAMPLES; i++) {
+	for (int i = 0; i < MSAA_SAMPLES; i++) {
 		vec4 val = texelFetch(tex, uv, i); 
 		result += val;
 	}    
 	// Average resolved samples
-	return result / float(NUM_SAMPLES);
+	return result / float(MSAA_SAMPLES);
 }
 
 // Resolve to the lowest possible depth; the normal resolve messes up edges. 
@@ -33,7 +36,7 @@ vec4 resolve(sampler2DMS tex, ivec2 uv) {
 float resolve_depth(ivec2 uv) {
 	float minDepth = 0.0;
 
-	for (int i = 0; i < NUM_SAMPLES; i++) {
+	for (int i = 0; i < MSAA_SAMPLES; i++) {
 		float depth = texelFetch(samplerDepth, uv, i).r;
 		minDepth = max(depth, minDepth);
 	}
@@ -80,7 +83,7 @@ vec4 shade_pixel(ivec2 uv) {
 void main() {
 	ivec2 uv = ivec2(gl_FragCoord.xy);
 
-	switch(RENDER_MODE) {
+	switch(renderMode) {
 	case 0:
 		outFragcolor = shade_pixel(uv); break;
 	case 1:

@@ -77,6 +77,7 @@ namespace bz {
 	BindGroup globalsBindings[arraysize(bz::uniformBuffers)];
 	Pipeline offscreenPipeline, deferredPipeline;
 
+	u32 renderMode = 0;
 
 	VkSampleCountFlagBits msaaSamples = VK_SAMPLE_COUNT_1_BIT;
 	bool framebufferResized = false;
@@ -102,6 +103,14 @@ void KeyCallback(GLFWwindow* window, int key, int scancode, int action, int mods
 	case GLFW_KEY_S:
 	case GLFW_KEY_D:
 		bz::camera.ProcessKeyboard(key, action);
+		break;
+
+	case GLFW_KEY_0:
+	case GLFW_KEY_1:
+	case GLFW_KEY_2:
+	case GLFW_KEY_3:
+	case GLFW_KEY_4:
+		bz::renderMode = key - '0';
 		break;
 	}
 }
@@ -430,6 +439,7 @@ void RecordDeferredCommandBuffer(VkCommandBuffer cmd, u32 imageIndex) {
 	vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, bz::deferredPipeline.pipeline);
 	vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, bz::deferredPipeline.pipelineLayout, 0, 1, &bz::globalsBindings[currentFrame].descriptorSet, 0, nullptr);
 	vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, bz::deferredPipeline.pipelineLayout, 1, 1, &bz::gbufferBindings.descriptorSet, 0, nullptr);
+	vkCmdPushConstants(cmd, bz::deferredPipeline.pipelineLayout, VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(u32), &bz::renderMode);
 
 	vkCmdBeginRendering(cmd, &renderingInfo);
 
@@ -543,7 +553,12 @@ void CreatePipelines() {
 				.cullMode = VK_CULL_MODE_FRONT_BIT,
 				.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE
 			},
-			.sampleCount = VK_SAMPLE_COUNT_1_BIT
+			.sampleCount = VK_SAMPLE_COUNT_1_BIT,
+			.specialization = {
+				.mapEntries = { { .size = sizeof(u32)}},
+				.dataSize = sizeof(u32),
+				.pData = &bz::msaaSamples
+			}
 		}
 	});
 
