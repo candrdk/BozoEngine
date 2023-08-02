@@ -31,11 +31,18 @@ static VkPushConstantRange MergePushConstants(span<const Shader> shaders) {
     VkPushConstantRange mergedPushConstants{};
 
     for (const Shader& shader : shaders) {
-        if (shader.pushConstants.stageFlags) {
-            mergedPushConstants = shader.pushConstants;
-        }
+        if (shader.pushConstants.stageFlags != 0) {
+            if (mergedPushConstants.stageFlags == 0) {
+                mergedPushConstants = {
+                    .offset = shader.pushConstants.offset,
+                    .size = shader.pushConstants.size
+                };
+            }
+            Check(mergedPushConstants.offset == shader.pushConstants.offset, "Incompatible push constant offsets");
+            Check(mergedPushConstants.size == shader.pushConstants.size, "Incompatible push constant sizes");
 
-        mergedPushConstants.stageFlags |= shader.pushConstants.stageFlags;
+            mergedPushConstants.stageFlags |= shader.pushConstants.stageFlags;
+        }
     }
 
     return mergedPushConstants;

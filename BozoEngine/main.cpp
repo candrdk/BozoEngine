@@ -20,6 +20,15 @@ struct CameraUBO {
 	alignas(16) glm::mat4 proj;
 };
 
+struct DeferredUBO {
+	alignas(16) glm::mat4 view;
+	alignas(16) glm::mat4 invProj;
+	alignas(16) glm::vec4 camPos;
+	alignas(16) glm::vec4 camDir;
+	alignas(16) glm::vec4 redLightPos;
+	alignas(16) glm::vec4 blueLightPos;
+};
+
 struct RenderFrame {
 	VkSemaphore imageAvailable;
 	VkSemaphore renderFinished;
@@ -61,20 +70,26 @@ struct DepthAttachment {
 // Temporary namespace to contain globals
 namespace bz {
 	Camera camera(glm::vec3(0.0f, 0.0f, 0.5f), 1.0f, 90.0f, (float)WIDTH / HEIGHT, 0.01f, 0.0f, -90.0f);
+	glm::vec4 redLightPos, blueLightPos;
 
 	Device device;
 	Swapchain swapchain;
 	UIOverlay* overlay;
 
 	RenderFrame renderFrames[MAX_FRAMES_IN_FLIGHT];
+
 	Buffer uniformBuffers[MAX_FRAMES_IN_FLIGHT];
+	Buffer deferredBuffers[MAX_FRAMES_IN_FLIGHT];
+	BindGroup globalsBindings[arraysize(uniformBuffers)];
+	BindGroup deferredBindings[arraysize(deferredBuffers)];
+
 	RenderAttachment albedo, normal, occMetRough;
 	DepthAttachment depth;
 	VkSampler attachmentSampler;
 
 	BindGroupLayout materialLayout, globalsLayout;
 	BindGroup gbufferBindings;
-	BindGroup globalsBindings[arraysize(bz::uniformBuffers)];
+
 	Pipeline offscreenPipeline, deferredPipeline;
 
 	u32 renderMode = 0;
@@ -212,12 +227,22 @@ void CreateImageView(VkImage image, VkFormat format, VkImageAspectFlags aspectFl
 }
 
 void CreateUniformBuffers() {
-	for (int i = 0; i < arraysize(bz::uniformBuffers); i++) {
+	for (u32 i = 0; i < arraysize(bz::uniformBuffers); i++) {
 		bz::device.CreateBuffer(
 			VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
 			VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
 			sizeof(CameraUBO), &bz::uniformBuffers[i]);
+
 		bz::uniformBuffers[i].map(bz::device.logicalDevice);
+	}
+
+	for (u32 i = 0; i < arraysize(bz::uniformBuffers); i++) {
+		bz::device.CreateBuffer(
+			VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+			VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+			sizeof(DeferredUBO), &bz::deferredBuffers[i]);
+
+		bz::deferredBuffers[i].map(bz::device.logicalDevice);
 	}
 }
 
@@ -437,7 +462,7 @@ void RecordDeferredCommandBuffer(VkCommandBuffer cmd, u32 imageIndex) {
 	};
 	
 	vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, bz::deferredPipeline.pipeline);
-	vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, bz::deferredPipeline.pipelineLayout, 0, 1, &bz::globalsBindings[currentFrame].descriptorSet, 0, nullptr);
+	vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, bz::deferredPipeline.pipelineLayout, 0, 1, &bz::deferredBindings[currentFrame].descriptorSet, 0, nullptr);
 	vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, bz::deferredPipeline.pipelineLayout, 1, 1, &bz::gbufferBindings.descriptorSet, 0, nullptr);
 	vkCmdPushConstants(cmd, bz::deferredPipeline.pipelineLayout, VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(u32), &bz::renderMode);
 
@@ -497,6 +522,12 @@ void CreateBindGroups() {
 	for (u32 i = 0; i < arraysize(bz::globalsBindings); i++) {
 		bz::globalsBindings[i] = BindGroup::Create(bz::device, bz::globalsLayout, {
 			.buffers = { {.binding = 0, .buffer = bz::uniformBuffers[i].buffer, .offset = 0, .size = sizeof(CameraUBO)}}
+		});
+	}
+
+	for (u32 i = 0; i < arraysize(bz::deferredBindings); i++) {
+		bz::deferredBindings[i] = BindGroup::Create(bz::device, bz::globalsLayout, {
+			.buffers = { {.binding = 0, .buffer = bz::deferredBuffers[i].buffer, .offset = 0, .size = sizeof(DeferredUBO)}}
 		});
 	}
 }
@@ -623,6 +654,11 @@ void CleanupVulkan() {
 		bz::uniformBuffers[i].destroy(bz::device.logicalDevice);
 	}
 
+	for (int i = 0; i < arraysize(bz::deferredBuffers); i++) {
+		bz::deferredBuffers[i].unmap(bz::device.logicalDevice);
+		bz::deferredBuffers[i].destroy(bz::device.logicalDevice);
+	}
+
 	for (int i = 0; i < arraysize(bz::renderFrames); i++) {
 		vkDestroySemaphore(bz::device.logicalDevice, bz::renderFrames[i].imageAvailable, nullptr);
 		vkDestroySemaphore(bz::device.logicalDevice, bz::renderFrames[i].renderFinished, nullptr);
@@ -634,12 +670,23 @@ void CleanupVulkan() {
 }
 
 void UpdateUniformBuffer(u32 currentImage) {
-	CameraUBO ubo = {
+	CameraUBO cameraUBO = {
 		.view = bz::camera.view,
 		.proj = bz::camera.projection
 	};
 
-	memcpy(bz::uniformBuffers[currentImage].mapped, &ubo, sizeof(ubo));
+	memcpy(bz::uniformBuffers[currentImage].mapped, &cameraUBO, sizeof(cameraUBO));
+
+	DeferredUBO deferredUBO = {
+		.view = bz::camera.view,
+		.invProj = glm::inverse(bz::camera.projection),
+		.camPos = glm::vec4(bz::camera.position, 1.0f),
+		.camDir = -1.0f * glm::vec4(bz::camera.direction, 0.0f),
+		.redLightPos = bz::redLightPos,
+		.blueLightPos = bz::blueLightPos
+	};
+
+	memcpy(bz::deferredBuffers[currentImage].mapped, &deferredUBO, sizeof(deferredUBO));
 }
 
 void DrawFrame() {
@@ -718,6 +765,9 @@ int main(int argc, char* argv[]) {
 
 	flightHelmet = new GLTFModel(bz::device, bz::materialLayout, "assets/FlightHelmet/FlightHelmet.gltf");
 
+	bz::redLightPos = glm::vec4(0.0f, 1.0f, 1.0f, 1.0f);
+	bz::blueLightPos = glm::vec4(0.0f, 0.0f, 0.0f, 1.0f);
+
 	double lastFrame = 0.0f;
 	while (!glfwWindowShouldClose(window)) {
 		double currentFrame = glfwGetTime();
@@ -726,6 +776,12 @@ int main(int argc, char* argv[]) {
 
 		bz::camera.Update(deltaTime);
 		bz::overlay->Update();
+
+		bz::redLightPos.x = 2.0f * glm::sin((float)currentFrame);
+		bz::redLightPos.z = 2.0f * glm::cos((float)currentFrame);
+
+		bz::blueLightPos.y = 2.0f * glm::sin((float)currentFrame);
+		bz::blueLightPos.z = 2.0f * glm::cos((float)currentFrame);
 		
 		DrawFrame();
 

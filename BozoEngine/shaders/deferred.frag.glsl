@@ -1,9 +1,13 @@
 #version 450
 
 layout(set = 0, binding = 0) uniform UniformBufferObject {
-    mat4 view;
-    mat4 proj;
-} uboScene;
+	mat4 view;
+    mat4 invProj;
+    vec4 position;
+	vec4 direction;
+	vec4 lightPos1;
+	vec4 lightPos2;
+} camera;
 
 layout(push_constant) uniform PushConstants {
     uint renderMode;
@@ -44,18 +48,18 @@ float resolve_depth(ivec2 uv) {
 	return minDepth;
 }
 
-vec3 reconstruct_viewpos(ivec2 uv) {
+vec3 reconstruct_pos_view_space(ivec2 uv) {
 	float z = resolve_depth(uv);
 
 	vec4 clipSpacePosition = vec4(inUV * 2.0 - 1.0, z, 1.0);
-	vec4 viewSpacePosition = inverse(uboScene.proj) * clipSpacePosition;	// TODO: inverse proj should be given by ubo
+	vec4 viewSpacePosition = camera.invProj * clipSpacePosition;
 
 	return viewSpacePosition.xyz / viewSpacePosition.w;
 }
 
-vec3 blinn_phong(vec3 n, vec3 l, vec3 v) {
+vec3 blinn_phong(vec3 n, vec3 l, vec3 v, vec3 lightColor) {
 	vec3 ambientColor = vec3(0.25, 0.25, 0.25);
-	vec3 lightColor = vec3(1.0, 1.0, 1.0);
+	//vec3 lightColor = vec3(1.0, 1.0, 1.0);
 	vec3 specularColor = vec3(0.25, 0.25, 0.25);
 	float alpha = 200.0;
 	
@@ -70,14 +74,17 @@ vec3 blinn_phong(vec3 n, vec3 l, vec3 v) {
 }
 
 vec4 shade_pixel(ivec2 uv) {
-	vec3 pixelpos = reconstruct_viewpos(uv);
-	vec3 lightpos = (uboScene.view * vec4(0.5, 0.0, 0.5, 1.0)).xyz;
+	vec3 pixelpos = reconstruct_pos_view_space(uv);
+	vec3 lightpos1 = (camera.view * camera.lightPos1).xyz;
+	vec3 lightpos2 = (camera.view * camera.lightPos2).xyz;
 
-	vec3 n = normalize((uboScene.view * vec4(resolve(samplerNormal, uv).xyz, 0.0)).xyz);
-	vec3 l = normalize(lightpos - pixelpos);
-	vec3 v = vec3(0.0, 0.0, 1.0);	// TODO: get camera view dir (normalized)
+	vec3 n = normalize((camera.view * resolve(samplerNormal, uv)).xyz);
+	vec3 v = normalize(camera.view * camera.direction).xyz;
 
-	return vec4(blinn_phong(n, l, v), 1.0);
+	vec3 l1 = normalize(lightpos1 - pixelpos);
+	vec3 l2 = normalize(lightpos2 - pixelpos);
+
+	return vec4(blinn_phong(n, l1, v, vec3(1.0, 0.0, 0.0)) + blinn_phong(n, l2, v, vec3(0.0, 0.0, 1.0)), 1.0);
 }
 
 void main() {
@@ -89,7 +96,9 @@ void main() {
 	case 1:
 		outFragcolor = resolve(samplerAlbedo, uv); break;
 	case 2:
-		outFragcolor = resolve(samplerNormal, uv); break;
+		vec4 view_space_normal = camera.view * resolve(samplerNormal, uv);
+		outFragcolor = vec4(normalize(view_space_normal.xyz), 1.0);
+		break;
 	case 3:
 		int channel = int(inUV.x < 0.5) + 2 * int(inUV.y < 0.5);
 		outFragcolor = vec4(0.0, 0.0, 0.0, 1.0);
