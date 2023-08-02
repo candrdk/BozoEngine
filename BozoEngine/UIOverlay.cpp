@@ -75,31 +75,6 @@ void UIOverlay::InitializeVulkanPipeline(VkFormat colorFormat, VkFormat depthFor
 	Shader vertShader = Shader::Create(device, "shaders/uioverlay.vert.spv");
 	Shader fragShader = Shader::Create(device, "shaders/uioverlay.frag.spv");
 
-	std::vector<VkVertexInputBindingDescription> vertexInputBindings = {{
-		.binding = 0,
-		.stride = sizeof(ImDrawVert),
-		.inputRate = VK_VERTEX_INPUT_RATE_VERTEX
-	}};
-
-	std::vector<VkVertexInputAttributeDescription> vertexAttributes = {
-		{
-			.location = 0,
-			.binding = 0,
-			.format = VK_FORMAT_R32G32_SFLOAT,
-			.offset = offsetof(ImDrawVert, pos)
-		}, {
-			.location = 1,
-			.binding = 0,
-			.format = VK_FORMAT_R32G32_SFLOAT,
-			.offset = offsetof(ImDrawVert, uv)
-		}, {
-			.location = 2,
-			.binding = 0,
-			.format = VK_FORMAT_R8G8B8A8_UNORM,
-			.offset = offsetof(ImDrawVert, col)
-		},
-	};
-
 	pipeline = Pipeline::Create(device, VK_PIPELINE_BIND_POINT_GRAPHICS, {
 		.debugName = "UI overlay pipeline",
 		.shaders = { vertShader, fragShader},
@@ -125,8 +100,31 @@ void UIOverlay::InitializeVulkanPipeline(VkFormat colorFormat, VkFormat depthFor
 			},
 			.sampleCount = VK_SAMPLE_COUNT_1_BIT,
 			.vertexInput = {
-				.bindingDesc = vertexInputBindings,
-				.attributeDesc = vertexAttributes
+				.bindingDesc = {
+					{
+						.binding = 0,
+						.stride = sizeof(ImDrawVert),
+						.inputRate = VK_VERTEX_INPUT_RATE_VERTEX
+					}
+				},
+				.attributeDesc = {
+					{
+						.location = 0,
+						.binding = 0,
+						.format = VK_FORMAT_R32G32_SFLOAT,
+						.offset = offsetof(ImDrawVert, pos)
+					}, {
+						.location = 1,
+						.binding = 0,
+						.format = VK_FORMAT_R32G32_SFLOAT,
+						.offset = offsetof(ImDrawVert, uv)
+					}, {
+						.location = 2,
+						.binding = 0,
+						.format = VK_FORMAT_R8G8B8A8_UNORM,
+						.offset = offsetof(ImDrawVert, col)
+					},
+				}
 			}
 		}
 	});

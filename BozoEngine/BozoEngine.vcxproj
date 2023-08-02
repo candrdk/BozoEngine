@@ -306,6 +306,7 @@
     <ClInclude Include="GLTF.h" />
     <ClInclude Include="Pipeline.h" />
     <ClInclude Include="Shader.h" />
+    <ClInclude Include="span.h" />
     <ClInclude Include="Swapchain.h" />
     <ClInclude Include="Texture.h" />
     <ClInclude Include="Tools.h" />

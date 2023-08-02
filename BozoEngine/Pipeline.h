@@ -9,11 +9,9 @@ struct PipelineDesc {
     // TODO: fix these up as needed - this is just a rough estimate of what PipelineDesc might look like.
     struct GraphicsPipelineStateDesc {
         struct {
-            std::vector<VkFormat> formats;
+            span<const VkFormat> formats;
             VkFormat depthStencilFormat;
-
-            //TODO: temporary hack
-            std::vector<VkPipelineColorBlendAttachmentState> blendStates = std::vector<VkPipelineColorBlendAttachmentState>(formats.size(), { .blendEnable = VK_FALSE, .colorWriteMask = 0xF });
+            span<const VkPipelineColorBlendAttachmentState> blendStates;
         } attachments;
 
         struct RasterizationState {
@@ -24,8 +22,8 @@ struct PipelineDesc {
         VkSampleCountFlagBits sampleCount = VK_SAMPLE_COUNT_1_BIT;
 
         struct VertexInputState {
-            std::vector<VkVertexInputBindingDescription> bindingDesc = {};
-            std::vector<VkVertexInputAttributeDescription> attributeDesc = {};
+            span<const VkVertexInputBindingDescription> bindingDesc = {};
+            span<const VkVertexInputAttributeDescription> attributeDesc = {};
         } vertexInput;
 
         struct DepthState {
@@ -35,14 +33,14 @@ struct PipelineDesc {
         } depthStencil = {};
 
         struct SpecializationState {
-            std::vector<VkSpecializationMapEntry> mapEntries = {};
+            span<const VkSpecializationMapEntry> mapEntries = {};
             size_t dataSize = 0;
             void* pData = nullptr;
         } specialization = {};
     };
 
     const char* debugName = nullptr;
-    std::vector<Shader> shaders;
+    span<const Shader> shaders;
     std::vector<BindGroupLayout> bindGroups;
 
     GraphicsPipelineStateDesc graphicsState;

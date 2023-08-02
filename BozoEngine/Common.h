@@ -7,6 +7,7 @@
 
 // Everyone uses vector
 #include <vector>
+#include "span.h"
 
 // VkResult reflection header for logging
 #include <vulkan/vk_enum_string_helper.h>

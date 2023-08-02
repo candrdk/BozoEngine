@@ -11,7 +11,7 @@ static bool TryUpdateShaderBindingStage(std::vector<ShaderBinding> existingBindi
     return false;
 }
 
-static std::vector<ShaderBinding> MergeShaderBindings(const Device& device, const std::vector<Shader> shaders) {
+static std::vector<ShaderBinding> MergeShaderBindings(const Device& device, span<const Shader> shaders) {
     std::vector<ShaderBinding> mergedShaderBindings{};
 
     for (const Shader& shader : shaders) {
@@ -27,7 +27,7 @@ static std::vector<ShaderBinding> MergeShaderBindings(const Device& device, cons
     return mergedShaderBindings;
 }
 
-static VkPushConstantRange MergePushConstants(const std::vector<Shader> shaders) {
+static VkPushConstantRange MergePushConstants(span<const Shader> shaders) {
     VkPushConstantRange mergedPushConstants{};
 
     for (const Shader& shader : shaders) {
@@ -61,7 +61,7 @@ static std::vector<BindGroupLayout> CreatePipelineBindGroupLayouts(const Device&
     return bindGroupLayouts;
 }
 
-static VkPipelineLayout CreatePipelineLayout(const Device& device, std::vector<BindGroupLayout> bindGroupLayouts, VkPushConstantRange* pushConstants) {
+static VkPipelineLayout CreatePipelineLayout(const Device& device, span<const BindGroupLayout> bindGroupLayouts, VkPushConstantRange* pushConstants) {
     std::vector<VkDescriptorSetLayout> setLayouts;
     for (const BindGroupLayout& layout : bindGroupLayouts) {
         setLayouts.push_back(layout.descriptorSetLayout);
@@ -81,7 +81,7 @@ static VkPipelineLayout CreatePipelineLayout(const Device& device, std::vector<B
     return pipelineLayout;
 }
 
-static VkPipeline CreatePipeline(const Device& device, VkPipelineLayout pipelineLayout, std::vector<Shader> shaders, PipelineDesc::GraphicsPipelineStateDesc desc) {
+static VkPipeline CreatePipeline(const Device& device, VkPipelineLayout pipelineLayout, span<const Shader> shaders, PipelineDesc::GraphicsPipelineStateDesc desc) {
     VkDynamicState dynamicState[] = { VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR };
     VkPipelineDynamicStateCreateInfo dynamicStateInfo = { .sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO, .dynamicStateCount = arraysize(dynamicState), .pDynamicStates = dynamicState };
     VkPipelineViewportStateCreateInfo viewportStateInfo = { .sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO, .viewportCount = 1, .scissorCount = 1 };
@@ -104,7 +104,7 @@ static VkPipeline CreatePipeline(const Device& device, VkPipelineLayout pipeline
             .module = shader.module,
             .pName = shader.pEntry,
             .pSpecializationInfo = &specializationInfo
-            });
+        });
     }
 
     VkPipelineVertexInputStateCreateInfo vertexInputInfo = {
@@ -154,6 +154,12 @@ static VkPipeline CreatePipeline(const Device& device, VkPipelineLayout pipeline
         .attachmentCount = (u32)desc.attachments.blendStates.size(),
         .pAttachments = desc.attachments.blendStates.data()
     };
+
+    std::vector<VkPipelineColorBlendAttachmentState> emptyBlendStates(desc.attachments.formats.size(), { .blendEnable = VK_FALSE, .colorWriteMask = 0xF });
+    if (desc.attachments.blendStates.data() == nullptr) {
+        colorBlendStateInfo.attachmentCount = (u32)emptyBlendStates.size();
+        colorBlendStateInfo.pAttachments = emptyBlendStates.data();
+    }
 
     VkPipelineRenderingCreateInfo renderingCreateInfo = {
         .sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO,

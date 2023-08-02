@@ -18,8 +18,8 @@ public:
 		glm::vec2 uv;
 		glm::vec3 color;
 
-		static VkVertexInputBindingDescription GetBindingDescription();
-		static std::vector<VkVertexInputAttributeDescription> GetAttributeDescriptions();
+		static const VkVertexInputBindingDescription BindingDescripton[1];
+		static const VkVertexInputAttributeDescription AttributeDescription[4];
 	};
 
 	struct Primitive {

@@ -5,13 +5,6 @@
       <UniqueIdentifier>{4FC737F1-C7A5-4376-A066-2A32D752A2FF}</UniqueIdentifier>
       <Extensions>cpp;c;cc;cxx;c++;cppm;ixx;def;odl;idl;hpj;bat;asm;asmx</Extensions>
     </Filter>
-    <Filter Include="Header Files">
-      <UniqueIdentifier>{93995380-89BD-4b04-88EB-625FBE52EBFB}</UniqueIdentifier>
-      <Extensions>h;hh;hpp;hxx;h++;hm;inl;inc;ipp;xsd</Extensions>
-    </Filter>
-    <Filter Include="shaders">
-      <UniqueIdentifier>{9fb3f89d-d67d-4ff5-885e-fab4601df355}</UniqueIdentifier>
-    </Filter>
     <Filter Include="Extern">
       <UniqueIdentifier>{51f947a1-f848-4316-8bb6-ae4426c8ffa8}</UniqueIdentifier>
     </Filter>
@@ -32,6 +25,15 @@
     </Filter>
     <Filter Include="Extern\SPIRV-Reflect">
       <UniqueIdentifier>{703e81da-c357-401f-979d-e930ceb77026}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Shaders">
+      <UniqueIdentifier>{9fb3f89d-d67d-4ff5-885e-fab4601df355}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Natvis">
+      <UniqueIdentifier>{49eb73f4-62c8-4e64-867c-215ad7f4473c}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Include">
+      <UniqueIdentifier>{46049645-989b-4963-bbe6-803e32865924}</UniqueIdentifier>
     </Filter>
   </ItemGroup>
   <ItemGroup>
@@ -187,9 +189,6 @@
     <ClInclude Include="..\Extern\stb\stb_image.h">
       <Filter>Extern\stb</Filter>
     </ClInclude>
-    <ClInclude Include="Camera.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
     <ClInclude Include="..\Extern\imgui\backends\imgui_impl_glfw.h">
       <Filter>Extern\imgui</Filter>
     </ClInclude>
@@ -208,27 +207,6 @@
     <ClInclude Include="..\Extern\imgui\imstb_truetype.h">
       <Filter>Extern\imgui</Filter>
     </ClInclude>
-    <ClInclude Include="Swapchain.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="Device.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="Common.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="Texture.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="UIOverlay.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="Tools.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="GLTF.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
     <ClInclude Include="..\Extern\tinygltf\tiny_gltf.h">
       <Filter>Extern\tinygltf</Filter>
     </ClInclude>
@@ -238,37 +216,66 @@
     <ClInclude Include="..\Extern\SPIRV-Reflect\spirv_reflect.h">
       <Filter>Extern\SPIRV-Reflect</Filter>
     </ClInclude>
-    <ClInclude Include="Shader.h">
-      <Filter>Header Files</Filter>
+    <ClInclude Include="UIOverlay.h">
+      <Filter>Source Files</Filter>
     </ClInclude>
     <ClInclude Include="BindGroup.h">
-      <Filter>Header Files</Filter>
+      <Filter>Source Files</Filter>
+    </ClInclude>
+    <ClInclude Include="Camera.h">
+      <Filter>Source Files</Filter>
+    </ClInclude>
+    <ClInclude Include="Common.h">
+      <Filter>Source Files</Filter>
+    </ClInclude>
+    <ClInclude Include="Device.h">
+      <Filter>Source Files</Filter>
+    </ClInclude>
+    <ClInclude Include="GLTF.h">
+      <Filter>Source Files</Filter>
     </ClInclude>
     <ClInclude Include="Pipeline.h">
-      <Filter>Header Files</Filter>
+      <Filter>Source Files</Filter>
+    </ClInclude>
+    <ClInclude Include="Shader.h">
+      <Filter>Source Files</Filter>
+    </ClInclude>
+    <ClInclude Include="Swapchain.h">
+      <Filter>Source Files</Filter>
+    </ClInclude>
+    <ClInclude Include="Texture.h">
+      <Filter>Source Files</Filter>
+    </ClInclude>
+    <ClInclude Include="Tools.h">
+      <Filter>Source Files</Filter>
+    </ClInclude>
+    <ClInclude Include="span.h">
+      <Filter>Include</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <None Include="shaders\uioverlay.vert.glsl">
-      <Filter>shaders</Filter>
+      <Filter>Shaders</Filter>
     </None>
     <None Include="shaders\uioverlay.frag.glsl">
-      <Filter>shaders</Filter>
+      <Filter>Shaders</Filter>
     </None>
     <None Include="shaders\deferred.vert.glsl">
-      <Filter>shaders</Filter>
+      <Filter>Shaders</Filter>
     </None>
     <None Include="shaders\deferred.frag.glsl">
-      <Filter>shaders</Filter>
+      <Filter>Shaders</Filter>
     </None>
     <None Include="shaders\offscreen.vert.glsl">
-      <Filter>shaders</Filter>
+      <Filter>Shaders</Filter>
     </None>
     <None Include="shaders\offscreen.frag.glsl">
-      <Filter>shaders</Filter>
+      <Filter>Shaders</Filter>
     </None>
   </ItemGroup>
   <ItemGroup>
-    <Natvis Include="..\Extern\glm\util\glm.natvis" />
+    <Natvis Include="..\Extern\glm\util\glm.natvis">
+      <Filter>Natvis</Filter>
+    </Natvis>
   </ItemGroup>
 </Project>

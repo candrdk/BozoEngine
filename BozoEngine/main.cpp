@@ -534,8 +534,8 @@ void CreatePipelines() {
 			},
 			.sampleCount = bz::msaaSamples,
 			.vertexInput = {
-				.bindingDesc = { GLTFModel::Vertex::GetBindingDescription() },
-				.attributeDesc = GLTFModel::Vertex::GetAttributeDescriptions()
+				.bindingDesc = GLTFModel::Vertex::BindingDescripton,
+				.attributeDesc = GLTFModel::Vertex::AttributeDescription
 			}
 		}
 	});
@@ -555,7 +555,7 @@ void CreatePipelines() {
 			},
 			.sampleCount = VK_SAMPLE_COUNT_1_BIT,
 			.specialization = {
-				.mapEntries = { { .size = sizeof(u32)}},
+				.mapEntries = { { .size = sizeof(u32) } },
 				.dataSize = sizeof(u32),
 				.pData = &bz::msaaSamples
 			}

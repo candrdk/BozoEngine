@@ -51,8 +51,8 @@ struct BindGroupDesc {
         VkDeviceSize size;
     };
 
-    std::vector<BufferBinding> buffers;
-    std::vector<TextureBinding> textures;
+    span<const BufferBinding> buffers;
+    span<const TextureBinding> textures;
 };
 
 struct BindGroup {
