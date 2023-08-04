@@ -95,14 +95,7 @@ void main() {
 	case 1:
 		outFragcolor = resolve(samplerAlbedo, uv); break;
 	case 2:
-		vec3 view_space_normal = normalize(resolve(samplerNormal, uv).xyz * 2.0 - 1.0);
-		if(resolve_depth(uv) == 0.0) {
-			outFragcolor = vec4(0.0, 0.0, 0.0, 1.0); break;
-		} 
-		else {
-			outFragcolor = vec4(view_space_normal * 0.5 + 0.5, 1.0);
-		}
-		break;
+		outFragcolor = resolve(samplerNormal, uv); break;
 	case 3:
 		int channel = int(inUV.x < 0.5) + 2 * int(inUV.y < 0.5);
 		outFragcolor = vec4(0.0, 0.0, 0.0, 1.0);

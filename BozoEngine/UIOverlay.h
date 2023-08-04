@@ -7,6 +7,7 @@
 
 class UIOverlay {
 	Device& device;
+	void (*RenderImGui)(void);
 
 	Buffer drawDataBuffer	= {};
 	Texture2D font			= {};
@@ -27,7 +28,7 @@ class UIOverlay {
 
 public:
 	// Create a uioverlay for the given window.
-	UIOverlay(GLFWwindow* window, Device& device, VkFormat colorFormat, VkFormat depthFormat);
+	UIOverlay(GLFWwindow* window, Device& device, VkFormat colorFormat, VkFormat depthFormat, void (*RenderFunction)());
 	~UIOverlay();
 
 	// Update the ui overlay draw data. Should be called every frame before Draw.

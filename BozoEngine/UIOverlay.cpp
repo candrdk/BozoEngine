@@ -3,7 +3,7 @@
 
 #include <backends/imgui_impl_glfw.h>
 
-UIOverlay::UIOverlay(GLFWwindow* window, Device& device, VkFormat colorFormat, VkFormat depthFormat) : device{ device } {
+UIOverlay::UIOverlay(GLFWwindow* window, Device& device, VkFormat colorFormat, VkFormat depthFormat, void (*RenderFunction)()) : device{ device }, RenderImGui{ RenderFunction } {
 	ImGui::CreateContext();
 
 	ImGuiIO& io = ImGui::GetIO();
@@ -137,9 +137,7 @@ void UIOverlay::InitializeVulkanPipeline(VkFormat colorFormat, VkFormat depthFor
 void UIOverlay::RenderFrame() {
 	ImGui_ImplGlfw_NewFrame();
 	ImGui::NewFrame();
-
-	ImGui::ShowDemoWindow();
-
+	RenderImGui();
 	ImGui::Render();
 }
 

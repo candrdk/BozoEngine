@@ -6,6 +6,7 @@
 
 #include "GLTF.h"
 #include "UIOverlay.h"
+#include <imgui.h>
 
 #include "Pipeline.h"
 
@@ -117,14 +118,6 @@ void KeyCallback(GLFWwindow* window, int key, int scancode, int action, int mods
 	case GLFW_KEY_S:
 	case GLFW_KEY_D:
 		bz::camera.ProcessKeyboard(key, action);
-		break;
-
-	case GLFW_KEY_0:
-	case GLFW_KEY_1:
-	case GLFW_KEY_2:
-	case GLFW_KEY_3:
-	case GLFW_KEY_4:
-		bz::renderMode = key - '0';
 		break;
 	}
 }
@@ -755,11 +748,35 @@ void DrawFrame() {
 	currentFrame = (currentFrame + 1) % arraysize(bz::renderFrames);
 }
 
+void OverlayRender() {
+	ImGui::Begin("Bozo Engine", 0, 0);
+
+	ImGui::SeparatorText("Render mode");
+	
+	if (ImGui::RadioButton("Deferred", bz::renderMode == 0)) {
+		bz::renderMode = 0;
+	}
+	else if (ImGui::RadioButton("Albedo", bz::renderMode == 1)) {
+		bz::renderMode = 1;
+	}
+	else if (ImGui::RadioButton("Normal", bz::renderMode == 2)) {
+		bz::renderMode = 2;
+	}
+	else if (ImGui::RadioButton("Occ/Met/Rough", bz::renderMode == 3)) {
+		bz::renderMode = 3;
+	}
+	else if (ImGui::RadioButton("Depth", bz::renderMode == 4)) {
+		bz::renderMode = 4;
+	}
+
+	ImGui::End();
+}
+
 int main(int argc, char* argv[]) {
 	InitWindow(WIDTH, HEIGHT);
 	InitVulkan();
 
-	bz::overlay = new UIOverlay(window, bz::device, bz::swapchain.format, bz::depth.format);
+	bz::overlay = new UIOverlay(window, bz::device, bz::swapchain.format, bz::depth.format, OverlayRender);
 
 	flightHelmet = new GLTFModel(bz::device, bz::materialLayout, "assets/FlightHelmet/FlightHelmet.gltf");
 
