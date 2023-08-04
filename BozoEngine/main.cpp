@@ -24,7 +24,6 @@ struct DeferredUBO {
 	alignas(16) glm::mat4 view;
 	alignas(16) glm::mat4 invProj;
 	alignas(16) glm::vec4 camPos;
-	alignas(16) glm::vec4 camDir;
 	alignas(16) glm::vec4 redLightPos;
 	alignas(16) glm::vec4 blueLightPos;
 };
@@ -681,7 +680,6 @@ void UpdateUniformBuffer(u32 currentImage) {
 		.view = bz::camera.view,
 		.invProj = glm::inverse(bz::camera.projection),
 		.camPos = glm::vec4(bz::camera.position, 1.0f),
-		.camDir = -1.0f * glm::vec4(bz::camera.direction, 0.0f),
 		.redLightPos = bz::redLightPos,
 		.blueLightPos = bz::blueLightPos
 	};
@@ -782,7 +780,7 @@ int main(int argc, char* argv[]) {
 
 		bz::blueLightPos.y = 2.0f * glm::sin((float)currentFrame);
 		bz::blueLightPos.z = 2.0f * glm::cos((float)currentFrame);
-		
+
 		DrawFrame();
 
 		glfwPollEvents();

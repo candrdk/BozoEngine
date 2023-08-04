@@ -4,7 +4,6 @@ layout(set = 0, binding = 0) uniform UniformBufferObject {
 	mat4 view;
     mat4 invProj;
     vec4 position;
-	vec4 direction;
 	vec4 lightPos1;
 	vec4 lightPos2;
 } camera;
@@ -74,15 +73,15 @@ vec3 blinn_phong(vec3 n, vec3 l, vec3 v, vec3 lightColor) {
 }
 
 vec4 shade_pixel(ivec2 uv) {
-	vec3 pixelpos = reconstruct_pos_view_space(uv);
+	vec3 pos = reconstruct_pos_view_space(uv);
 	vec3 lightpos1 = (camera.view * camera.lightPos1).xyz;
 	vec3 lightpos2 = (camera.view * camera.lightPos2).xyz;
 
-	vec3 n = normalize((camera.view * resolve(samplerNormal, uv)).xyz);
-	vec3 v = normalize(camera.view * camera.direction).xyz;
+	vec3 n = normalize(resolve(samplerNormal, uv).xyz * 2.0 - 1.0);
+	vec3 v = normalize((camera.view * camera.position).xyz - pos);
 
-	vec3 l1 = normalize(lightpos1 - pixelpos);
-	vec3 l2 = normalize(lightpos2 - pixelpos);
+	vec3 l1 = normalize(lightpos1 - pos);
+	vec3 l2 = normalize(lightpos2 - pos);
 
 	return vec4(blinn_phong(n, l1, v, vec3(1.0, 0.0, 0.0)) + blinn_phong(n, l2, v, vec3(0.0, 0.0, 1.0)), 1.0);
 }
@@ -96,8 +95,13 @@ void main() {
 	case 1:
 		outFragcolor = resolve(samplerAlbedo, uv); break;
 	case 2:
-		vec4 view_space_normal = camera.view * resolve(samplerNormal, uv);
-		outFragcolor = vec4(normalize(view_space_normal.xyz), 1.0);
+		vec3 view_space_normal = normalize(resolve(samplerNormal, uv).xyz * 2.0 - 1.0);
+		if(resolve_depth(uv) == 0.0) {
+			outFragcolor = vec4(0.0, 0.0, 0.0, 1.0); break;
+		} 
+		else {
+			outFragcolor = vec4(view_space_normal * 0.5 + 0.5, 1.0);
+		}
 		break;
 	case 3:
 		int channel = int(inUV.x < 0.5) + 2 * int(inUV.y < 0.5);

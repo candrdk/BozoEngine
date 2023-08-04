@@ -14,10 +14,6 @@ layout(location = 2) out vec4 outOccMetRough;
 
 void main() {
     outAlbedo = vec4(texture(samplerAlbedo, inUV).rgb, 1.0);
-
-    // We use vertex normals for now - will figure out proper transforms for the normal map later on, 
-    // but this is ok for the basic lighting being used now.
-    outNormal = vec4(normalize(inNormal), 1.0);
-
+    outNormal = vec4(normalize(inNormal) * 0.5 + 0.5, 1.0);
     outOccMetRough = vec4(texture(samplerOccMetRough, inUV).xyz, 1.0);
 }
