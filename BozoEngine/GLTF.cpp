@@ -16,7 +16,7 @@ const VkVertexInputBindingDescription GLTFModel::Vertex::BindingDescripton[1] = 
 	} 
 };
 
-const VkVertexInputAttributeDescription GLTFModel::Vertex::AttributeDescription[4] = {
+const VkVertexInputAttributeDescription GLTFModel::Vertex::AttributeDescription[5] = {
 	{	// Location 0: Position
 		.location = 0,
 		.binding = 0,
@@ -29,14 +29,20 @@ const VkVertexInputAttributeDescription GLTFModel::Vertex::AttributeDescription[
 		.format = VK_FORMAT_R32G32B32_SFLOAT,
 		.offset = offsetof(Vertex, normal)
 	},
-	{	// Location 2: Texture coordinates
+	{	// Location 2: Tangent
 		.location = 2,
+		.binding = 0,
+		.format = VK_FORMAT_R32G32B32A32_SFLOAT,
+		.offset = offsetof(Vertex, tangent)
+	},
+	{	// Location 3: Texture coordinates
+		.location = 3,
 		.binding = 0,
 		.format = VK_FORMAT_R32G32_SFLOAT,
 		.offset = offsetof(Vertex, uv)
 	},
-	{	// Location 3: Color
-		.location = 3,
+	{	// Location 4: Color
+		.location = 4,
 		.binding = 0,
 		.format = VK_FORMAT_R32G32B32_SFLOAT,
 		.offset = offsetof(Vertex, color)
@@ -89,7 +95,7 @@ void GLTFModel::DrawNode(VkCommandBuffer cmdBuffer, VkPipelineLayout pipelineLay
 		}
 
 		// Pass final matrix to the vertex shader using push constants
-		vkCmdPushConstants(cmdBuffer, pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(glm::mat4), &nodeTransform);
+		vkCmdPushConstants(cmdBuffer, pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(glm::mat4), &nodeTransform);
 
 		for (const Primitive& primitive : node->mesh.primitives) {
 			if (primitive.indexCount > 0) {
@@ -195,6 +201,7 @@ void GLTFModel::LoadNode(const tinygltf::Node& inputNode, const tinygltf::Model&
 			// Load vertices
 			const float* positionBuffer = nullptr;
 			const float* normalsBuffer = nullptr;
+			const float* tangentsBuffer = nullptr;
 			const float* texCoordsBuffer = nullptr;
 			size_t vertexCount = 0;
 
@@ -213,6 +220,13 @@ void GLTFModel::LoadNode(const tinygltf::Node& inputNode, const tinygltf::Model&
 				normalsBuffer = (float*)(&model.buffers[view.buffer].data[accessor.byteOffset + view.byteOffset]);
 			}
 
+			// Get buffer data for vertex tangents
+			if (primitive.attributes.find("TANGENT") != primitive.attributes.end()) {
+				const tinygltf::Accessor& accessor = model.accessors[primitive.attributes.find("TANGENT")->second];
+				const tinygltf::BufferView& view = model.bufferViews[accessor.bufferView];
+				tangentsBuffer = (float*)(&model.buffers[view.buffer].data[accessor.byteOffset + view.byteOffset]);
+			}
+
 			// Get buffer data for texture coordinates normals
 			if (primitive.attributes.find("TEXCOORD_0") != primitive.attributes.end()) {
 				const tinygltf::Accessor& accessor = model.accessors[primitive.attributes.find("TEXCOORD_0")->second];
@@ -226,9 +240,10 @@ void GLTFModel::LoadNode(const tinygltf::Node& inputNode, const tinygltf::Model&
 				vertexBuffer.push_back({
 					.pos = glm::vec4(glm::make_vec3(&positionBuffer[v * 3]), 1.0f),
 					.normal = normalsBuffer ? glm::normalize(glm::vec3(glm::make_vec3(&normalsBuffer[v * 3]))) : glm::vec3(0.0f),
+					.tangent = tangentsBuffer ? glm::normalize(glm::vec4(glm::make_vec4(&tangentsBuffer[v * 4]))) : glm::vec4(0.0f),
 					.uv = texCoordsBuffer ? glm::make_vec2(&texCoordsBuffer[v * 2]) : glm::vec2(0.0f),
 					.color = glm::vec3(1.0f)
-					});
+				});
 			}
 
 			// Load indices
@@ -271,7 +286,7 @@ void GLTFModel::LoadNode(const tinygltf::Node& inputNode, const tinygltf::Model&
 				.firstIndex = firstIndex,
 				.indexCount = indexCount,
 				.materialIndex = primitive.material
-				});
+			});
 		}
 	}
 

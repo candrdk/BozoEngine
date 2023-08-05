@@ -15,11 +15,12 @@ public:
 	struct Vertex {
 		glm::vec3 pos;
 		glm::vec3 normal;
+		glm::vec4 tangent;
 		glm::vec2 uv;
 		glm::vec3 color;
 
 		static const VkVertexInputBindingDescription BindingDescripton[1];
-		static const VkVertexInputAttributeDescription AttributeDescription[4];
+		static const VkVertexInputAttributeDescription AttributeDescription[5];
 	};
 
 	struct Primitive {
