@@ -142,15 +142,18 @@ void GLTFModel::LoadMaterials(tinygltf::Model& model) {
 		if (gltfMaterial.values.find("baseColorTexture") != gltfMaterial.values.end()) {
 			material.albedo = &images[gltfMaterial.values["baseColorTexture"].TextureIndex()];
 		}
-
-		material.normal = &images[gltfMaterial.normalTexture.index];
-		material.OccMetRough = &images[gltfMaterial.occlusionTexture.index];	// For this model specifically, we know occulsionTexture also contains metalic and roughness.
+		if (gltfMaterial.values.find("metallicRoughnessTexture") != gltfMaterial.values.end()) {
+			material.metallicRoughness = &images[gltfMaterial.values["metallicRoughnessTexture"].TextureIndex()];
+		}
+		if (gltfMaterial.additionalValues.find("normalTexture") != gltfMaterial.additionalValues.end()) {
+			material.normal = &images[gltfMaterial.additionalValues["normalTexture"].TextureIndex()];
+		}
 
 		material.bindGroup = BindGroup::Create(device, materialBindGroupLayout, {
 			.textures = {
 				{.binding = 0, .sampler = material.albedo->sampler, .view = material.albedo->view, .layout = material.albedo->layout },
 				{.binding = 1, .sampler = material.normal->sampler, .view = material.normal->view, .layout = material.normal->layout },
-				{.binding = 2, .sampler = material.OccMetRough->sampler, .view = material.OccMetRough->view, .layout = material.OccMetRough->layout },
+				{.binding = 2, .sampler = material.metallicRoughness->sampler, .view = material.metallicRoughness->view, .layout = material.metallicRoughness->layout },
 			}
 		});
 	}

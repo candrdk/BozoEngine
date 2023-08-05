@@ -14,7 +14,7 @@ layout(push_constant) uniform PushConstants {
 
 layout (set = 1, binding = 0) uniform sampler2DMS samplerAlbedo;
 layout (set = 1, binding = 1) uniform sampler2DMS samplerNormal;
-layout (set = 1, binding = 2) uniform sampler2DMS samplerOccMetRough;
+layout (set = 1, binding = 2) uniform sampler2DMS samplerMetallicRoughness;
 layout (set = 1, binding = 3) uniform sampler2DMS samplerDepth;
 
 layout (location = 0) in vec2 inUV;
@@ -97,9 +97,9 @@ void main() {
 	case 2:
 		outFragcolor = resolve(samplerNormal, uv); break;
 	case 3:
-		int channel = int(inUV.x < 0.5) + 2 * int(inUV.y < 0.5);
+		int channel = inUV.x < 0.5 ? 2 : 1;
 		outFragcolor = vec4(0.0, 0.0, 0.0, 1.0);
-		outFragcolor[channel] = resolve(samplerOccMetRough, uv)[channel];
+		outFragcolor[channel] = resolve(samplerMetallicRoughness, uv)[channel];
 		break;
 	case 4:
 		outFragcolor = vec4(resolve_depth(uv), 0.0, 0.0, 1.0); break;

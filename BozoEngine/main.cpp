@@ -83,7 +83,7 @@ namespace bz {
 	BindGroup globalsBindings[arraysize(uniformBuffers)];
 	BindGroup deferredBindings[arraysize(deferredBuffers)];
 
-	RenderAttachment albedo, normal, occMetRough;
+	RenderAttachment albedo, normal, metallicRoughness;
 	DepthAttachment depth;
 	VkSampler attachmentSampler;
 
@@ -307,7 +307,7 @@ void CreateRenderAttachments() {
 		.samples = bz::msaaSamples
 	});
 
-	CreateRenderAttachment(bz::occMetRough, {
+	CreateRenderAttachment(bz::metallicRoughness, {
 		.extent = bz::swapchain.extent,
 		.format = VK_FORMAT_R8G8B8A8_UNORM,
 		.usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
@@ -344,9 +344,9 @@ void CleanupRenderAttachments() {
 	vkDestroyImage(bz::device.logicalDevice, bz::normal.image, nullptr);
 	vkFreeMemory(bz::device.logicalDevice, bz::normal.memory, nullptr);
 
-	vkDestroyImageView(bz::device.logicalDevice, bz::occMetRough.view, nullptr);
-	vkDestroyImage(bz::device.logicalDevice, bz::occMetRough.image, nullptr);
-	vkFreeMemory(bz::device.logicalDevice, bz::occMetRough.memory, nullptr);
+	vkDestroyImageView(bz::device.logicalDevice, bz::metallicRoughness.view, nullptr);
+	vkDestroyImage(bz::device.logicalDevice, bz::metallicRoughness.image, nullptr);
+	vkFreeMemory(bz::device.logicalDevice, bz::metallicRoughness.memory, nullptr);
 
 	vkDestroyImageView(bz::device.logicalDevice, bz::depth.depthStencilView, nullptr);
 	vkDestroyImageView(bz::device.logicalDevice, bz::depth.depthView, nullptr);
@@ -370,7 +370,7 @@ void RecordDeferredCommandBuffer(VkCommandBuffer cmd, u32 imageIndex) {
 	vkCmdSetViewport(cmd, 0, 1, &viewport);
 	vkCmdSetScissor(cmd, 0, 1, &scissor);
 
-	VkRenderingAttachmentInfo colorAttachments[] = { bz::albedo.attachmentInfo, bz::normal.attachmentInfo, bz::occMetRough.attachmentInfo };
+	VkRenderingAttachmentInfo colorAttachments[] = { bz::albedo.attachmentInfo, bz::normal.attachmentInfo, bz::metallicRoughness.attachmentInfo };
 	VkRenderingAttachmentInfo depthAttachment[] = { bz::depth.attachmentInfo };
 
 	VkRenderingInfo renderingInfo = {
@@ -401,7 +401,7 @@ void RecordDeferredCommandBuffer(VkCommandBuffer cmd, u32 imageIndex) {
 		VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,			VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
 		VK_IMAGE_LAYOUT_UNDEFINED,						VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL);
 
-	ImageBarrier(cmd, bz::occMetRough.image,			VK_IMAGE_ASPECT_COLOR_BIT,
+	ImageBarrier(cmd, bz::metallicRoughness.image,			VK_IMAGE_ASPECT_COLOR_BIT,
 		VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,	VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
 		VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,			VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
 		VK_IMAGE_LAYOUT_UNDEFINED,						VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL);
@@ -435,7 +435,7 @@ void RecordDeferredCommandBuffer(VkCommandBuffer cmd, u32 imageIndex) {
 		VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,			VK_ACCESS_2_SHADER_SAMPLED_READ_BIT,
 		VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL,				VK_IMAGE_LAYOUT_READ_ONLY_OPTIMAL);
 
-	ImageBarrier(cmd, bz::occMetRough.image, VK_IMAGE_ASPECT_COLOR_BIT,
+	ImageBarrier(cmd, bz::metallicRoughness.image, VK_IMAGE_ASPECT_COLOR_BIT,
 		VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,	VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
 		VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,			VK_ACCESS_2_SHADER_SAMPLED_READ_BIT,
 		VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL,				VK_IMAGE_LAYOUT_READ_ONLY_OPTIMAL);
@@ -506,7 +506,7 @@ void CreateBindGroups() {
 		.textures = {
 			{.binding = 0, .sampler = bz::attachmentSampler, .view = bz::albedo.view, .layout = VK_IMAGE_LAYOUT_READ_ONLY_OPTIMAL },
 			{.binding = 1, .sampler = bz::attachmentSampler, .view = bz::normal.view, .layout = VK_IMAGE_LAYOUT_READ_ONLY_OPTIMAL },
-			{.binding = 2, .sampler = bz::attachmentSampler, .view = bz::occMetRough.view, .layout = VK_IMAGE_LAYOUT_READ_ONLY_OPTIMAL },
+			{.binding = 2, .sampler = bz::attachmentSampler, .view = bz::metallicRoughness.view, .layout = VK_IMAGE_LAYOUT_READ_ONLY_OPTIMAL },
 			{.binding = 3, .sampler = bz::attachmentSampler, .view = bz::depth.depthView, .layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL }
 		}
 	});
@@ -529,7 +529,7 @@ void UpdateGBufferBindGroup() {
 		.textures = {
 			{.binding = 0, .sampler = bz::attachmentSampler, .view = bz::albedo.view, .layout = VK_IMAGE_LAYOUT_READ_ONLY_OPTIMAL },
 			{.binding = 1, .sampler = bz::attachmentSampler, .view = bz::normal.view, .layout = VK_IMAGE_LAYOUT_READ_ONLY_OPTIMAL },
-			{.binding = 2, .sampler = bz::attachmentSampler, .view = bz::occMetRough.view, .layout = VK_IMAGE_LAYOUT_READ_ONLY_OPTIMAL },
+			{.binding = 2, .sampler = bz::attachmentSampler, .view = bz::metallicRoughness.view, .layout = VK_IMAGE_LAYOUT_READ_ONLY_OPTIMAL },
 			{.binding = 3, .sampler = bz::attachmentSampler, .view = bz::depth.depthView, .layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL }
 		}
 	});
@@ -548,7 +548,7 @@ void CreatePipelines() {
 		.bindGroups = { bz::globalsLayout, bz::materialLayout },
 		.graphicsState = {
 			.attachments = {
-				.formats = { bz::albedo.format, bz::normal.format, bz::occMetRough.format },
+				.formats = { bz::albedo.format, bz::normal.format, bz::metallicRoughness.format },
 				.depthStencilFormat = bz::depth.format
 			},
 			.rasterization = {
@@ -762,7 +762,7 @@ void OverlayRender() {
 	else if (ImGui::RadioButton("Normal", bz::renderMode == 2)) {
 		bz::renderMode = 2;
 	}
-	else if (ImGui::RadioButton("Occ/Met/Rough", bz::renderMode == 3)) {
+	else if (ImGui::RadioButton("Metallic/Roughness", bz::renderMode == 3)) {
 		bz::renderMode = 3;
 	}
 	else if (ImGui::RadioButton("Depth", bz::renderMode == 4)) {

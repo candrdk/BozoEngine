@@ -36,7 +36,7 @@ public:
 	struct Material {
 		Texture2D* albedo;
 		Texture2D* normal;
-		Texture2D* OccMetRough;
+		Texture2D* metallicRoughness;
 		BindGroup bindGroup;
 	};
 
