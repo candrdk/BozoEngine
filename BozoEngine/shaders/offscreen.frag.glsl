@@ -8,6 +8,8 @@ layout(set = 0, binding = 0) uniform UniformBufferObject {
     mat4 view;
     mat4 proj;
     vec3 camPos;
+    uint parallaxMode;
+    float parallaxScale;
 } uboScene;
 
 layout(push_constant) uniform PushConstants {
@@ -39,14 +41,18 @@ vec3 get_view_space_normal(vec2 uv) {
 vec2 parallax(vec2 uv, vec3 vdir) {
     float height = 1.0 - texture(samplerNormal, uv).a;
     //height = uv.x > 0.5 ? 1.0 : 0.0;
-    vec2 p = vdir.xy * (height * 0.02) / vdir.z;
+    vec2 p = vdir.xy * (height * uboScene.parallaxScale) / vdir.z;
     return uv - p;
 }
 
 void main() {
     vec3 tangentViewDir = normalize(inTangentViewPos - inTangentFragPos);
     tangentViewDir.y *= -1.0;
-    vec2 uv = parallax(inUV, tangentViewDir);
+    
+    vec2 uv = inUV;
+    if (uboScene.parallaxMode == 1) {
+        uv = parallax(inUV, tangentViewDir);
+    }
 
     if (uv.x < 0.0 || uv.x > 1.0 || uv.y < 0.0 || uv.y > 1.0) {
 		discard;

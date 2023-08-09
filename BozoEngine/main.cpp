@@ -21,6 +21,8 @@ struct CameraUBO {
 	alignas(16) glm::mat4 view;
 	alignas(16) glm::mat4 proj;
 	alignas(16) glm::vec3 camPos;
+	u32 parallaxMode;
+	float parallaxScale;
 };
 
 struct DeferredUBO {
@@ -95,6 +97,8 @@ namespace bz {
 	Pipeline offscreenPipeline, deferredPipeline;
 
 	u32 renderMode = 0;
+	u32 parallaxMode = 0;
+	float parallaxScale = 0.02f;
 
 	VkSampleCountFlagBits msaaSamples = VK_SAMPLE_COUNT_1_BIT;
 	bool framebufferResized = false;
@@ -669,7 +673,9 @@ void UpdateUniformBuffer(u32 currentImage) {
 	CameraUBO cameraUBO = {
 		.view = bz::camera.view,
 		.proj = bz::camera.projection,
-		.camPos = bz::camera.position
+		.camPos = bz::camera.position,
+		.parallaxMode = bz::parallaxMode,
+		.parallaxScale = bz::parallaxScale
 	};
 
 	memcpy(bz::uniformBuffers[currentImage].mapped, &cameraUBO, sizeof(cameraUBO));
@@ -756,22 +762,35 @@ void DrawFrame() {
 void OverlayRender() {
 	ImGui::Begin("Bozo Engine", 0, 0);
 
-	ImGui::SeparatorText("Render mode");
+	ImGui::SeparatorText("Shader hot-reload");
+	if (ImGui::Button("Reload shaders")) {
+		vkDeviceWaitIdle(bz::device.logicalDevice);
+		bz::offscreenPipeline.Destroy(bz::device);
+		bz::deferredPipeline.Destroy(bz::device);
+		CreatePipelines();
+	}
+
+	ImGui::SeparatorText("Render Settings");
+	if (ImGui::CollapsingHeader("Render Mode")) {
+		ImGui::BeginTable("split", 2);
+
+		ImGui::TableNextColumn(); if (ImGui::RadioButton("Deferred", bz::renderMode == 0))			{ bz::renderMode = 0; }
+		ImGui::TableNextColumn();
+		ImGui::TableNextColumn(); if (ImGui::RadioButton("Albedo", bz::renderMode == 1))			{ bz::renderMode = 1; }
+		ImGui::TableNextColumn(); if (ImGui::RadioButton("Normal", bz::renderMode == 2))			{ bz::renderMode = 2; }
+		ImGui::TableNextColumn(); if (ImGui::RadioButton("Metallic/Roughness", bz::renderMode == 3)){ bz::renderMode = 3; }
+		ImGui::TableNextColumn(); if (ImGui::RadioButton("Depth", bz::renderMode == 4))				{ bz::renderMode = 4; }
+
+		ImGui::EndTable();
+	}
 	
-	if (ImGui::RadioButton("Deferred", bz::renderMode == 0)) {
-		bz::renderMode = 0;
-	}
-	else if (ImGui::RadioButton("Albedo", bz::renderMode == 1)) {
-		bz::renderMode = 1;
-	}
-	else if (ImGui::RadioButton("Normal", bz::renderMode == 2)) {
-		bz::renderMode = 2;
-	}
-	else if (ImGui::RadioButton("Metallic/Roughness", bz::renderMode == 3)) {
-		bz::renderMode = 3;
-	}
-	else if (ImGui::RadioButton("Depth", bz::renderMode == 4)) {
-		bz::renderMode = 4;
+	if (ImGui::CollapsingHeader("Parallax Mode")) {
+		if (ImGui::RadioButton("Disable", bz::parallaxMode == 0)) { bz::parallaxMode = 0; }
+		if (ImGui::RadioButton("Parallax Mapping", bz::parallaxMode == 1)) { bz::parallaxMode = 1; }
+
+		if (bz::parallaxMode) {
+			ImGui::SliderFloat("Scale", &bz::parallaxScale, 0.001f, 0.1f);
+		}
 	}
 
 	ImGui::End();
