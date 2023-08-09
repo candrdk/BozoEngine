@@ -82,7 +82,7 @@ void Texture2D::LoadFromFile(const char* path, const Device& device, VkQueue cop
 	stbi_uc* pixels = stbi_load(path, (int*)(&texWidth), (int*)(&texHeight), (int*)(&channels), STBI_rgb_alpha);
 	Check(pixels != nullptr, "Failed to load: `%s`", path);
 
-	CreateFromBuffer(pixels, width * height * STBI_rgb_alpha, device, copyQueue, texWidth, texHeight, requestedFormat, usage, requestedImageLayout);
+	CreateFromBuffer(pixels, texWidth * texHeight * STBI_rgb_alpha, device, copyQueue, texWidth, texHeight, requestedFormat, usage, requestedImageLayout);
 
 	stbi_image_free(pixels);
 }

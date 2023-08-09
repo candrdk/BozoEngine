@@ -243,7 +243,7 @@ void GLTFModel::LoadNode(const tinygltf::Node& inputNode, const tinygltf::Model&
 				vertexBuffer.push_back({
 					.pos = glm::vec4(glm::make_vec3(&positionBuffer[v * 3]), 1.0f),
 					.normal = normalsBuffer ? glm::normalize(glm::vec3(glm::make_vec3(&normalsBuffer[v * 3]))) : glm::vec3(0.0f),
-					.tangent = tangentsBuffer ? glm::normalize(glm::vec4(glm::make_vec4(&tangentsBuffer[v * 4]))) : glm::vec4(0.0f),
+					.tangent = tangentsBuffer ? glm::vec4(glm::make_vec4(&tangentsBuffer[v * 4])) : glm::vec4(0.0f),
 					.uv = texCoordsBuffer ? glm::make_vec2(&texCoordsBuffer[v * 2]) : glm::vec2(0.0f),
 					.color = glm::vec3(1.0f)
 				});

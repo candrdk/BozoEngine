@@ -14,11 +14,13 @@ constexpr u32 WIDTH = 1600;
 constexpr u32 HEIGHT = 900;
 
 GLTFModel* flightHelmet;
+GLTFModel* plane;
 u32 currentFrame = 0;
 
 struct CameraUBO {
 	alignas(16) glm::mat4 view;
 	alignas(16) glm::mat4 proj;
+	alignas(16) glm::vec3 camPos;
 };
 
 struct DeferredUBO {
@@ -69,7 +71,7 @@ struct DepthAttachment {
 
 // Temporary namespace to contain globals
 namespace bz {
-	Camera camera(glm::vec3(0.0f, 0.0f, 0.5f), 1.0f, 90.0f, (float)WIDTH / HEIGHT, 0.01f, 0.0f, -90.0f);
+	Camera camera(glm::vec3(0.0f, 1.0f, 0.0f), 1.0f, 90.0f, (float)WIDTH / HEIGHT, 0.01f, 0.0f, 0.0f);
 	glm::vec4 redLightPos, blueLightPos;
 
 	Device device;
@@ -411,7 +413,9 @@ void RecordDeferredCommandBuffer(VkCommandBuffer cmd, u32 imageIndex) {
 
 	vkCmdBeginRendering(cmd, &renderingInfo);
 
-	flightHelmet->Draw(cmd, bz::offscreenPipeline.pipelineLayout);
+	//flightHelmet->Draw(cmd, bz::offscreenPipeline.pipelineLayout);
+
+	plane->Draw(cmd, bz::offscreenPipeline.pipelineLayout);
 
 	vkCmdEndRendering(cmd);
 
@@ -664,7 +668,8 @@ void CleanupVulkan() {
 void UpdateUniformBuffer(u32 currentImage) {
 	CameraUBO cameraUBO = {
 		.view = bz::camera.view,
-		.proj = bz::camera.projection
+		.proj = bz::camera.projection,
+		.camPos = bz::camera.position
 	};
 
 	memcpy(bz::uniformBuffers[currentImage].mapped, &cameraUBO, sizeof(cameraUBO));
@@ -778,7 +783,30 @@ int main(int argc, char* argv[]) {
 
 	bz::overlay = new UIOverlay(window, bz::device, bz::swapchain.format, bz::depth.format, OverlayRender);
 
-	flightHelmet = new GLTFModel(bz::device, bz::materialLayout, "assets/FlightHelmet/FlightHelmet.gltf");
+	//flightHelmet = new GLTFModel(bz::device, bz::materialLayout, "assets/FlightHelmet/FlightHelmet.gltf");
+
+	plane = new GLTFModel(bz::device, bz::materialLayout, "assets/ParallaxTest/plane.gltf");
+	{
+		plane->images.resize(2);
+		plane->images[0].LoadFromFile("assets/ParallaxTest/rocks_color_rgba.png", bz::device, bz::device.graphicsQueue, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_USAGE_SAMPLED_BIT);
+		plane->images[1].LoadFromFile("assets/ParallaxTest/rocks_normal_height_rgba.png", bz::device, bz::device.graphicsQueue, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_USAGE_SAMPLED_BIT);
+
+		plane->materials.push_back({
+			.albedo = &plane->images[0],
+			.normal = &plane->images[1],
+			.metallicRoughness = &plane->images[0],
+			.bindGroup = BindGroup::Create(bz::device, bz::materialLayout, {
+				.textures = {
+					{.binding = 0, .sampler = plane->images[0].sampler, .view = plane->images[0].view, .layout = plane->images[0].layout },
+					{.binding = 1, .sampler = plane->images[1].sampler, .view = plane->images[1].view, .layout = plane->images[1].layout },
+					{.binding = 2, .sampler = plane->images[0].sampler, .view = plane->images[0].view, .layout = plane->images[0].layout },
+				}
+			})
+		});
+
+		plane->nodes[0]->mesh.primitives[0].materialIndex = 0;
+		plane->nodes[0]->transform = glm::mat4(1.0);
+	}
 
 	bz::redLightPos = glm::vec4(0.0f, 1.0f, 1.0f, 1.0f);
 	bz::blueLightPos = glm::vec4(0.0f, 0.0f, 0.0f, 1.0f);
@@ -806,7 +834,8 @@ int main(int argc, char* argv[]) {
 	// Wait until all commandbuffers are done so we can safely clean up semaphores they might potentially be using.
 	vkDeviceWaitIdle(bz::device.logicalDevice);
 
-	delete flightHelmet;
+	delete plane;
+	//delete flightHelmet;
 	
 	delete bz::overlay;
 
