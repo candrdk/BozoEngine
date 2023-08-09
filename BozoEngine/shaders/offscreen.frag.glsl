@@ -40,7 +40,6 @@ vec3 get_view_space_normal(vec2 uv) {
 
 vec2 parallax(vec2 uv, vec3 vdir) {
     float height = 1.0 - texture(samplerNormal, uv).a;
-    //height = uv.x > 0.5 ? 1.0 : 0.0;
     vec2 p = vdir.xy * (height * uboScene.parallaxScale) / vdir.z;
     return uv - p;
 }

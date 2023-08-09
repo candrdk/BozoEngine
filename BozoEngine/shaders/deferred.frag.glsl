@@ -57,9 +57,8 @@ vec3 reconstruct_pos_view_space(ivec2 uv) {
 }
 
 vec3 blinn_phong(vec3 n, vec3 l, vec3 v, vec3 lightColor) {
-	vec3 ambientColor = vec3(0.25, 0.25, 0.25);
-	//vec3 lightColor = vec3(1.0, 1.0, 1.0);
-	vec3 specularColor = vec3(0.25, 0.25, 0.25);
+	vec3 ambientColor = vec3(0.1, 0.1, 0.1);
+	vec3 specularColor = vec3(0.1, 0.1, 0.1);
 	float alpha = 200.0;
 	
 	vec3 directColor = lightColor * clamp(dot(n, l), 0.0, 1.0);
@@ -83,7 +82,7 @@ vec4 shade_pixel(ivec2 uv) {
 	vec3 l1 = normalize(lightpos1 - pos);
 	vec3 l2 = normalize(lightpos2 - pos);
 
-	return vec4(blinn_phong(n, l1, v, vec3(1.0, 0.0, 0.0)) + blinn_phong(n, l2, v, vec3(0.0, 0.0, 1.0)), 1.0);
+	return vec4(blinn_phong(n, l1, v, vec3(1.0, 1.0, 1.0)) + blinn_phong(n, l2, v, vec3(1.0, 0.0, 0.0)), 1.0);
 }
 
 void main() {

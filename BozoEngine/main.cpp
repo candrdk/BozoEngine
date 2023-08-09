@@ -29,8 +29,8 @@ struct DeferredUBO {
 	alignas(16) glm::mat4 view;
 	alignas(16) glm::mat4 invProj;
 	alignas(16) glm::vec4 camPos;
-	alignas(16) glm::vec4 redLightPos;
-	alignas(16) glm::vec4 blueLightPos;
+	alignas(16) glm::vec4 l1pos;
+	alignas(16) glm::vec4 l2pos;
 };
 
 struct RenderFrame {
@@ -73,8 +73,8 @@ struct DepthAttachment {
 
 // Temporary namespace to contain globals
 namespace bz {
-	Camera camera(glm::vec3(0.0f, 1.0f, 0.0f), 1.0f, 90.0f, (float)WIDTH / HEIGHT, 0.01f, 0.0f, 0.0f);
-	glm::vec4 redLightPos, blueLightPos;
+	Camera camera(glm::vec3(0.0f, 1.25f, -1.5f), 1.0f, 60.0f, (float)WIDTH / HEIGHT, 0.01f, -45.0f, 90.0f);
+	glm::vec4 light1pos, light2pos;
 
 	Device device;
 	Swapchain swapchain;
@@ -97,8 +97,8 @@ namespace bz {
 	Pipeline offscreenPipeline, deferredPipeline;
 
 	u32 renderMode = 0;
-	u32 parallaxMode = 0;
-	float parallaxScale = 0.02f;
+	u32 parallaxMode = 1;
+	float parallaxScale = 0.03f;
 
 	VkSampleCountFlagBits msaaSamples = VK_SAMPLE_COUNT_1_BIT;
 	bool framebufferResized = false;
@@ -684,8 +684,8 @@ void UpdateUniformBuffer(u32 currentImage) {
 		.view = bz::camera.view,
 		.invProj = glm::inverse(bz::camera.projection),
 		.camPos = glm::vec4(bz::camera.position, 1.0f),
-		.redLightPos = bz::redLightPos,
-		.blueLightPos = bz::blueLightPos
+		.l1pos = bz::light1pos,
+		.l2pos = bz::light2pos
 	};
 
 	memcpy(bz::deferredBuffers[currentImage].mapped, &deferredUBO, sizeof(deferredUBO));
@@ -762,15 +762,7 @@ void DrawFrame() {
 void OverlayRender() {
 	ImGui::Begin("Bozo Engine", 0, 0);
 
-	ImGui::SeparatorText("Shader hot-reload");
-	if (ImGui::Button("Reload shaders")) {
-		vkDeviceWaitIdle(bz::device.logicalDevice);
-		bz::offscreenPipeline.Destroy(bz::device);
-		bz::deferredPipeline.Destroy(bz::device);
-		CreatePipelines();
-	}
-
-	ImGui::SeparatorText("Render Settings");
+	ImGui::SetNextItemOpen(true);
 	if (ImGui::CollapsingHeader("Render Mode")) {
 		ImGui::BeginTable("split", 2);
 
@@ -783,7 +775,8 @@ void OverlayRender() {
 
 		ImGui::EndTable();
 	}
-	
+
+	ImGui::SetNextItemOpen(true);
 	if (ImGui::CollapsingHeader("Parallax Mode")) {
 		if (ImGui::RadioButton("Disable", bz::parallaxMode == 0)) { bz::parallaxMode = 0; }
 		if (ImGui::RadioButton("Parallax Mapping", bz::parallaxMode == 1)) { bz::parallaxMode = 1; }
@@ -791,6 +784,14 @@ void OverlayRender() {
 		if (bz::parallaxMode) {
 			ImGui::SliderFloat("Scale", &bz::parallaxScale, 0.001f, 0.1f);
 		}
+	}
+
+	ImGui::SeparatorText("Shader hot-reload");
+	if (ImGui::Button("Reload shaders")) {
+		vkDeviceWaitIdle(bz::device.logicalDevice);
+		bz::offscreenPipeline.Destroy(bz::device);
+		bz::deferredPipeline.Destroy(bz::device);
+		CreatePipelines();
 	}
 
 	ImGui::End();
@@ -824,11 +825,11 @@ int main(int argc, char* argv[]) {
 		});
 
 		plane->nodes[0]->mesh.primitives[0].materialIndex = 0;
-		plane->nodes[0]->transform = glm::mat4(1.0);
+		plane->nodes[0]->transform = glm::scale(glm::mat4(1.0f), glm::vec3(0.2f));
 	}
 
-	bz::redLightPos = glm::vec4(0.0f, 1.0f, 1.0f, 1.0f);
-	bz::blueLightPos = glm::vec4(0.0f, 0.0f, 0.0f, 1.0f);
+	bz::light1pos = glm::vec4(0.0f, 1.0f, 1.0f, 1.0f);
+	bz::light2pos = glm::vec4(0.0f, 0.5f, -1.0f, 1.0f);
 
 	double lastFrame = 0.0f;
 	while (!glfwWindowShouldClose(window)) {
@@ -839,11 +840,8 @@ int main(int argc, char* argv[]) {
 		bz::camera.Update(deltaTime);
 		bz::overlay->Update();
 
-		bz::redLightPos.x = 2.0f * glm::sin((float)currentFrame);
-		bz::redLightPos.z = 2.0f * glm::cos((float)currentFrame);
-
-		bz::blueLightPos.y = 2.0f * glm::sin((float)currentFrame);
-		bz::blueLightPos.z = 2.0f * glm::cos((float)currentFrame);
+		bz::light1pos.x = 2.0f * glm::sin(float(0.5 * currentFrame));
+		bz::light1pos.z = 2.0f * glm::cos(float(0.5 * currentFrame));
 
 		DrawFrame();
 
