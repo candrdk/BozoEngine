@@ -22,6 +22,7 @@ struct CameraUBO {
 	alignas(16) glm::mat4 proj;
 	alignas(16) glm::vec3 camPos;
 	u32 parallaxMode;
+	u32 parallaxSteps;
 	float parallaxScale;
 };
 
@@ -97,7 +98,8 @@ namespace bz {
 	Pipeline offscreenPipeline, deferredPipeline;
 
 	u32 renderMode = 0;
-	u32 parallaxMode = 1;
+	u32 parallaxMode = 3;
+	u32 parallaxSteps = 8;
 	float parallaxScale = 0.03f;
 
 	VkSampleCountFlagBits msaaSamples = VK_SAMPLE_COUNT_1_BIT;
@@ -675,6 +677,7 @@ void UpdateUniformBuffer(u32 currentImage) {
 		.proj = bz::camera.projection,
 		.camPos = bz::camera.position,
 		.parallaxMode = bz::parallaxMode,
+		.parallaxSteps = bz::parallaxSteps,
 		.parallaxScale = bz::parallaxScale
 	};
 
@@ -779,10 +782,17 @@ void OverlayRender() {
 	ImGui::SetNextItemOpen(true);
 	if (ImGui::CollapsingHeader("Parallax Mode")) {
 		if (ImGui::RadioButton("Disable", bz::parallaxMode == 0)) { bz::parallaxMode = 0; }
-		if (ImGui::RadioButton("Parallax Mapping", bz::parallaxMode == 1)) { bz::parallaxMode = 1; }
+		if (ImGui::RadioButton("Simple Parallax Mapping", bz::parallaxMode == 1)) { bz::parallaxMode = 1; }
+		if (ImGui::RadioButton("Steep Parallax Mapping", bz::parallaxMode == 2)) { bz::parallaxMode = 2; }
+		if (ImGui::RadioButton("Parallax Occlusion Mapping", bz::parallaxMode == 3)) { bz::parallaxMode = 3; }
 
 		if (bz::parallaxMode) {
 			ImGui::SliderFloat("Scale", &bz::parallaxScale, 0.001f, 0.1f);
+			if (bz::parallaxMode > 1) {
+				const u32 minSteps = 8;
+				const u32 maxSteps = 64;
+				ImGui::SliderScalar("Steps", ImGuiDataType_U32, &bz::parallaxSteps, &minSteps, &maxSteps);
+			}
 		}
 	}
 
