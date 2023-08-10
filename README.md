@@ -15,7 +15,7 @@ The goal is just to learn vulkan and simple rendering techniques.
 - Reversed depth buffering for better precision.
 - Very basic support for rendering glTF 2.0 models. Only glTF features used by the sample assets are implemented.
 - Small custom [Dear ImGui](https://github.com/ocornut/imgui) vulkan backend for use with dynamic rendering.
-- *Very* basic spir-v reflection of shaders for pipeline layout generation. Not used atm, and not sure if I'll keep it around, but the skeleton an implementation is there.
+- *Very* basic spir-v reflection of shaders for pipeline layout generation. Not used atm, and not sure if I'll keep it around, but the skeleton of an implementation is there.
 
 ## Dependencies
 Bozo Engine uses the following 3rd party libraries:
