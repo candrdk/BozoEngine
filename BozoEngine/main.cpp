@@ -765,8 +765,7 @@ void DrawFrame() {
 void OverlayRender() {
 	ImGui::Begin("Bozo Engine", 0, 0);
 
-	ImGui::SetNextItemOpen(true);
-	if (ImGui::CollapsingHeader("Render Mode")) {
+	if (ImGui::CollapsingHeader("Render Mode", ImGuiTreeNodeFlags_DefaultOpen)) {
 		ImGui::BeginTable("split", 2);
 
 		ImGui::TableNextColumn(); if (ImGui::RadioButton("Deferred", bz::renderMode == 0))			{ bz::renderMode = 0; }
@@ -779,8 +778,7 @@ void OverlayRender() {
 		ImGui::EndTable();
 	}
 
-	ImGui::SetNextItemOpen(true);
-	if (ImGui::CollapsingHeader("Parallax Mode")) {
+	if (ImGui::CollapsingHeader("Parallax Mode", ImGuiTreeNodeFlags_DefaultOpen)) {
 		if (ImGui::RadioButton("Disable", bz::parallaxMode == 0)) { bz::parallaxMode = 0; }
 		if (ImGui::RadioButton("Simple Parallax Mapping", bz::parallaxMode == 1)) { bz::parallaxMode = 1; }
 		if (ImGui::RadioButton("Steep Parallax Mapping", bz::parallaxMode == 2)) { bz::parallaxMode = 2; }
