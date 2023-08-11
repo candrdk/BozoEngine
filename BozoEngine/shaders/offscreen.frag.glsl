@@ -39,16 +39,29 @@ vec3 get_view_space_normal(vec2 uv) {
     return normalize((uboScene.view * primitive.model * vec4(object_space_normal, 0.0)).xyz);
 }
 
-// TODO: The vdir.z division causes weird artifacts at shallow angles.
-// Look into pros/cons of including it...
 vec2 parallax(vec2 uv, vec3 vdir) {
     float height = 1.0 - texture(samplerNormal, uv).a;
-    vec2 p = vdir.xy * height * uboScene.parallaxScale / vdir.z;
-    return uv - p;
+    vec2 parallax = vdir.xy * height * uboScene.parallaxScale;
+    return uv - parallax;
+}
+
+// This is probably wrong idk
+vec2 fged_parallax(vec2 uv, vec3 vdir) {
+    const int k = int(uboScene.parallaxSteps);
+
+    vec2 scale = vec2(uboScene.parallaxScale * 5000) / (textureSize(samplerNormal, 0) * 2.0 * k);
+    vec2 pdir = vdir.xy * scale;
+
+    for (int i = 0; i < k; i++) {
+        float parallax = (texture(samplerNormal, uv).z * 2.0 - 1.0) * (1.0 - texture(samplerNormal, uv).a);
+        uv -= pdir * parallax;
+    }
+
+    return uv;
 }
 
 vec2 steep_parallax(vec2 uv, vec3 vdir) {
-    // Small optimization?: Take less samples when looking straight at surface.
+    // Small optimization?: Take less samples when looking straight at surface. Prob only worth it when using lots of samples
     const float minLayers = min(8, uboScene.parallaxSteps);
     const float maxLayers = uboScene.parallaxSteps;
     float numLayers = mix(maxLayers, minLayers, max(dot(vec3(0.0, 0.0, 1.0), vdir), 0.0));
@@ -70,11 +83,7 @@ vec2 steep_parallax(vec2 uv, vec3 vdir) {
 }
 
 vec2 parallax_occlusion(vec2 uv, vec3 vdir) {
-    // Small optimization?: Take less samples when looking straight at surface.
-    const float minLayers = min(8, uboScene.parallaxSteps);
-    const float maxLayers = uboScene.parallaxSteps;
-    float numLayers = mix(maxLayers, minLayers, max(dot(vec3(0.0, 0.0, 1.0), vdir), 0.0));
-
+    float numLayers = uboScene.parallaxSteps;
     float layerDepth = 1.0 / numLayers;
     float currentLayerDepth = 0.0;
 
@@ -107,8 +116,9 @@ void main() {
 
     switch(uboScene.parallaxMode) {
         case 1: uv = parallax(inUV, tangentViewDir); break;
-        case 2: uv = steep_parallax(inUV, tangentViewDir); break;
-        case 3: uv = parallax_occlusion(inUV, tangentViewDir); break;
+        case 2: uv = fged_parallax(inUV, tangentViewDir); break;
+        case 3: uv = steep_parallax(inUV, tangentViewDir); break;
+        case 4: uv = parallax_occlusion(inUV, tangentViewDir); break;
         default: break;
     }
 

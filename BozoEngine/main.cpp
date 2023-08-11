@@ -98,9 +98,9 @@ namespace bz {
 	Pipeline offscreenPipeline, deferredPipeline;
 
 	u32 renderMode = 0;
-	u32 parallaxMode = 3;
+	u32 parallaxMode = 4;
 	u32 parallaxSteps = 8;
-	float parallaxScale = 0.03f;
+	float parallaxScale = 0.05f;
 
 	VkSampleCountFlagBits msaaSamples = VK_SAMPLE_COUNT_1_BIT;
 	bool framebufferResized = false;
@@ -781,8 +781,9 @@ void OverlayRender() {
 	if (ImGui::CollapsingHeader("Parallax Mode", ImGuiTreeNodeFlags_DefaultOpen)) {
 		if (ImGui::RadioButton("Disable", bz::parallaxMode == 0)) { bz::parallaxMode = 0; }
 		if (ImGui::RadioButton("Simple Parallax Mapping", bz::parallaxMode == 1)) { bz::parallaxMode = 1; }
-		if (ImGui::RadioButton("Steep Parallax Mapping", bz::parallaxMode == 2)) { bz::parallaxMode = 2; }
-		if (ImGui::RadioButton("Parallax Occlusion Mapping", bz::parallaxMode == 3)) { bz::parallaxMode = 3; }
+		if (ImGui::RadioButton("FGED Parallax Mapping", bz::parallaxMode == 2)) { bz::parallaxMode = 2; }
+		if (ImGui::RadioButton("Steep Parallax Mapping", bz::parallaxMode == 3)) { bz::parallaxMode = 3; }
+		if (ImGui::RadioButton("Parallax Occlusion Mapping", bz::parallaxMode == 4)) { bz::parallaxMode = 4; }
 
 		if (bz::parallaxMode) {
 			ImGui::SliderFloat("Scale", &bz::parallaxScale, 0.001f, 0.1f);
