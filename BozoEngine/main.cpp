@@ -26,12 +26,18 @@ struct CameraUBO {
 	float parallaxScale;
 };
 
+struct DirectionalLight {
+	alignas(16) glm::vec3 direction;
+	alignas(16) glm::vec3 ambient;
+	alignas(16) glm::vec3 diffuse;
+	alignas(16) glm::vec3 specular;
+};
+
 struct DeferredUBO {
 	alignas(16) glm::mat4 view;
 	alignas(16) glm::mat4 invProj;
 	alignas(16) glm::vec4 camPos;
-	alignas(16) glm::vec4 l1pos;
-	alignas(16) glm::vec4 l2pos;
+	DirectionalLight dirLight;
 };
 
 struct RenderFrame {
@@ -74,9 +80,24 @@ struct DepthAttachment {
 
 // Temporary namespace to contain globals
 namespace bz {
-	Camera camera(glm::vec3(0.0f, 1.25f, -1.5f), 1.0f, 60.0f, (float)WIDTH / HEIGHT, 0.01f, -45.0f, 90.0f);
-	glm::vec4 light1pos, light2pos;
+	// Scene
+	Camera camera(glm::vec3(0.0f, 1.25f, 1.5f), 1.0f, 60.0f, (float)WIDTH / HEIGHT, 0.01f, -30.0f, -90.0f);
 
+	DirectionalLight dirLight = {
+		.direction = glm::vec3(0.0f, -1.0f, 0.0f),
+		.ambient = glm::vec3(0.05f, 0.05f, 0.05f),
+		.diffuse = glm::vec3(1.0f, 0.8f, 0.7f),
+		.specular = glm::vec3(0.1f, 0.1f, 0.1f)
+	};
+	bool bAnimateLight = true;
+
+	// Deferred pass settings
+	u32 renderMode = 0;
+	u32 parallaxMode = 4;
+	u32 parallaxSteps = 8;
+	float parallaxScale = 0.05f;
+
+	// Vulkan stuff
 	Device device;
 	Swapchain swapchain;
 	UIOverlay* overlay;
@@ -96,11 +117,6 @@ namespace bz {
 	BindGroup gbufferBindings;
 
 	Pipeline offscreenPipeline, deferredPipeline;
-
-	u32 renderMode = 0;
-	u32 parallaxMode = 4;
-	u32 parallaxSteps = 8;
-	float parallaxScale = 0.05f;
 
 	VkSampleCountFlagBits msaaSamples = VK_SAMPLE_COUNT_1_BIT;
 	bool framebufferResized = false;
@@ -419,7 +435,7 @@ void RecordDeferredCommandBuffer(VkCommandBuffer cmd, u32 imageIndex) {
 
 	vkCmdBeginRendering(cmd, &renderingInfo);
 
-	//flightHelmet->Draw(cmd, bz::offscreenPipeline.pipelineLayout);
+	flightHelmet->Draw(cmd, bz::offscreenPipeline.pipelineLayout);
 
 	plane->Draw(cmd, bz::offscreenPipeline.pipelineLayout);
 
@@ -687,8 +703,7 @@ void UpdateUniformBuffer(u32 currentImage) {
 		.view = bz::camera.view,
 		.invProj = glm::inverse(bz::camera.projection),
 		.camPos = glm::vec4(bz::camera.position, 1.0f),
-		.l1pos = bz::light1pos,
-		.l2pos = bz::light2pos
+		.dirLight = bz::dirLight
 	};
 
 	memcpy(bz::deferredBuffers[currentImage].mapped, &deferredUBO, sizeof(deferredUBO));
@@ -765,6 +780,12 @@ void DrawFrame() {
 void OverlayRender() {
 	ImGui::Begin("Bozo Engine", 0, 0);
 
+	ImGui::SeparatorText("Directional Light settings");
+	ImGui::Checkbox("Animate light", &bz::bAnimateLight);
+	ImGui::ColorEdit3("Ambient", &bz::dirLight.ambient.x, ImGuiColorEditFlags_Float);
+	ImGui::ColorEdit3("Diffuse", &bz::dirLight.diffuse.x, ImGuiColorEditFlags_Float);
+	ImGui::ColorEdit3("Specular", &bz::dirLight.specular.x, ImGuiColorEditFlags_Float);
+
 	if (ImGui::CollapsingHeader("Render Mode", ImGuiTreeNodeFlags_DefaultOpen)) {
 		ImGui::BeginTable("split", 2);
 
@@ -812,7 +833,8 @@ int main(int argc, char* argv[]) {
 
 	bz::overlay = new UIOverlay(window, bz::device, bz::swapchain.format, bz::depth.format, OverlayRender);
 
-	//flightHelmet = new GLTFModel(bz::device, bz::materialLayout, "assets/FlightHelmet/FlightHelmet.gltf");
+	flightHelmet = new GLTFModel(bz::device, bz::materialLayout, "assets/FlightHelmet/FlightHelmet.gltf");
+	flightHelmet->nodes[0]->transform = glm::scale(glm::translate(flightHelmet->nodes[0]->transform, glm::vec3(0.0, 1.0, 0.0)), glm::vec3(2.0));
 
 	plane = new GLTFModel(bz::device, bz::materialLayout, "assets/ParallaxTest/plane.gltf");
 	{
@@ -837,20 +859,21 @@ int main(int argc, char* argv[]) {
 		plane->nodes[0]->transform = glm::scale(glm::mat4(1.0f), glm::vec3(0.2f));
 	}
 
-	bz::light1pos = glm::vec4(0.0f, 1.0f, 1.0f, 1.0f);
-	bz::light2pos = glm::vec4(0.0f, 0.5f, -1.0f, 1.0f);
-
 	double lastFrame = 0.0f;
 	while (!glfwWindowShouldClose(window)) {
 		double currentFrame = glfwGetTime();
 		float deltaTime = float(currentFrame - lastFrame);
 		lastFrame = currentFrame;
 
+		if (bz::bAnimateLight) {
+			float t = float(currentFrame * 0.5);
+			//bz::dirLight.direction.x = glm::cos(t);
+			//bz::dirLight.direction.y = 0.5f * glm::sin(2.0f * t + 1.5708f) - 0.5f;
+			bz::dirLight.direction = glm::vec3(glm::cos(t), -1.0f, glm::sin(t));
+		}
+
 		bz::camera.Update(deltaTime);
 		bz::overlay->Update();
-
-		bz::light1pos.x = 2.0f * glm::sin(float(0.5 * currentFrame));
-		bz::light1pos.z = 2.0f * glm::cos(float(0.5 * currentFrame));
 
 		DrawFrame();
 
@@ -861,7 +884,7 @@ int main(int argc, char* argv[]) {
 	vkDeviceWaitIdle(bz::device.logicalDevice);
 
 	delete plane;
-	//delete flightHelmet;
+	delete flightHelmet;
 	
 	delete bz::overlay;
 

@@ -11,7 +11,7 @@ layout(set = 0, binding = 0) uniform UniformBufferObject {
     uint parallaxMode;
     uint parallaxSteps;
     float parallaxScale;
-} uboScene;
+} ubo;
 
 layout(push_constant) uniform PushConstants {
     mat4 model;
@@ -36,20 +36,20 @@ vec3 get_view_space_normal(vec2 uv) {
     mat3 tbn = mat3(t, b, n);
 
     vec3 object_space_normal = tbn * (texture(samplerNormal, uv).xyz * 2.0 - 1.0);
-    return normalize((uboScene.view * primitive.model * vec4(object_space_normal, 0.0)).xyz);
+    return normalize((ubo.view * primitive.model * vec4(object_space_normal, 0.0)).xyz);
 }
 
 vec2 parallax(vec2 uv, vec3 vdir) {
     float height = 1.0 - texture(samplerNormal, uv).a;
-    vec2 parallax = vdir.xy * height * uboScene.parallaxScale;
+    vec2 parallax = vdir.xy * height * ubo.parallaxScale;
     return uv - parallax;
 }
 
 // This is probably wrong idk
 vec2 fged_parallax(vec2 uv, vec3 vdir) {
-    const int k = int(uboScene.parallaxSteps);
+    const int k = int(ubo.parallaxSteps);
 
-    vec2 scale = vec2(uboScene.parallaxScale * 5000) / (textureSize(samplerNormal, 0) * 2.0 * k);
+    vec2 scale = vec2(ubo.parallaxScale * 5000) / (textureSize(samplerNormal, 0) * 2.0 * k);
     vec2 pdir = vdir.xy * scale;
 
     for (int i = 0; i < k; i++) {
@@ -62,14 +62,14 @@ vec2 fged_parallax(vec2 uv, vec3 vdir) {
 
 vec2 steep_parallax(vec2 uv, vec3 vdir) {
     // Small optimization?: Take less samples when looking straight at surface. Prob only worth it when using lots of samples
-    const float minLayers = min(8, uboScene.parallaxSteps);
-    const float maxLayers = uboScene.parallaxSteps;
+    const float minLayers = min(8, ubo.parallaxSteps);
+    const float maxLayers = ubo.parallaxSteps;
     float numLayers = mix(maxLayers, minLayers, max(dot(vec3(0.0, 0.0, 1.0), vdir), 0.0));
 
     float layerDepth = 1.0 / numLayers;
     float currentLayerDepth = 0.0;
 
-    vec2 p = vdir.xy * uboScene.parallaxScale;
+    vec2 p = vdir.xy * ubo.parallaxScale;
     vec2 deltaUV = p / numLayers;
 
     float currentDepth = 1.0 - texture(samplerNormal, uv).a;
@@ -83,11 +83,11 @@ vec2 steep_parallax(vec2 uv, vec3 vdir) {
 }
 
 vec2 parallax_occlusion(vec2 uv, vec3 vdir) {
-    float numLayers = uboScene.parallaxSteps;
+    float numLayers = ubo.parallaxSteps;
     float layerDepth = 1.0 / numLayers;
     float currentLayerDepth = 0.0;
 
-    vec2 p = vdir.xy * uboScene.parallaxScale;
+    vec2 p = vdir.xy * ubo.parallaxScale;
     vec2 deltaUV = p / numLayers;
 
     vec2 currentUV = uv;
@@ -114,7 +114,7 @@ void main() {
 
     vec2 uv = inUV;
 
-    switch(uboScene.parallaxMode) {
+    switch(ubo.parallaxMode) {
         case 1: uv = parallax(inUV, tangentViewDir); break;
         case 2: uv = fged_parallax(inUV, tangentViewDir); break;
         case 3: uv = steep_parallax(inUV, tangentViewDir); break;

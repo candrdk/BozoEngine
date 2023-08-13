@@ -13,7 +13,7 @@ layout(set = 0, binding = 0) uniform UniformBufferObject {
     uint parallaxMode;
     uint parallaxSteps;
     float parallaxScale;
-} uboScene;
+} ubo;
 
 layout(push_constant) uniform PushConstants {
     mat4 model;
@@ -28,7 +28,7 @@ layout(location = 4) out vec3 outTangentViewPos;
 layout(location = 5) out vec3 outTangentFragPos;
 
 void main() {
-    gl_Position = uboScene.proj * uboScene.view * primitive.model * vec4(inPos, 1.0);
+    gl_Position = ubo.proj * ubo.view * primitive.model * vec4(inPos, 1.0);
 
     outNormal = inNormal;
     outTangent = inTangent;
@@ -39,7 +39,7 @@ void main() {
     vec3 T = normalize(mat3(primitive.model) * inTangent.xyz);
     vec3 B = normalize(cross(N, T) * inTangent.w);
     mat3 TBN = transpose(mat3(T, B, N));
-
-    outTangentViewPos = TBN * uboScene.camPos;
+    
+    outTangentViewPos = TBN * ubo.camPos;
     outTangentFragPos = TBN * vec3(primitive.model * vec4(inPos, 1.0));
 }

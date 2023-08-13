@@ -1,12 +1,19 @@
 #version 450
 
+struct DirLight {
+	vec3 direction;
+	vec3 ambient;
+	vec3 diffuse;
+	vec3 specular;
+};
+
 layout(set = 0, binding = 0) uniform UniformBufferObject {
 	mat4 view;
     mat4 invProj;
     vec4 position;
-	vec4 lightPos1;
-	vec4 lightPos2;
-} camera;
+
+	DirLight dirLight;
+} ubo;
 
 layout(push_constant) uniform PushConstants {
     uint renderMode;
@@ -51,38 +58,32 @@ vec3 reconstruct_pos_view_space(ivec2 uv) {
 	float z = resolve_depth(uv);
 
 	vec4 clipSpacePosition = vec4(inUV * 2.0 - 1.0, z, 1.0);
-	vec4 viewSpacePosition = camera.invProj * clipSpacePosition;
+	vec4 viewSpacePosition = ubo.invProj * clipSpacePosition;
 
 	return viewSpacePosition.xyz / viewSpacePosition.w;
 }
 
-vec3 blinn_phong(vec3 n, vec3 l, vec3 v, vec3 lightColor) {
-	vec3 ambientColor = vec3(0.1, 0.1, 0.1);
-	vec3 specularColor = vec3(0.1, 0.1, 0.1);
-	float alpha = 200.0;
-	
-	vec3 directColor = lightColor * clamp(dot(n, l), 0.0, 1.0);
-	vec3 diffuse = (ambientColor + directColor) * resolve(samplerAlbedo, ivec2(gl_FragCoord)).rgb;
+vec3 shade_directional_light(DirLight light, vec3 n, vec3 v) {
+	const float alpha = 200.0;
+
+	vec3 l = -normalize(mat3(ubo.view) * light.direction);
+
+	vec3 directColor = light.diffuse * clamp(dot(n, l), 0.0, 1.0);
+	vec3 diffuse = (light.ambient + directColor) * resolve(samplerAlbedo, ivec2(gl_FragCoord)).rgb;
 
 	vec3 h = normalize(l + v);
 	float highlight = pow(clamp(dot(n, h), 0.0, 1.0), alpha) * float(dot(n, l) > 0.0);
-	vec3 specular = lightColor * specularColor * highlight;
+	vec3 specular = light.diffuse * light.specular * highlight;
 
-	return specular + diffuse;
+	return diffuse + specular;
 }
 
 vec4 shade_pixel(ivec2 uv) {
-	vec3 pos = reconstruct_pos_view_space(uv);
-	vec3 lightpos1 = (camera.view * camera.lightPos1).xyz;
-	vec3 lightpos2 = (camera.view * camera.lightPos2).xyz;
-
+	vec3 p = reconstruct_pos_view_space(uv);
 	vec3 n = normalize(resolve(samplerNormal, uv).xyz * 2.0 - 1.0);
-	vec3 v = normalize((camera.view * camera.position).xyz - pos);
+	vec3 v = normalize((ubo.view * ubo.position).xyz - p);
 
-	vec3 l1 = normalize(lightpos1 - pos);
-	vec3 l2 = normalize(lightpos2 - pos);
-
-	return vec4(blinn_phong(n, l1, v, vec3(1.0, 1.0, 1.0)) + blinn_phong(n, l2, v, vec3(1.0, 0.0, 0.0)), 1.0);
+	return vec4(shade_directional_light(ubo.dirLight, n, v), 1.0);
 }
 
 void main() {
