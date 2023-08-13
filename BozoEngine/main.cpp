@@ -33,11 +33,22 @@ struct DirectionalLight {
 	alignas(16) glm::vec3 specular;
 };
 
+struct PointLight {
+	alignas(16) glm::vec3 position;
+	alignas(16) glm::vec3 ambient;
+	alignas(16) glm::vec3 diffuse;
+	alignas(16) glm::vec3 specular;
+};
+
+#define MAX_POINT_LIGHTS 4
 struct DeferredUBO {
 	alignas(16) glm::mat4 view;
 	alignas(16) glm::mat4 invProj;
 	alignas(16) glm::vec4 camPos;
+
+	int pointLightCount;
 	DirectionalLight dirLight;
+	PointLight pointLights[MAX_POINT_LIGHTS];
 };
 
 struct RenderFrame {
@@ -88,6 +99,24 @@ namespace bz {
 		.ambient = glm::vec3(0.05f, 0.05f, 0.05f),
 		.diffuse = glm::vec3(1.0f, 0.8f, 0.7f),
 		.specular = glm::vec3(0.1f, 0.1f, 0.1f)
+	};
+	PointLight pointLightR = {
+		.position = glm::vec3(0.0f, 0.25f, 0.25f),
+		.ambient = glm::vec3(0.1f, 0.1f, 0.1f),
+		.diffuse = glm::vec3(1.0f, 0.0f, 0.0f),
+		.specular = glm::vec3(0.05f, 0.05f, 0.05f)
+	};
+	PointLight pointLightG = {
+		.position = glm::vec3(0.0f, 0.25f, 0.25f),
+		.ambient = glm::vec3(0.1f, 0.1f, 0.1f),
+		.diffuse = glm::vec3(0.0f, 1.0f, 0.0f),
+		.specular = glm::vec3(0.05f, 0.05f, 0.05f)
+	};
+	PointLight pointLightB = {
+		.position = glm::vec3(0.0f, 0.25f, 0.25f),
+		.ambient = glm::vec3(0.1f, 0.1f, 0.1f),
+		.diffuse = glm::vec3(0.0f, 0.0f, 1.0f),
+		.specular = glm::vec3(0.05f, 0.05f, 0.05f)
 	};
 	bool bAnimateLight = true;
 
@@ -703,7 +732,13 @@ void UpdateUniformBuffer(u32 currentImage) {
 		.view = bz::camera.view,
 		.invProj = glm::inverse(bz::camera.projection),
 		.camPos = glm::vec4(bz::camera.position, 1.0f),
-		.dirLight = bz::dirLight
+		.pointLightCount = 3,
+		.dirLight = bz::dirLight,
+		.pointLights = {
+			bz::pointLightR,
+			bz::pointLightG,
+			bz::pointLightB
+		}
 	};
 
 	memcpy(bz::deferredBuffers[currentImage].mapped, &deferredUBO, sizeof(deferredUBO));
@@ -870,6 +905,10 @@ int main(int argc, char* argv[]) {
 			//bz::dirLight.direction.x = glm::cos(t);
 			//bz::dirLight.direction.y = 0.5f * glm::sin(2.0f * t + 1.5708f) - 0.5f;
 			bz::dirLight.direction = glm::vec3(glm::cos(t), -1.0f, glm::sin(t));
+
+			bz::pointLightR.position = glm::vec3(-0.5f, glm::cos(2.0f * t) + 1.0f, 0.5f);
+			bz::pointLightG.position = glm::vec3(0.5f, 0.25f, 0.0f);
+			bz::pointLightB.position = glm::vec3(glm::cos(4.0f * t), 0.25f, -0.5f);
 		}
 
 		bz::camera.Update(deltaTime);

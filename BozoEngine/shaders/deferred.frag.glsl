@@ -7,12 +7,23 @@ struct DirLight {
 	vec3 specular;
 };
 
+struct PointLight {
+	vec3 position;
+	vec3 ambient;
+	vec3 diffuse;
+	vec3 specular;
+};
+
+#define MAX_POINT_LIGHTS 4
+
 layout(set = 0, binding = 0) uniform UniformBufferObject {
 	mat4 view;
     mat4 invProj;
     vec4 position;
 
+	int pointLightCount;
 	DirLight dirLight;
+	PointLight pointLights[MAX_POINT_LIGHTS];
 } ubo;
 
 layout(push_constant) uniform PushConstants {
@@ -78,12 +89,38 @@ vec3 shade_directional_light(DirLight light, vec3 n, vec3 v) {
 	return diffuse + specular;
 }
 
+//TODO: fix up attentuation function + variables
+vec3 shade_point_light(PointLight light, vec3 n, vec3 v, vec3 p) {
+	const float alpha = 200.0;
+
+	vec3 lpos = vec3(ubo.view * vec4(light.position, 1.0));
+	vec3 l = normalize(lpos - p);
+
+	vec3 directColor = light.diffuse * clamp(dot(n, l), 0.0, 1.0);
+	vec3 diffuse = (light.ambient + directColor) * resolve(samplerAlbedo, ivec2(gl_FragCoord)).rgb;
+
+	vec3 h = normalize(l + v);
+	float highlight = pow(clamp(dot(n, h), 0.0, 1.0), alpha) * float(dot(n, l) > 0.0);
+	vec3 specular = light.diffuse * light.specular * highlight;
+
+	float d = length(lpos - p);
+	float attenuation = 1.0 / (1.0 + 0.7 * d + 1.8 * d * d);  
+
+	return (diffuse + specular) * attenuation;
+}
+
 vec4 shade_pixel(ivec2 uv) {
 	vec3 p = reconstruct_pos_view_space(uv);
 	vec3 n = normalize(resolve(samplerNormal, uv).xyz * 2.0 - 1.0);
 	vec3 v = normalize((ubo.view * ubo.position).xyz - p);
 
-	return vec4(shade_directional_light(ubo.dirLight, n, v), 1.0);
+	vec3 shade = shade_directional_light(ubo.dirLight, n, v);
+
+	for (int i = 0; i < ubo.pointLightCount; i++) {
+		shade += shade_point_light(ubo.pointLights[i], n, v, p);
+	}
+
+	return vec4(shade, 1.0);
 }
 
 void main() {
