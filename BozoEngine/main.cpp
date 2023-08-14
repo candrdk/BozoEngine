@@ -464,7 +464,7 @@ void RecordDeferredCommandBuffer(VkCommandBuffer cmd, u32 imageIndex) {
 
 	vkCmdBeginRendering(cmd, &renderingInfo);
 
-	flightHelmet->Draw(cmd, bz::offscreenPipeline.pipelineLayout);
+	//flightHelmet->Draw(cmd, bz::offscreenPipeline.pipelineLayout);
 
 	plane->Draw(cmd, bz::offscreenPipeline.pipelineLayout);
 
@@ -868,8 +868,8 @@ int main(int argc, char* argv[]) {
 
 	bz::overlay = new UIOverlay(window, bz::device, bz::swapchain.format, bz::depth.format, OverlayRender);
 
-	flightHelmet = new GLTFModel(bz::device, bz::materialLayout, "assets/FlightHelmet/FlightHelmet.gltf");
-	flightHelmet->nodes[0]->transform = glm::scale(glm::translate(flightHelmet->nodes[0]->transform, glm::vec3(0.0, 1.0, 0.0)), glm::vec3(2.0));
+	//flightHelmet = new GLTFModel(bz::device, bz::materialLayout, "assets/FlightHelmet/FlightHelmet.gltf");
+	//flightHelmet->nodes[0]->transform = glm::scale(glm::translate(flightHelmet->nodes[0]->transform, glm::vec3(0.0, 1.0, 0.0)), glm::vec3(2.0));
 
 	plane = new GLTFModel(bz::device, bz::materialLayout, "assets/ParallaxTest/plane.gltf");
 	{
@@ -891,7 +891,7 @@ int main(int argc, char* argv[]) {
 		});
 
 		plane->nodes[0]->mesh.primitives[0].materialIndex = 0;
-		plane->nodes[0]->transform = glm::scale(glm::mat4(1.0f), glm::vec3(0.2f));
+		//plane->nodes[0]->transform = glm::scale(glm::mat4(1.0f), glm::vec3(0.2f));
 	}
 
 	double lastFrame = 0.0f;
@@ -906,9 +906,9 @@ int main(int argc, char* argv[]) {
 			//bz::dirLight.direction.y = 0.5f * glm::sin(2.0f * t + 1.5708f) - 0.5f;
 			bz::dirLight.direction = glm::vec3(glm::cos(t), -1.0f, glm::sin(t));
 
-			bz::pointLightR.position = glm::vec3(-0.5f, glm::cos(2.0f * t) + 1.0f, 0.5f);
-			bz::pointLightG.position = glm::vec3(0.5f, 0.25f, 0.0f);
-			bz::pointLightB.position = glm::vec3(glm::cos(4.0f * t), 0.25f, -0.5f);
+			bz::pointLightR.position = glm::vec3(-2.0f, glm::cos(2.0f * t) + 1.0f, 2.0f);
+			bz::pointLightG.position = glm::vec3(2.0f, 0.25f, 0.0f);
+			bz::pointLightB.position = glm::vec3(glm::cos(4.0f * t), 0.25f, -2.0f);
 		}
 
 		bz::camera.Update(deltaTime);
@@ -923,7 +923,7 @@ int main(int argc, char* argv[]) {
 	vkDeviceWaitIdle(bz::device.logicalDevice);
 
 	delete plane;
-	delete flightHelmet;
+	//delete flightHelmet;
 	
 	delete bz::overlay;
 

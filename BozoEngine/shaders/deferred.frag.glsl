@@ -89,7 +89,36 @@ vec3 shade_directional_light(DirLight light, vec3 n, vec3 v) {
 	return diffuse + specular;
 }
 
-//TODO: fix up attentuation function + variables
+// These three are from fged
+// x = r0^2 / (rmax^2 - r0^2), y = rmax^2
+float inverse_square_attenuation(float r, vec2 attenuationConstants) {
+	float r2 = r * r;
+	return clamp(attenuationConstants.x * (attenuationConstants.y / r2 - 1.0), 0.0, 1.0);
+}
+
+// x = -k^2/rmax^2, y = 1 / (1 - e^(-k^2)), z = e^(-k^2) / (1-e^(-k^2)
+float exponential_attenuation(float r, vec3 attenuationConstants) {
+	float r2 = r * r;
+	return clamp(exp(r2 * attenuationConstants.x) * attenuationConstants.y - attenuationConstants.z, 0.0, 1.0);
+}
+
+// x = 1 / rmax^2, y = 2 / rmax
+float smooth_attenuation(float r, vec2 attenuationConstants) {
+	r = clamp(r, 0.0, 2.0 / attenuationConstants.y);
+
+	float r2 = r * r;
+	float attenuation = r2 * attenuationConstants.x * (sqrt(r2) * attenuationConstants.y - 3.0) + 1.0;
+	return clamp(attenuation, 0.0, 1.0);
+}
+
+// From https://www.youtube.com/watch?v=wzIcjzKQ2BE
+// r = radius of point light (r0)
+// d = distance
+float yuksel_attenuation(float d, float r) {
+	float r2 = r * r;
+	return 2.0 / r2 * (1.0 - d / sqrt(d*d + r2));
+}
+
 vec3 shade_point_light(PointLight light, vec3 n, vec3 v, vec3 p) {
 	const float alpha = 200.0;
 
@@ -104,9 +133,14 @@ vec3 shade_point_light(PointLight light, vec3 n, vec3 v, vec3 p) {
 	vec3 specular = light.diffuse * light.specular * highlight;
 
 	float d = length(lpos - p);
-	float attenuation = 1.0 / (1.0 + 0.7 * d + 1.8 * d * d);  
+	float r0 = 0.05;	float r02 = r0 * r0;
+	float rmax = 4.0;	float rmax2 = rmax * rmax;
+	float k = 2.0;		float k2 = k * k;
 
-	return (diffuse + specular) * attenuation;
+	//return (diffuse + specular) * 500.0 * inverse_square_attenuation(d, vec2(r02 / (rmax2 - r02), rmax2));
+	//return (diffuse + specular) * exponential_attenuation(d, vec3(-k2 / rmax2, 1.0 / (1.0 - exp(-k2)), exp(-k2) / (1.0 - exp(-k2))));
+	return (diffuse + specular) * smooth_attenuation(d, vec2(1.0 / rmax2, 2.0 / rmax));
+	//return (diffuse + specular) * yuksel_attenuation(d, r0);
 }
 
 vec4 shade_pixel(ivec2 uv) {
