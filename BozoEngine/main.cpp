@@ -13,7 +13,7 @@
 constexpr u32 WIDTH = 1600;
 constexpr u32 HEIGHT = 900;
 
-GLTFModel* flightHelmet;
+GLTFModel* model;
 GLTFModel* plane;
 u32 currentFrame = 0;
 
@@ -21,9 +21,6 @@ struct CameraUBO {
 	alignas(16) glm::mat4 view;
 	alignas(16) glm::mat4 proj;
 	alignas(16) glm::vec3 camPos;
-	u32 parallaxMode;
-	u32 parallaxSteps;
-	float parallaxScale;
 };
 
 struct DirectionalLight {
@@ -464,8 +461,7 @@ void RecordDeferredCommandBuffer(VkCommandBuffer cmd, u32 imageIndex) {
 
 	vkCmdBeginRendering(cmd, &renderingInfo);
 
-	//flightHelmet->Draw(cmd, bz::offscreenPipeline.pipelineLayout);
-
+	model->Draw(cmd, bz::offscreenPipeline.pipelineLayout);
 	plane->Draw(cmd, bz::offscreenPipeline.pipelineLayout);
 
 	vkCmdEndRendering(cmd);
@@ -720,10 +716,7 @@ void UpdateUniformBuffer(u32 currentImage) {
 	CameraUBO cameraUBO = {
 		.view = bz::camera.view,
 		.proj = bz::camera.projection,
-		.camPos = bz::camera.position,
-		.parallaxMode = bz::parallaxMode,
-		.parallaxSteps = bz::parallaxSteps,
-		.parallaxScale = bz::parallaxScale
+		.camPos = bz::camera.position
 	};
 
 	memcpy(bz::uniformBuffers[currentImage].mapped, &cameraUBO, sizeof(cameraUBO));
@@ -868,30 +861,31 @@ int main(int argc, char* argv[]) {
 
 	bz::overlay = new UIOverlay(window, bz::device, bz::swapchain.format, bz::depth.format, OverlayRender);
 
-	//flightHelmet = new GLTFModel(bz::device, bz::materialLayout, "assets/FlightHelmet/FlightHelmet.gltf");
-	//flightHelmet->nodes[0]->transform = glm::scale(glm::translate(flightHelmet->nodes[0]->transform, glm::vec3(0.0, 1.0, 0.0)), glm::vec3(2.0));
+	//model = new GLTFModel(bz::device, bz::materialLayout, "assets/FlightHelmet/FlightHelmet.gltf");
+	//model->nodes[0]->transform = glm::scale(glm::translate(model->nodes[0]->transform, glm::vec3(0.0, 1.0, 0.0)), glm::vec3(2.0));
+	model = new GLTFModel(bz::device, bz::materialLayout, "assets/Sponza/Sponza.gltf");
 
 	plane = new GLTFModel(bz::device, bz::materialLayout, "assets/ParallaxTest/plane.gltf");
 	{
-		plane->images.resize(2);
-		plane->images[0].LoadFromFile("assets/ParallaxTest/rocks_color_rgba.png", bz::device, bz::device.graphicsQueue, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_USAGE_SAMPLED_BIT);
-		plane->images[1].LoadFromFile("assets/ParallaxTest/rocks_normal_height_rgba.png", bz::device, bz::device.graphicsQueue, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_USAGE_SAMPLED_BIT);
+		plane->images.resize(3);
+		plane->images[1].LoadFromFile("assets/ParallaxTest/rocks_color_rgba.png", bz::device, bz::device.graphicsQueue, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_USAGE_SAMPLED_BIT);
+		plane->images[2].LoadFromFile("assets/ParallaxTest/rocks_normal_height_rgba.png", bz::device, bz::device.graphicsQueue, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_USAGE_SAMPLED_BIT);
 
 		plane->materials.push_back({
-			.albedo = &plane->images[0],
-			.normal = &plane->images[1],
+			.albedo = &plane->images[1],
+			.normal = &plane->images[2],
 			.metallicRoughness = &plane->images[0],
 			.bindGroup = BindGroup::Create(bz::device, bz::materialLayout, {
 				.textures = {
-					{.binding = 0, .sampler = plane->images[0].sampler, .view = plane->images[0].view, .layout = plane->images[0].layout },
-					{.binding = 1, .sampler = plane->images[1].sampler, .view = plane->images[1].view, .layout = plane->images[1].layout },
+					{.binding = 0, .sampler = plane->images[1].sampler, .view = plane->images[1].view, .layout = plane->images[1].layout },
+					{.binding = 1, .sampler = plane->images[2].sampler, .view = plane->images[2].view, .layout = plane->images[2].layout },
 					{.binding = 2, .sampler = plane->images[0].sampler, .view = plane->images[0].view, .layout = plane->images[0].layout },
 				}
 			})
 		});
 
 		plane->nodes[0]->mesh.primitives[0].materialIndex = 0;
-		//plane->nodes[0]->transform = glm::scale(glm::mat4(1.0f), glm::vec3(0.2f));
+		plane->nodes[0]->transform = glm::scale(glm::mat4(1.0f), glm::vec3(0.2f));
 	}
 
 	double lastFrame = 0.0f;
@@ -902,14 +896,16 @@ int main(int argc, char* argv[]) {
 
 		if (bz::bAnimateLight) {
 			float t = float(currentFrame * 0.5);
-			//bz::dirLight.direction.x = glm::cos(t);
-			//bz::dirLight.direction.y = 0.5f * glm::sin(2.0f * t + 1.5708f) - 0.5f;
 			bz::dirLight.direction = glm::vec3(glm::cos(t), -1.0f, glm::sin(t));
 
 			bz::pointLightR.position = glm::vec3(-2.0f, glm::cos(2.0f * t) + 1.0f, 2.0f);
 			bz::pointLightG.position = glm::vec3(2.0f, 0.25f, 0.0f);
 			bz::pointLightB.position = glm::vec3(glm::cos(4.0f * t), 0.25f, -2.0f);
 		}
+
+		plane->materials[0].parallaxMode = bz::parallaxMode;
+		plane->materials[0].parallaxSteps = bz::parallaxSteps;
+		plane->materials[0].parallaxScale = bz::parallaxScale;
 
 		bz::camera.Update(deltaTime);
 		bz::overlay->Update();
@@ -923,7 +919,7 @@ int main(int argc, char* argv[]) {
 	vkDeviceWaitIdle(bz::device.logicalDevice);
 
 	delete plane;
-	//delete flightHelmet;
+	delete model;
 	
 	delete bz::overlay;
 

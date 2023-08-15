@@ -94,13 +94,19 @@ void GLTFModel::DrawNode(VkCommandBuffer cmdBuffer, VkPipelineLayout pipelineLay
 			parent = parent->parent;
 		}
 
-		// Pass final matrix to the vertex shader using push constants
-		vkCmdPushConstants(cmdBuffer, pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(glm::mat4), &nodeTransform);
-
 		for (const Primitive& primitive : node->mesh.primitives) {
 			if (primitive.indexCount > 0) {
 				// Bind the descriptor for the current primitives' material
 				vkCmdBindDescriptorSets(cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 1, 1, &materials[primitive.materialIndex].bindGroup.descriptorSet, 0, nullptr);
+
+				PushConstants p = {
+					.model = nodeTransform,
+					.parallaxMode  = materials[primitive.materialIndex].parallaxMode,
+					.parallaxSteps = materials[primitive.materialIndex].parallaxSteps,
+					.parallaxScale = materials[primitive.materialIndex].parallaxScale
+				};
+				vkCmdPushConstants(cmdBuffer, pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(p), &p);
+
 				vkCmdDrawIndexed(cmdBuffer, primitive.indexCount, 1, primitive.firstIndex, 0, 0);
 			}
 		}
@@ -112,7 +118,7 @@ void GLTFModel::DrawNode(VkCommandBuffer cmdBuffer, VkPipelineLayout pipelineLay
 }
 
 void GLTFModel::LoadImages(tinygltf::Model& model) {
-	images.resize(model.images.size());
+	images.resize(model.images.size() + 1);
 
 	for (size_t i = 0; i < model.images.size(); i++) {
 		tinygltf::Image& gltfImage = model.images[i];
@@ -128,8 +134,21 @@ void GLTFModel::LoadImages(tinygltf::Model& model) {
 			bufferSize = gltfImage.image.size();
 		}
 
-		images[i].CreateFromBuffer(buffer, bufferSize, device, device.graphicsQueue, gltfImage.width, gltfImage.height, VK_FORMAT_R8G8B8A8_SRGB);
+		// Ugly hack, idk how this should be handled properly.
+		bool srgb = false;
+		for (tinygltf::Material m : model.materials) { 
+			int idx = m.pbrMetallicRoughness.baseColorTexture.index;
+			if (m.extensions.find("KHR_materials_pbrSpecularGlossiness") != m.extensions.end())
+				idx = m.extensions["KHR_materials_pbrSpecularGlossiness"].Get<tinygltf::Value::Object>()["diffuseTexture"].Get<tinygltf::Value::Object>()["index"].GetNumberAsInt();
+
+			if (idx != -1 && i == model.textures[idx].source) { srgb = true; break; }
+		}
+
+		images[i].CreateFromBuffer(buffer, bufferSize, device, device.graphicsQueue, gltfImage.width, gltfImage.height, srgb ? VK_FORMAT_R8G8B8A8_SRGB : VK_FORMAT_R8G8B8A8_UNORM);
 	}
+
+	u32 empty[4] = { 0xFFFF00FF, 0xFFFF00FF, 0xFFFF00FF, 0xFFFF00FF };
+	images.back().CreateFromBuffer(empty, 16, device, device.graphicsQueue, 2, 2, VK_FORMAT_R8G8B8A8_SRGB);
 }
 
 void GLTFModel::LoadMaterials(tinygltf::Model& model) {
@@ -139,14 +158,21 @@ void GLTFModel::LoadMaterials(tinygltf::Model& model) {
 		tinygltf::Material gltfMaterial = model.materials[i];
 		GLTFModel::Material& material = materials[i];
 
+		material.albedo = &images.back();
+		material.metallicRoughness = &images.back();
+		material.normal = &images.back();
+
 		if (gltfMaterial.values.find("baseColorTexture") != gltfMaterial.values.end()) {
-			material.albedo = &images[gltfMaterial.values["baseColorTexture"].TextureIndex()];
+			material.albedo = &images[model.textures[gltfMaterial.values["baseColorTexture"].TextureIndex()].source];
+		}
+		else if (gltfMaterial.extensions.find("KHR_materials_pbrSpecularGlossiness") != gltfMaterial.extensions.end()) {
+			material.albedo = &images[model.textures[gltfMaterial.extensions["KHR_materials_pbrSpecularGlossiness"].Get<tinygltf::Value::Object>()["diffuseTexture"].Get<tinygltf::Value::Object>()["index"].GetNumberAsInt()].source];
 		}
 		if (gltfMaterial.values.find("metallicRoughnessTexture") != gltfMaterial.values.end()) {
-			material.metallicRoughness = &images[gltfMaterial.values["metallicRoughnessTexture"].TextureIndex()];
+			material.metallicRoughness = &images[model.textures[gltfMaterial.values["metallicRoughnessTexture"].TextureIndex()].source];
 		}
 		if (gltfMaterial.additionalValues.find("normalTexture") != gltfMaterial.additionalValues.end()) {
-			material.normal = &images[gltfMaterial.additionalValues["normalTexture"].TextureIndex()];
+			material.normal = &images[model.textures[gltfMaterial.additionalValues["normalTexture"].TextureIndex()].source];
 		}
 
 		material.bindGroup = BindGroup::Create(device, materialBindGroupLayout, {
@@ -306,7 +332,12 @@ void GLTFModel::LoadGLTFFile(const char* filename) {
 	tinygltf::TinyGLTF gltfContext;
 	std::string error, warning;
 
-	Check(gltfContext.LoadASCIIFromFile(&gltfInput, &error, &warning, filename), "tinygltf failed to load gltf file");
+	if (filename[strlen(filename) - 1] == 'b') {
+		Check(gltfContext.LoadBinaryFromFile(&gltfInput, &error, &warning, filename), "tinygltf failed to load glb file");
+	}
+	else {
+		Check(gltfContext.LoadASCIIFromFile(&gltfInput, &error, &warning, filename), "tinygltf failed to load gltf file");
+	}
 
 	LoadImages(gltfInput);
 	LoadMaterials(gltfInput);
@@ -314,7 +345,7 @@ void GLTFModel::LoadGLTFFile(const char* filename) {
 	std::vector<u32> indexBuffer;
 	std::vector<Vertex> vertexBuffer;
 
-	const tinygltf::Scene& scene = gltfInput.scenes[0];
+	const tinygltf::Scene& scene = gltfInput.scenes[gltfInput.defaultScene == -1 ? 0 : gltfInput.defaultScene];
 
 	// Reserve space for the number of nodes in the scene.
 	nodes.reserve(nodes.size() + scene.nodes.size());

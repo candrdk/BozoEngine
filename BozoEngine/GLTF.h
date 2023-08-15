@@ -38,6 +38,10 @@ public:
 		Texture2D* normal;
 		Texture2D* metallicRoughness;
 		BindGroup bindGroup;
+
+		u32 parallaxMode = 0;
+		u32 parallaxSteps = 0;
+		float parallaxScale = 0.0f;
 	};
 
 	struct Node {
@@ -64,6 +68,13 @@ public:
 	void Draw(VkCommandBuffer cmdBuffer, VkPipelineLayout pipelineLayout);
 
 private:
+	struct PushConstants {
+		glm::mat4 model;
+		u32   parallaxMode;
+		u32   parallaxSteps;
+		float parallaxScale;
+	};
+
 	void DrawNode(VkCommandBuffer cmdBuffer, VkPipelineLayout pipelineLayout, Node* node);
 
 	void LoadImages(tinygltf::Model& model);
