@@ -55,7 +55,7 @@ static void GenerateMipmaps(VkCommandBuffer commandBuffer, const Device& device,
 
 		ImageBarrier(commandBuffer, image, subresourceRange,
 			VK_PIPELINE_STAGE_TRANSFER_BIT,			VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
-			VK_ACCESS_TRANSFER_READ_BIT,			VK_ACCESS_2_SHADER_SAMPLED_READ_BIT_KHR,
+			VK_ACCESS_TRANSFER_READ_BIT,			VK_ACCESS_2_SHADER_SAMPLED_READ_BIT,
 			VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, finalLayout);
 
 		if (mipWidth > 1)	mipWidth /= 2;
@@ -65,7 +65,7 @@ static void GenerateMipmaps(VkCommandBuffer commandBuffer, const Device& device,
 	subresourceRange.baseMipLevel = mipLevels - 1;
 	ImageBarrier(commandBuffer, image, subresourceRange,
 		VK_PIPELINE_STAGE_TRANSFER_BIT,			VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
-		VK_ACCESS_TRANSFER_WRITE_BIT,			VK_ACCESS_2_SHADER_SAMPLED_READ_BIT_KHR,
+		VK_ACCESS_TRANSFER_WRITE_BIT,			VK_ACCESS_2_SHADER_SAMPLED_READ_BIT,
 		VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, finalLayout);
 }
 
@@ -159,7 +159,7 @@ void Texture2D::CreateFromBuffer(void* buffer, VkDeviceSize bufferSize, const De
 	else { 
 		ImageBarrier(copyCmd, image, subResourceRange,
 			VK_PIPELINE_STAGE_TRANSFER_BIT,			VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
-			VK_ACCESS_TRANSFER_WRITE_BIT,			VK_ACCESS_2_SHADER_SAMPLED_READ_BIT_KHR,
+			VK_ACCESS_TRANSFER_WRITE_BIT,			VK_ACCESS_2_SHADER_SAMPLED_READ_BIT,
 			VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,	layout);
 	}
 
