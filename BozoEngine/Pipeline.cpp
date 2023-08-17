@@ -147,11 +147,13 @@ static VkPipeline CreatePipeline(const Device& device, VkPipelineLayout pipeline
 
     VkPipelineDepthStencilStateCreateInfo depthStencilInfo = {
         .sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO,
-        .depthTestEnable = VK_TRUE,
-        .depthWriteEnable = VK_TRUE,
-        .depthCompareOp = VK_COMPARE_OP_GREATER_OR_EQUAL, // inverse z
+        .depthTestEnable = desc.depthState.depthTestEnable,
+        .depthWriteEnable = desc.depthState.depthWriteEnable,
+        .depthCompareOp = desc.depthState.depthCompareOp,
         .depthBoundsTestEnable = VK_FALSE,
-        .stencilTestEnable = VK_FALSE,
+        .stencilTestEnable = desc.stencilState.stencilTestEnable,
+        .front = desc.stencilState.frontBackOpState,
+        .back = desc.stencilState.frontBackOpState,
         .minDepthBounds = 0.0f,
         .maxDepthBounds = 1.0f
     };
@@ -214,7 +216,7 @@ Pipeline Pipeline::Create(const Device& device, VkPipelineBindPoint bindPoint, c
     //
     //       Idk what the best solution is here, so just going to force the user to specify bindgroup layouts for now.
     if (bindGroupLayouts.size() == 0) {
-        Check(bindGroupLayouts.size() > 0, "Generating bindgroup layouts from shader reflection data is disabled until a cleaner interface is figured out. User code should manually create bindgroup layouts that match the shaders and pass them in PipelineDesc.");
+        //Check(bindGroupLayouts.size() > 0, "Generating bindgroup layouts from shader reflection data is disabled until a cleaner interface is figured out. User code should manually create bindgroup layouts that match the shaders and pass them in PipelineDesc.");
 
         std::vector<ShaderBinding> mergedShaderBindings = MergeShaderBindings(device, desc.shaders);
         bindGroupLayouts = CreatePipelineBindGroupLayouts(device, mergedShaderBindings);

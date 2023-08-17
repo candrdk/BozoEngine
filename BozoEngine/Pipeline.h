@@ -27,10 +27,15 @@ struct PipelineDesc {
         } vertexInput;
 
         struct DepthState {
-            bool depthTestEnable = true;
-            bool depthWriteEnable = true;
+            VkBool32 depthTestEnable = VK_TRUE;
+            VkBool32 depthWriteEnable = VK_TRUE;
             VkCompareOp depthCompareOp = VK_COMPARE_OP_GREATER_OR_EQUAL;
-        } depthStencil = {};
+        } depthState = {};
+
+        struct StencilState {
+            VkBool32 stencilTestEnable = VK_FALSE;
+            VkStencilOpState frontBackOpState = {};
+        } stencilState = {};
 
         struct SpecializationState {
             span<const VkSpecializationMapEntry> mapEntries = {};

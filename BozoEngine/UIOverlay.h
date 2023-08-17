@@ -4,6 +4,7 @@
 #include "Device.h"
 #include "Texture.h"
 #include "Pipeline.h"
+#include "Swapchain.h"
 
 class UIOverlay {
 	Device& device;
@@ -27,6 +28,32 @@ class UIOverlay {
 	} pushConstantBlock	= {};
 
 public:
+	struct FrameTimeHistory {
+		float entries[1024] = {};
+		u32 front = 0;
+		u32 back = 0;
+		u32 count = 0;
+		bool freeze = false;
+
+		float Get(u32 i) {
+			i = (back + count - i - 1) % arraysize(entries);
+			return entries[i];
+		}
+
+		void Post(float dt) {
+			if (freeze) return;
+
+			entries[front] = dt;
+			front = (front + 1) % arraysize(entries);
+			if (count == arraysize(entries)) {
+				back = front;
+			}
+			else {
+				count++;
+			}
+		}
+	} frameTimeHistory;
+
 	// Create a uioverlay for the given window.
 	UIOverlay(GLFWwindow* window, Device& device, VkFormat colorFormat, VkFormat depthFormat, void (*RenderFunction)());
 	~UIOverlay();
@@ -35,7 +62,10 @@ public:
 	void Update();
 
 	// Records draw commands to render the ui overlay into the specified VkCommandBuffer.
-	void Draw(VkCommandBuffer cmdBuffer);
+	void Draw(VkCommandBuffer cmdBuffer, VkExtent2D extent, const VkRenderingAttachmentInfo& colorAttachment);
+
+	// Render the time graph widget - must be called inside a imgui window context.
+	void ShowFrameTimeGraph();
 
 private:
 	// Initialize all vulkan resources needed to draw the ui overlay

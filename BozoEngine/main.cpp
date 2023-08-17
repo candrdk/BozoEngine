@@ -10,11 +10,184 @@
 
 #include "Pipeline.h"
 
+#include <stb_image.h>
+struct CubeMap {
+	VkImageView view;
+	VkImage image;
+	VkSampler sampler;
+	VkDeviceMemory memory;
+
+	void Destroy(const Device& device) {
+		vkDestroyImageView(device.logicalDevice, view, nullptr);
+		vkDestroyImage(device.logicalDevice, image, nullptr);
+		vkDestroySampler(device.logicalDevice, sampler, nullptr);
+		vkFreeMemory(device.logicalDevice, memory, nullptr);
+	}
+
+	static CubeMap LoadFromFiles(Device& device, span<const char* const> files) {
+		Check(files.size() == 6, "CubeMaps require a texture for each face");
+
+		u8* textureData[6];
+		bool deleteBuffer = false;
+
+		int width, height, channels;
+		for (u32 face = 0; face < 6; face++) {
+			stbi_uc* data = stbi_load(files[face], &width, &height, &channels, STBI_rgb);
+
+			if (channels == 3) {
+				textureData[face] = new u8[width * height * 4];
+				for (int i = 0; i < width * height; i++) {
+					textureData[face][4 * i + 0] = data[3 * i + 0];
+					textureData[face][4 * i + 1] = data[3 * i + 1];
+					textureData[face][4 * i + 2] = data[3 * i + 2];
+					textureData[face][4 * i + 3] = 0xFF;
+				}
+				stbi_image_free(data);
+				deleteBuffer = true;
+			}
+			else {
+				textureData[face] = data;
+			}
+		}
+
+		const u64 imageSize = width * height * 4 * 6;
+		const u64 layerSize = width * height * 4;
+
+		Buffer stagingBuffer;
+		device.CreateBuffer(VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, imageSize, &stagingBuffer);
+
+		stagingBuffer.map(device.logicalDevice);
+		for (u32 i = 0; i < 6; i++) {
+			memcpy((u8*)stagingBuffer.mapped + layerSize * i, textureData[i], layerSize);
+		}
+		stagingBuffer.unmap(device.logicalDevice);
+
+		for (u32 face = 0; face < 6; face++) {
+			deleteBuffer ? delete(textureData[face]) : stbi_image_free(textureData[face]);
+		}
+
+		VkImage image;
+		VkImageCreateInfo imageInfo = {
+			.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
+			.flags = VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT,
+			.imageType = VK_IMAGE_TYPE_2D,
+			.format = VK_FORMAT_R8G8B8A8_UNORM,
+			.extent = { (u32)width, (u32)height, 1 },
+			.mipLevels = 1,
+			.arrayLayers = 6,
+			.samples = VK_SAMPLE_COUNT_1_BIT,
+			.tiling = VK_IMAGE_TILING_OPTIMAL,
+			.usage = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+			.sharingMode = VK_SHARING_MODE_EXCLUSIVE,
+			.queueFamilyIndexCount = 1,
+			.pQueueFamilyIndices = &device.queueIndex.graphics
+		};
+
+		VkCheck(vkCreateImage(device.logicalDevice, &imageInfo, nullptr, &image), "Failed to create cubemap images");
+
+		VkMemoryRequirements memReqs;
+		vkGetImageMemoryRequirements(device.logicalDevice, image, &memReqs);
+
+		VkMemoryAllocateInfo allocInfo = {
+			.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
+			.allocationSize = memReqs.size,
+			.memoryTypeIndex = device.GetMemoryType(memReqs.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT)
+		};
+
+		VkDeviceMemory deviceMemory;
+		VkCheck(vkAllocateMemory(device.logicalDevice, &allocInfo, nullptr, &deviceMemory), "Failed to allocate cubemap memory");
+		VkCheck(vkBindImageMemory(device.logicalDevice, image, deviceMemory, 0), "Failed to bind cubemap memory to image");
+
+		VkCommandBuffer copyCmd = device.CreateCommandBuffer(VK_COMMAND_BUFFER_LEVEL_PRIMARY, true);
+
+		std::vector<VkBufferImageCopy> copyRegions;
+		for (u32 face = 0; face < 6; face++) {
+			copyRegions.push_back(VkBufferImageCopy{
+				.bufferOffset = layerSize * face,
+				.imageSubresource = {
+					.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+					.mipLevel = 0,
+					.baseArrayLayer = face,
+					.layerCount = 1
+				},
+				.imageExtent = { (u32)width, (u32)height, 1 }
+			});
+		}
+
+		VkImageSubresourceRange subresourceRange = {
+			.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+			.baseMipLevel = 0,
+			.levelCount = 1,
+			.layerCount = 6
+		};
+
+		ImageBarrier(copyCmd, image, subresourceRange,
+			VK_PIPELINE_STAGE_NONE, VK_PIPELINE_STAGE_TRANSFER_BIT,
+			VK_ACCESS_NONE, VK_ACCESS_TRANSFER_WRITE_BIT,
+			VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+
+		vkCmdCopyBufferToImage(copyCmd, stagingBuffer.buffer, image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, (u32)copyRegions.size(), copyRegions.data());
+
+		ImageBarrier(copyCmd, image, subresourceRange,
+			VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+			VK_ACCESS_TRANSFER_WRITE_BIT, VK_ACCESS_2_SHADER_SAMPLED_READ_BIT,
+			VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_READ_ONLY_OPTIMAL);
+
+		device.FlushCommandBuffer(copyCmd, device.graphicsQueue);
+
+		VkSamplerCreateInfo samplerInfo = {
+			.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
+			.magFilter = VK_FILTER_LINEAR,
+			.minFilter = VK_FILTER_LINEAR,
+			.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR,
+			.addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
+			.addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
+			.addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
+			.mipLodBias = 0.0f,
+			.anisotropyEnable = VK_TRUE,
+			.maxAnisotropy = device.properties.limits.maxSamplerAnisotropy,
+			.compareOp = VK_COMPARE_OP_NEVER,
+			.minLod = 0.0f,
+			.maxLod = 1.0f,
+			.borderColor = VK_BORDER_COLOR_FLOAT_OPAQUE_BLACK,
+		};
+
+		VkSampler sampler;
+		VkCheck(vkCreateSampler(device.logicalDevice, &samplerInfo, nullptr, &sampler), "Failed to create cubemap sampler");
+
+		VkImageViewCreateInfo viewInfo = {
+			.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
+			.image = image,
+			.viewType = VK_IMAGE_VIEW_TYPE_CUBE,
+			.format = VK_FORMAT_R8G8B8A8_UNORM,
+			.subresourceRange = {
+				.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+				.baseMipLevel = 0,
+				.levelCount = 1,
+				.baseArrayLayer = 0,
+				.layerCount = 6
+			}
+		};
+		VkImageView view;
+		VkCheck(vkCreateImageView(device.logicalDevice, &viewInfo, nullptr, &view), "Failed to create cubemap image view");
+
+		stagingBuffer.destroy(device.logicalDevice);
+
+		return CubeMap {
+			.view = view,
+			.image = image,
+			.sampler = sampler,
+			.memory = deviceMemory
+		};
+	}
+};
+
 constexpr u32 WIDTH = 1600;
 constexpr u32 HEIGHT = 900;
 
 GLTFModel* model;
 GLTFModel* plane;
+GLTFModel* cube;
 u32 currentFrame = 0;
 
 struct CameraUBO {
@@ -91,6 +264,9 @@ namespace bz {
 	// Scene
 	Camera camera(glm::vec3(0.0f, 1.25f, 1.5f), 1.0f, 60.0f, (float)WIDTH / HEIGHT, 0.01f, -30.0f, -90.0f);
 
+	CubeMap skybox;
+	BindGroup skyboxBindGroup;
+
 	DirectionalLight dirLight = {
 		.direction = glm::vec3(0.0f, -1.0f, 0.0f),
 		.ambient = glm::vec3(0.05f, 0.05f, 0.05f),
@@ -139,12 +315,11 @@ namespace bz {
 	DepthAttachment depth;
 	VkSampler attachmentSampler;
 
-	BindGroupLayout materialLayout, globalsLayout;
+	BindGroupLayout materialLayout, globalsLayout, skyboxLayout;
 	BindGroup gbufferBindings;
 
-	Pipeline offscreenPipeline, deferredPipeline;
+	Pipeline offscreenPipeline, skyboxPipeline, deferredPipeline;
 
-	VkSampleCountFlagBits msaaSamples = VK_SAMPLE_COUNT_1_BIT;
 	bool framebufferResized = false;
 }
 
@@ -339,29 +514,25 @@ void CreateRenderAttachments() {
 	CreateDepthAttachment(bz::depth, {
 		.extent = bz::swapchain.extent,
 		.format = VK_FORMAT_D24_UNORM_S8_UINT,
-		.usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
-		.samples = bz::msaaSamples
+		.usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT
 	});
 
 	CreateRenderAttachment(bz::normal, {
 		.extent = bz::swapchain.extent,
 		.format = VK_FORMAT_R8G8B8A8_UNORM,
-		.usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
-		.samples = bz::msaaSamples
+		.usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT
 	});
 
 	CreateRenderAttachment(bz::albedo, {
 		.extent = bz::swapchain.extent,
 		.format = VK_FORMAT_R8G8B8A8_UNORM,
-		.usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
-		.samples = bz::msaaSamples
+		.usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT
 	});
 
 	CreateRenderAttachment(bz::metallicRoughness, {
 		.extent = bz::swapchain.extent,
 		.format = VK_FORMAT_R8G8B8A8_UNORM,
-		.usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
-		.samples = bz::msaaSamples
+		.usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT
 	});
 
 	VkSamplerCreateInfo samplerInfo = {
@@ -423,6 +594,7 @@ void RecordDeferredCommandBuffer(VkCommandBuffer cmd, u32 imageIndex) {
 	VkRenderingAttachmentInfo colorAttachments[] = { bz::albedo.attachmentInfo, bz::normal.attachmentInfo, bz::metallicRoughness.attachmentInfo };
 	VkRenderingAttachmentInfo depthAttachment[] = { bz::depth.attachmentInfo };
 
+	// OFFSCREEN PASS
 	VkRenderingInfo renderingInfo = {
 		.sType = VK_STRUCTURE_TYPE_RENDERING_INFO,
 		.renderArea = {
@@ -466,6 +638,7 @@ void RecordDeferredCommandBuffer(VkCommandBuffer cmd, u32 imageIndex) {
 
 	vkCmdEndRendering(cmd);
 
+	// DEFERRED PASS
 	ImageBarrier(cmd, bz::swapchain.images[imageIndex], VK_IMAGE_ASPECT_COLOR_BIT,
 		VK_PIPELINE_STAGE_NONE,		VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
 		VK_ACCESS_NONE,				VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
@@ -513,9 +686,46 @@ void RecordDeferredCommandBuffer(VkCommandBuffer cmd, u32 imageIndex) {
 
 	vkCmdDraw(cmd, 3, 1, 0, 0);
 
-	bz::overlay->Draw(cmd);
+	vkCmdEndRendering(cmd);
+
+	// SKYBOX PASS
+	// Transition depth back to attachment optimal
+	depthAttachment[0].loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
+	ImageBarrier(cmd, bz::depth.image,				VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT,
+		VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,		VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+		VK_ACCESS_2_SHADER_SAMPLED_READ_BIT,		VK_ACCESS_2_SHADER_SAMPLED_READ_BIT,
+		VK_IMAGE_LAYOUT_READ_ONLY_OPTIMAL,			VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL);
+
+	// Then render the skybox at infinite distance (depth = 0)
+	renderingInfo = {
+		.sType = VK_STRUCTURE_TYPE_RENDERING_INFO,
+		.renderArea = {
+			.offset = {0, 0},
+			.extent = bz::swapchain.extent
+		},
+		.layerCount = 1,
+		.colorAttachmentCount = 1,
+		.pColorAttachments = &bz::swapchain.attachmentInfos[imageIndex],
+		.pDepthAttachment = depthAttachment,
+		.pStencilAttachment = depthAttachment
+	};
+
+	vkCmdBeginRendering(cmd, &renderingInfo);
+
+	vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, bz::skyboxPipeline.pipeline);
+	vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, bz::skyboxPipeline.pipelineLayout, 0, 1, &bz::globalsBindings[currentFrame].descriptorSet, 0, nullptr);
+	vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, bz::skyboxPipeline.pipelineLayout, 1, 1, &bz::skyboxBindGroup.descriptorSet, 0, nullptr);
+
+	VkDeviceSize offsets[] = { 0 };
+	vkCmdBindVertexBuffers(cmd, 0, 1, &cube->vertices.buffer, offsets);
+	vkCmdBindIndexBuffer(cmd, cube->indices.buffer, 0, VK_INDEX_TYPE_UINT32);
+
+	vkCmdDrawIndexed(cmd, cube->nodes[0]->children[0]->mesh.primitives[0].indexCount, 1, cube->nodes[0]->children[0]->mesh.primitives[0].firstIndex, 0, 0);
 
 	vkCmdEndRendering(cmd);
+
+	// UI OVERLAY PASS
+	bz::overlay->Draw(cmd, bz::swapchain.extent, bz::swapchain.attachmentInfos[imageIndex]);
 
 	ImageBarrier(cmd, bz::swapchain.images[imageIndex], VK_IMAGE_ASPECT_COLOR_BIT,
 		VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,	VK_PIPELINE_STAGE_NONE,
@@ -550,6 +760,10 @@ void CreateBindGroupLayouts() {
 	bz::globalsLayout = BindGroupLayout::Create(bz::device, {
 		{.binding = 0, .type = Binding::BUFFER }
 	});
+
+	bz::skyboxLayout = BindGroupLayout::Create(bz::device, {
+		{.binding = 0, .type = Binding::TEXTURE, .stages = Binding::FRAGMENT }
+	});
 }
 
 void CreateBindGroups() {
@@ -558,7 +772,7 @@ void CreateBindGroups() {
 			{.binding = 0, .sampler = bz::attachmentSampler, .view = bz::albedo.view, .layout = VK_IMAGE_LAYOUT_READ_ONLY_OPTIMAL },
 			{.binding = 1, .sampler = bz::attachmentSampler, .view = bz::normal.view, .layout = VK_IMAGE_LAYOUT_READ_ONLY_OPTIMAL },
 			{.binding = 2, .sampler = bz::attachmentSampler, .view = bz::metallicRoughness.view, .layout = VK_IMAGE_LAYOUT_READ_ONLY_OPTIMAL },
-			{.binding = 3, .sampler = bz::attachmentSampler, .view = bz::depth.depthView, .layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL }
+			{.binding = 3, .sampler = bz::attachmentSampler, .view = bz::depth.depthView, .layout = VK_IMAGE_LAYOUT_READ_ONLY_OPTIMAL }
 		}
 	});
 
@@ -581,7 +795,7 @@ void UpdateGBufferBindGroup() {
 			{.binding = 0, .sampler = bz::attachmentSampler, .view = bz::albedo.view, .layout = VK_IMAGE_LAYOUT_READ_ONLY_OPTIMAL },
 			{.binding = 1, .sampler = bz::attachmentSampler, .view = bz::normal.view, .layout = VK_IMAGE_LAYOUT_READ_ONLY_OPTIMAL },
 			{.binding = 2, .sampler = bz::attachmentSampler, .view = bz::metallicRoughness.view, .layout = VK_IMAGE_LAYOUT_READ_ONLY_OPTIMAL },
-			{.binding = 3, .sampler = bz::attachmentSampler, .view = bz::depth.depthView, .layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL }
+			{.binding = 3, .sampler = bz::attachmentSampler, .view = bz::depth.depthView, .layout = VK_IMAGE_LAYOUT_READ_ONLY_OPTIMAL }
 		}
 	});
 }
@@ -589,9 +803,6 @@ void UpdateGBufferBindGroup() {
 void CreatePipelines() {
 	Shader offscreenVert = Shader::Create(bz::device, "shaders/offscreen.vert.spv");
 	Shader offscreenFrag = Shader::Create(bz::device, "shaders/offscreen.frag.spv");
-
-	Shader deferredVert = Shader::Create(bz::device, "shaders/deferred.vert.spv");
-	Shader deferredFrag = Shader::Create(bz::device, "shaders/deferred.frag.spv");
 
 	bz::offscreenPipeline = Pipeline::Create(bz::device, VK_PIPELINE_BIND_POINT_GRAPHICS, {
 		.debugName = "Offscreen pipeline",
@@ -606,13 +817,19 @@ void CreatePipelines() {
 				.cullMode = VK_CULL_MODE_BACK_BIT,
 				.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE
 			},
-			.sampleCount = bz::msaaSamples,
+			.sampleCount = VK_SAMPLE_COUNT_1_BIT,
 			.vertexInput = {
 				.bindingDesc = GLTFModel::Vertex::BindingDescripton,
 				.attributeDesc = GLTFModel::Vertex::AttributeDescription
 			}
 		}
 	});
+
+	offscreenVert.Destroy(bz::device);
+	offscreenFrag.Destroy(bz::device);
+
+	Shader deferredVert = Shader::Create(bz::device, "shaders/deferred.vert.spv");
+	Shader deferredFrag = Shader::Create(bz::device, "shaders/deferred.frag.spv");
 
 	bz::deferredPipeline = Pipeline::Create(bz::device, VK_PIPELINE_BIND_POINT_GRAPHICS, {
 		.debugName = "Deferred pipeline",
@@ -627,24 +844,43 @@ void CreatePipelines() {
 				.cullMode = VK_CULL_MODE_FRONT_BIT,
 				.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE
 			},
+			.sampleCount = VK_SAMPLE_COUNT_1_BIT
+		}
+	});
+
+	deferredVert.Destroy(bz::device);
+	deferredFrag.Destroy(bz::device);
+
+	Shader skyboxVert = Shader::Create(bz::device, "shaders/skybox.vert.spv");
+	Shader skyboxFrag = Shader::Create(bz::device, "shaders/skybox.frag.spv");
+
+	bz::skyboxPipeline = Pipeline::Create(bz::device, VK_PIPELINE_BIND_POINT_GRAPHICS, {
+		.debugName = "Skybox pipeline",
+		.shaders = { skyboxVert, skyboxFrag },
+		.bindGroups = { bz::globalsLayout, bz::skyboxLayout },
+		.graphicsState = {
+			.attachments = {
+				.formats = { bz::swapchain.format },
+				.depthStencilFormat = bz::depth.format
+			},
+			.rasterization = {
+				.cullMode = VK_CULL_MODE_FRONT_BIT,
+				.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE
+			},
 			.sampleCount = VK_SAMPLE_COUNT_1_BIT,
-			.specialization = {
-				.mapEntries = { { .size = sizeof(u32) } },
-				.dataSize = sizeof(u32),
-				.pData = &bz::msaaSamples
+			.vertexInput = {
+				.bindingDesc = GLTFModel::Vertex::BindingDescripton,
+				.attributeDesc = GLTFModel::Vertex::AttributeDescription
 			}
 		}
 	});
 
-	offscreenVert.Destroy(bz::device);
-	offscreenFrag.Destroy(bz::device);
-	deferredVert.Destroy(bz::device);
-	deferredFrag.Destroy(bz::device);
+	skyboxVert.Destroy(bz::device);
+	skyboxFrag.Destroy(bz::device);
 }
 
 void InitVulkan() {
 	bz::device.CreateDevice(window);
-	bz::msaaSamples = bz::device.GetMaxUsableSampleCount();
 	bz::swapchain.CreateSwapchain(window, bz::device, {
 		.enableVSync = true, 
 		.preferredImageCount = 2, 
@@ -807,6 +1043,7 @@ void DrawFrame() {
 
 void OverlayRender() {
 	ImGui::Begin("Bozo Engine", 0, 0);
+	bz::overlay->ShowFrameTimeGraph();
 
 	ImGui::SeparatorText("Directional Light settings");
 	ImGui::Checkbox("Animate light", &bz::bAnimateLight);
@@ -849,6 +1086,7 @@ void OverlayRender() {
 		vkDeviceWaitIdle(bz::device.logicalDevice);
 		bz::offscreenPipeline.Destroy(bz::device);
 		bz::deferredPipeline.Destroy(bz::device);
+		bz::skyboxPipeline.Destroy(bz::device);
 		CreatePipelines();
 	}
 
@@ -860,6 +1098,23 @@ int main(int argc, char* argv[]) {
 	InitVulkan();
 
 	bz::overlay = new UIOverlay(window, bz::device, bz::swapchain.format, bz::depth.format, OverlayRender);
+
+	bz::skybox = CubeMap::LoadFromFiles(bz::device, {
+		"assets/Skybox/right.jpg",
+		"assets/Skybox/left.jpg",
+		"assets/Skybox/top.jpg",
+		"assets/Skybox/bottom.jpg",
+		"assets/Skybox/front.jpg",
+		"assets/Skybox/back.jpg"
+	});
+
+	bz::skyboxBindGroup = BindGroup::Create(bz::device, bz::skyboxLayout, {
+		.textures = {
+			{.binding = 0, .sampler = bz::skybox.sampler, .view = bz::skybox.view, .layout = VK_IMAGE_LAYOUT_READ_ONLY_OPTIMAL }
+		}
+	});
+
+	cube = new GLTFModel(bz::device, bz::materialLayout, "assets/Box.glb");
 
 	//model = new GLTFModel(bz::device, bz::materialLayout, "assets/FlightHelmet/FlightHelmet.gltf");
 	//model->nodes[0]->transform = glm::scale(glm::translate(model->nodes[0]->transform, glm::vec3(0.0, 1.0, 0.0)), glm::vec3(2.0));
@@ -894,6 +1149,8 @@ int main(int argc, char* argv[]) {
 		float deltaTime = float(currentFrame - lastFrame);
 		lastFrame = currentFrame;
 
+		bz::overlay->frameTimeHistory.Post(deltaTime);
+
 		if (bz::bAnimateLight) {
 			float t = float(currentFrame * 0.5);
 			bz::dirLight.direction = glm::vec3(glm::cos(t), -1.0f, glm::sin(t));
@@ -917,6 +1174,11 @@ int main(int argc, char* argv[]) {
 
 	// Wait until all commandbuffers are done so we can safely clean up semaphores they might potentially be using.
 	vkDeviceWaitIdle(bz::device.logicalDevice);
+
+	bz::skybox.Destroy(bz::device);
+	delete cube;
+	bz::skyboxPipeline.Destroy(bz::device);
+	bz::skyboxLayout.Destroy(bz::device);
 
 	delete plane;
 	delete model;

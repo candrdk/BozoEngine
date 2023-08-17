@@ -174,7 +174,7 @@ void UIOverlay::Update() {
 	VkCheck(drawDataBuffer.Flush(device.logicalDevice), "Failed to flush ui overlay draw data buffer to device memory");
 }
 
-void UIOverlay::Draw(VkCommandBuffer cmdBuffer) {
+void UIOverlay::Draw(VkCommandBuffer cmdBuffer, VkExtent2D extent, const VkRenderingAttachmentInfo& colorAttachment) {
 	ImDrawData* imDrawData = ImGui::GetDrawData();
 	int32_t vertexOffset = 0;
 	int32_t indexOffset = 0;
@@ -184,6 +184,21 @@ void UIOverlay::Draw(VkCommandBuffer cmdBuffer) {
 	}
 
 	ImGuiIO& io = ImGui::GetIO();
+
+	VkRenderingInfo renderingInfo = {
+		.sType = VK_STRUCTURE_TYPE_RENDERING_INFO,
+		.renderArea = {
+			.offset = {0, 0},
+			.extent = extent
+		},
+		.layerCount = 1,
+		.colorAttachmentCount = 1,
+		.pColorAttachments = &colorAttachment,
+		.pDepthAttachment = nullptr,
+		.pStencilAttachment = nullptr
+	};
+
+	vkCmdBeginRendering(cmdBuffer, &renderingInfo);
 
 	vkCmdBindPipeline(cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline.pipeline);
 	vkCmdBindDescriptorSets(cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline.pipelineLayout, 0, 1, &bindGroup.descriptorSet, 0, 0);
@@ -214,5 +229,95 @@ void UIOverlay::Draw(VkCommandBuffer cmdBuffer) {
 			indexOffset += cmd->ElemCount;
 		}
 		vertexOffset += cmdList->VtxBuffer.Size;
+	}
+
+	vkCmdEndRendering(cmdBuffer);
+}
+
+static glm::vec4 DeltaTimeToColor(float dt) {
+	constexpr glm::vec3 colors[] = {
+		{0.0f, 0.0f, 1.0f}, // blue
+		{0.0f, 1.0f, 0.0f}, // green
+		{1.0f, 1.0f, 0.0f}, // yellow
+		{1.0f, 0.0f, 0.0f}, // red
+	};
+	constexpr float dts[] = {
+		1.0f / 120.0f,
+		1.0f / 60.0f,
+		1.0f / 30.0f,
+		1.0f / 15.0f,
+	};
+
+	if (dt < dts[0]) {
+		return glm::vec4(colors[0], 1.f);
+	}
+
+	for (size_t i = 1; i < arraysize(dts); ++i) {
+		if (dt < dts[i]) {
+			const float t = (dt - dts[i - 1]) / (dts[i] - dts[i - 1]);
+			return glm::vec4(glm::mix(colors[i - 1], colors[i], t), 1.f);
+		}
+	}
+	return glm::vec4(colors[arraysize(dts) - 1], 1.f);
+}
+
+// Based on https://asawicki.info/news?x=view&year=2022&month=5
+void UIOverlay::ShowFrameTimeGraph() {
+	constexpr float minHeight = 2.0f;
+	constexpr float maxHeight = 64.0f;
+	constexpr float dtMin = 1.0f / 120.0f;
+	constexpr float dtMax = 1.0f / 15.0f;
+	const float dtMin_Log2 = glm::log2(dtMin);
+	const float dtMax_Log2 = glm::log2(dtMax);
+
+	const float width = ImGui::GetWindowWidth();
+	const u32 frameCount = arraysize(frameTimeHistory.entries);
+
+	if (width > 0.0f && frameCount > 0) {
+		ImDrawList* drawList = ImGui::GetWindowDrawList();
+		ImVec2 basePos = ImGui::GetCursorScreenPos();
+
+		float endX = width;
+		drawList->AddRectFilled(basePos, ImVec2(basePos.x + width, basePos.y + maxHeight), 0xFF404040);
+
+		float mouseX = ImGui::GetMousePos().x;
+		u32 mouseFrame = 0;
+
+		for (u32 frameIndex = 0; (frameIndex < frameCount) && (endX > 0.0f); frameIndex++) {
+			float dt = frameTimeHistory.Get(frameIndex);
+
+			const float frameWidth = dt / dtMin;
+			const float frameHeightFactor = (glm::log2(dt) - dtMin_Log2) / (dtMax_Log2 - dtMin_Log2);
+			const float frameHeightFactor_Nrm = glm::clamp(frameHeightFactor, 0.0f, 1.0f);
+			const float frameHeight = glm::mix(minHeight, maxHeight, frameHeightFactor_Nrm);
+			const float begX = endX - frameWidth;
+
+			glm::vec4 color = DeltaTimeToColor(dt);
+			const u32 packedColor = glm::packUnorm4x8(color);
+
+			drawList->AddRectFilled(
+				ImVec2(basePos.x + glm::max(0.0f, glm::floor(begX)), basePos.y + maxHeight - frameHeight),
+				ImVec2(basePos.x + glm::ceil(endX), basePos.y + maxHeight),
+				packedColor);
+
+			endX = begX;
+
+			if (!mouseFrame && mouseX >= basePos.x + glm::max(0.0f, glm::floor(begX))) {
+				mouseFrame = frameIndex;
+			}
+		}
+		ImGui::Dummy(ImVec2(width, maxHeight));
+
+		frameTimeHistory.freeze = false;
+		if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled)) {
+			frameTimeHistory.freeze = true;
+
+			drawList->AddRectFilled(
+				ImVec2(mouseX, basePos.y),
+				ImVec2(mouseX + 2.0f, basePos.y + maxHeight),
+				~0u);
+
+			ImGui::SetTooltip("FPS: %.1f (%.2f ms)", 1.0f / frameTimeHistory.Get(mouseFrame), 1000.0f * frameTimeHistory.Get(mouseFrame));
+		}
 	}
 }

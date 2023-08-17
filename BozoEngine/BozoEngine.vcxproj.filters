@@ -272,6 +272,12 @@
     <None Include="shaders\offscreen.frag.glsl">
       <Filter>Shaders</Filter>
     </None>
+    <None Include="shaders\skybox.vert.glsl">
+      <Filter>Shaders</Filter>
+    </None>
+    <None Include="shaders\skybox.frag.glsl">
+      <Filter>Shaders</Filter>
+    </None>
   </ItemGroup>
   <ItemGroup>
     <Natvis Include="..\Extern\glm\util\glm.natvis">

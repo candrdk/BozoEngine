@@ -75,22 +75,30 @@ public:
 	}
 
 	void UpdateMatrices() {
-		view = glm::lookAt(position, position + direction, glm::vec3(0.0f, 1.0f, 0.0f));
+		// Intermediate transformation aligning the axes with the expected format of Vulkans fixed-function steps.
+		// See: https://johannesugb.github.io/gpu-programming/setting-up-a-proper-vulkan-projection-matrix/
+		constexpr glm::mat4 X = glm::mat4(
+			1.0f, 0.0f, 0.0f, 0.0f,
+			0.0f, -1.0f, 0.0f, 0.0f,
+			0.0f, 0.0f, -1.0f, 0.0f,
+			0.0f, 0.0f, 0.0f, 1.0f);
+
+		view = X * glm::lookAt(position, position + direction, glm::vec3(0.0f, 1.0f, 0.0f));
 		projection = MatRevInfiniteProjection(fov, aspect, zNear);
 	}
 
 	// Calculates the reversed z infinite perspetive projection. Taken from FGED 2, Listing 6.3.
-	// fovy: vertical field of view
-	// s: Aspect ratio
-	// n: Near plane
-	// e: Small epsilon value to deal with round-off errors when rendering objects at infinity. Defaults to 2^-20
+	// fovy: Vertical field of view
+	// s:	 Aspect ratio
+	// n:	 Near plane
+	// e:	 Small epsilon value to deal with round-off errors when rendering objects at infinity. Defaults to 2^-20.
 	glm::mat4 MatRevInfiniteProjection(float fovy, float s, float n, float e = 1.0f / (1 << 20)) {
 		float g = 1.0f / glm::tan(glm::radians(fovy) * 0.5f);
 
 		return glm::mat4(
 			g / s,	0.0f,	0.0f,			0.0f,
-			0.0f,	-g,		0.0f,			0.0f,
-			0.0f,	0.0f,	e,				-1.0f,
+			0.0f,	g,		0.0f,			0.0f,
+			0.0f,	0.0f,	e,				1.0f,
 			0.0f,	0.0f,   n * (1.0f - e),	0.0f);
 	}
 

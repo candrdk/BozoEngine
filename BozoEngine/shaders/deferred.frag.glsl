@@ -30,43 +30,17 @@ layout(push_constant) uniform PushConstants {
     uint renderMode;
 };
 
-layout (set = 1, binding = 0) uniform sampler2DMS samplerAlbedo;
-layout (set = 1, binding = 1) uniform sampler2DMS samplerNormal;
-layout (set = 1, binding = 2) uniform sampler2DMS samplerMetallicRoughness;
-layout (set = 1, binding = 3) uniform sampler2DMS samplerDepth;
+layout (set = 1, binding = 0) uniform sampler2D samplerAlbedo;
+layout (set = 1, binding = 1) uniform sampler2D samplerNormal;
+layout (set = 1, binding = 2) uniform sampler2D samplerMetallicRoughness;
+layout (set = 1, binding = 3) uniform sampler2D samplerDepth;
 
 layout (location = 0) in vec2 inUV;
 
 layout (location = 0) out vec4 outFragcolor;
 
-layout (constant_id = 0) const int MSAA_SAMPLES = 1;
-
-// Manual resolve for MSAA samples 
-vec4 resolve(sampler2DMS tex, ivec2 uv) {
-	vec4 result = vec4(0.0);	   
-	for (int i = 0; i < MSAA_SAMPLES; i++) {
-		vec4 val = texelFetch(tex, uv, i); 
-		result += val;
-	}    
-	// Average resolved samples
-	return result / float(MSAA_SAMPLES);
-}
-
-// Resolve to the lowest possible depth; the normal resolve messes up edges. 
-// TODO: Look into if this is the corret way to do this
-float resolve_depth(ivec2 uv) {
-	float minDepth = 0.0;
-
-	for (int i = 0; i < MSAA_SAMPLES; i++) {
-		float depth = texelFetch(samplerDepth, uv, i).r;
-		minDepth = max(depth, minDepth);
-	}
-
-	return minDepth;
-}
-
-vec3 reconstruct_pos_view_space(ivec2 uv) {
-	float z = resolve_depth(uv);
+vec3 reconstruct_pos_view_space() {
+	float z = texture(samplerDepth, inUV).r;
 
 	vec4 clipSpacePosition = vec4(inUV * 2.0 - 1.0, z, 1.0);
 	vec4 viewSpacePosition = ubo.invProj * clipSpacePosition;
@@ -80,7 +54,7 @@ vec3 shade_directional_light(DirLight light, vec3 n, vec3 v) {
 	vec3 l = -normalize(mat3(ubo.view) * light.direction);
 
 	vec3 directColor = light.diffuse * clamp(dot(n, l), 0.0, 1.0);
-	vec3 diffuse = (light.ambient + directColor) * resolve(samplerAlbedo, ivec2(gl_FragCoord)).rgb;
+	vec3 diffuse = (light.ambient + directColor) * texture(samplerAlbedo, inUV).rgb;
 
 	vec3 h = normalize(l + v);
 	float highlight = pow(clamp(dot(n, h), 0.0, 1.0), alpha) * float(dot(n, l) > 0.0);
@@ -126,7 +100,7 @@ vec3 shade_point_light(PointLight light, vec3 n, vec3 v, vec3 p) {
 	vec3 l = normalize(lpos - p);
 
 	vec3 directColor = light.diffuse * clamp(dot(n, l), 0.0, 1.0);
-	vec3 diffuse = (light.ambient + directColor) * resolve(samplerAlbedo, ivec2(gl_FragCoord)).rgb;
+	vec3 diffuse = (light.ambient + directColor) * texture(samplerAlbedo, inUV).rgb;
 
 	vec3 h = normalize(l + v);
 	float highlight = pow(clamp(dot(n, h), 0.0, 1.0), alpha) * float(dot(n, l) > 0.0);
@@ -143,9 +117,9 @@ vec3 shade_point_light(PointLight light, vec3 n, vec3 v, vec3 p) {
 	//return (diffuse + specular) * yuksel_attenuation(d, r0);
 }
 
-vec4 shade_pixel(ivec2 uv) {
-	vec3 p = reconstruct_pos_view_space(uv);
-	vec3 n = normalize(resolve(samplerNormal, uv).xyz * 2.0 - 1.0);
+vec4 shade_pixel() {
+	vec3 p = reconstruct_pos_view_space();
+	vec3 n = normalize(texture(samplerNormal, inUV).xyz * 2.0 - 1.0);
 	vec3 v = normalize((ubo.view * ubo.position).xyz - p);
 
 	vec3 shade = shade_directional_light(ubo.dirLight, n, v);
@@ -158,21 +132,19 @@ vec4 shade_pixel(ivec2 uv) {
 }
 
 void main() {
-	ivec2 uv = ivec2(gl_FragCoord.xy);
-
 	switch(renderMode) {
 	case 0:
-		outFragcolor = shade_pixel(uv); break;
+		outFragcolor = shade_pixel(); break;
 	case 1:
-		outFragcolor = resolve(samplerAlbedo, uv); break;
+		outFragcolor = texture(samplerAlbedo, inUV); break;
 	case 2:
-		outFragcolor = resolve(samplerNormal, uv); break;
+		outFragcolor = texture(samplerNormal, inUV); break;
 	case 3:
 		int channel = inUV.x < 0.5 ? 2 : 1;
 		outFragcolor = vec4(0.0, 0.0, 0.0, 1.0);
-		outFragcolor[channel] = resolve(samplerMetallicRoughness, uv)[channel];
+		outFragcolor[channel] = texture(samplerMetallicRoughness, inUV)[channel];
 		break;
 	case 4:
-		outFragcolor = vec4(resolve_depth(uv), 0.0, 0.0, 1.0); break;
+		outFragcolor = vec4(texture(samplerDepth, inUV).r, 0.0, 0.0, 1.0); break;
 	}
 }

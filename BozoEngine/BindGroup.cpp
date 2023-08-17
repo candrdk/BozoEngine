@@ -8,7 +8,7 @@ BindGroupLayout BindGroupLayout::Create(const Device& device, std::vector<Bindin
             .descriptorType = (VkDescriptorType)bindings[i].type,
             .descriptorCount = bindings[i].count,
             .stageFlags = bindings[i].stages
-            });
+        });
     }
 
     VkDescriptorSetLayoutCreateInfo createInfo = {

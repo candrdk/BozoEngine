@@ -115,7 +115,7 @@ void Swapchain::CreateSwapchain(GLFWwindow* window, const Device& device, Swapch
 			.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
 			.imageView = imageViews[i],
 			.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-			.loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+			.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD,
 			.storeOp = VK_ATTACHMENT_STORE_OP_STORE
 		});
 	}
