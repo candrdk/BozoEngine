@@ -69,7 +69,7 @@ GLTFModel::~GLTFModel() {
 	vertices.destroy(device.logicalDevice);
 	indices.destroy(device.logicalDevice);
 
-	for (Texture2D image : images) {
+	for (Texture image : images) {
 		image.Destroy(device);
 	}
 }
@@ -144,11 +144,24 @@ void GLTFModel::LoadImages(tinygltf::Model& model) {
 			if (idx != -1 && i == model.textures[idx].source) { srgb = true; break; }
 		}
 
-		images[i].CreateFromBuffer(buffer, bufferSize, device, device.graphicsQueue, gltfImage.width, gltfImage.height, srgb ? VK_FORMAT_R8G8B8A8_SRGB : VK_FORMAT_R8G8B8A8_UNORM);
+		images[i] = Texture::Create(device, TextureDesc{
+			.width = (u32)gltfImage.width,
+			.height = (u32)gltfImage.height,
+			.generateMipLevels = true,
+			.format = srgb ? Format::RGBA8_SRGB : Format::RGBA8_UNORM,
+			.bindFlags = BindFlag::SHADER_RESOURCE,
+			.initialData = span<const u8>(buffer, bufferSize)
+		});
 	}
 
-	u32 empty[4] = { 0xFFFF00FF, 0xFFFF00FF, 0xFFFF00FF, 0xFFFF00FF };
-	images.back().CreateFromBuffer(empty, 16, device, device.graphicsQueue, 2, 2, VK_FORMAT_R8G8B8A8_SRGB);
+	images.back() = Texture::Create(device, TextureDesc{
+		.width = 1,
+		.height = 1,
+		.generateMipLevels = false,
+		.format = Format::RGBA8_UNORM,
+		.bindFlags = BindFlag::SHADER_RESOURCE,
+		.initialData = { 0xFF, 0x00, 0xFF, 0xFF }
+	});
 }
 
 void GLTFModel::LoadMaterials(tinygltf::Model& model) {
@@ -176,11 +189,7 @@ void GLTFModel::LoadMaterials(tinygltf::Model& model) {
 		}
 
 		material.bindGroup = BindGroup::Create(device, materialBindGroupLayout, {
-			.textures = {
-				{.binding = 0, .sampler = material.albedo->sampler, .view = material.albedo->view, .layout = material.albedo->layout },
-				{.binding = 1, .sampler = material.normal->sampler, .view = material.normal->view, .layout = material.normal->layout },
-				{.binding = 2, .sampler = material.metallicRoughness->sampler, .view = material.metallicRoughness->view, .layout = material.metallicRoughness->layout },
-			}
+			.textures = { material.albedo->GetBinding(0), material.normal->GetBinding(1), material.metallicRoughness->GetBinding(2) }
 		});
 	}
 }

@@ -47,15 +47,20 @@ void UIOverlay::InitializeVulkanResources() {
 	io.Fonts->GetTexDataAsRGBA32(&fontData, &texWidth, &texHeight);
 	VkDeviceSize uploadSize = (u64)texWidth * (u64)texHeight * sizeof(u32);	// u64 cast to satisfy arithmetic warning
 
-	// TODO: currently generates mip maps - do we want that?
-	font.CreateFromBuffer(fontData, uploadSize, device, device.graphicsQueue, texWidth, texHeight, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_USAGE_SAMPLED_BIT, VK_IMAGE_LAYOUT_READ_ONLY_OPTIMAL);
+	font = Texture::Create(device, {
+		.width = (u32)texWidth,
+		.height = (u32)texHeight,
+		.format = Format::RGBA8_UNORM,
+		.bindFlags = BindFlag::SHADER_RESOURCE,
+		.initialData = span<const u8>(fontData, uploadSize)
+	});
 
 	bindGroupLayout = BindGroupLayout::Create(device, {
 		{.binding = 0, .type = Binding::TEXTURE, .stages = Binding::FRAGMENT }
 	});
 
 	bindGroup = BindGroup::Create(device, bindGroupLayout, {
-		.textures = { {.binding = 0, .sampler = font.sampler, .view = font.view, .layout = font.layout} }
+		.textures = { font.GetBinding(0) }
 	});
 
 	// Allocate draw data buffer for vertices and indides up front. Fixed size of 1 mb for now.

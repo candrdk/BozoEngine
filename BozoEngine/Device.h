@@ -85,7 +85,7 @@ public:
 	void FlushCommandBuffer(VkCommandBuffer commandBuffer, VkQueue queue) const;
 
 	// TODO: move to device.cpp, or buffer.cpp
-	VkResult CreateBuffer(VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkDeviceSize size, Buffer* buffer, void* data = nullptr) const {
+	VkResult CreateBuffer(VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkDeviceSize size, Buffer* buffer, const void* data = nullptr) const {
 		VkBufferCreateInfo bufferInfo = {
 			.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
 			.size = size,

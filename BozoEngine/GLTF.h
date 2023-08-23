@@ -34,9 +34,9 @@ public:
 	};
 
 	struct Material {
-		Texture2D* albedo;
-		Texture2D* normal;
-		Texture2D* metallicRoughness;
+		Texture* albedo;
+		Texture* normal;
+		Texture* metallicRoughness;
 		BindGroup bindGroup;
 
 		u32 parallaxMode = 0;
@@ -56,7 +56,7 @@ public:
 	Device& device;
 	BindGroupLayout materialBindGroupLayout;
 
-	std::vector<Texture2D> images;
+	std::vector<Texture> images;
 	std::vector<Material> materials;
 	std::vector<Node*> nodes;
 

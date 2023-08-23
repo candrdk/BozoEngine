@@ -11,7 +11,7 @@ class UIOverlay {
 	void (*RenderImGui)(void);
 
 	Buffer drawDataBuffer	= {};
-	Texture2D font			= {};
+	Texture font			= {};
 
 	void* vertexBufferStart			= nullptr;
 	void* indexBufferStart			= nullptr;

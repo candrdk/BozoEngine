@@ -10,178 +10,6 @@
 
 #include "Pipeline.h"
 
-#include <stb_image.h>
-struct CubeMap {
-	VkImageView view;
-	VkImage image;
-	VkSampler sampler;
-	VkDeviceMemory memory;
-
-	void Destroy(const Device& device) {
-		vkDestroyImageView(device.logicalDevice, view, nullptr);
-		vkDestroyImage(device.logicalDevice, image, nullptr);
-		vkDestroySampler(device.logicalDevice, sampler, nullptr);
-		vkFreeMemory(device.logicalDevice, memory, nullptr);
-	}
-
-	static CubeMap LoadFromFiles(Device& device, span<const char* const> files) {
-		Check(files.size() == 6, "CubeMaps require a texture for each face");
-
-		u8* textureData[6];
-		bool deleteBuffer = false;
-
-		int width, height, channels;
-		for (u32 face = 0; face < 6; face++) {
-			stbi_uc* data = stbi_load(files[face], &width, &height, &channels, STBI_rgb);
-
-			if (channels == 3) {
-				textureData[face] = new u8[width * height * 4];
-				for (int i = 0; i < width * height; i++) {
-					textureData[face][4 * i + 0] = data[3 * i + 0];
-					textureData[face][4 * i + 1] = data[3 * i + 1];
-					textureData[face][4 * i + 2] = data[3 * i + 2];
-					textureData[face][4 * i + 3] = 0xFF;
-				}
-				stbi_image_free(data);
-				deleteBuffer = true;
-			}
-			else {
-				textureData[face] = data;
-			}
-		}
-
-		const u64 imageSize = width * height * 4 * 6;
-		const u64 layerSize = width * height * 4;
-
-		Buffer stagingBuffer;
-		device.CreateBuffer(VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, imageSize, &stagingBuffer);
-
-		stagingBuffer.map(device.logicalDevice);
-		for (u32 i = 0; i < 6; i++) {
-			memcpy((u8*)stagingBuffer.mapped + layerSize * i, textureData[i], layerSize);
-		}
-		stagingBuffer.unmap(device.logicalDevice);
-
-		for (u32 face = 0; face < 6; face++) {
-			deleteBuffer ? delete(textureData[face]) : stbi_image_free(textureData[face]);
-		}
-
-		VkImage image;
-		VkImageCreateInfo imageInfo = {
-			.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
-			.flags = VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT,
-			.imageType = VK_IMAGE_TYPE_2D,
-			.format = VK_FORMAT_R8G8B8A8_UNORM,
-			.extent = { (u32)width, (u32)height, 1 },
-			.mipLevels = 1,
-			.arrayLayers = 6,
-			.samples = VK_SAMPLE_COUNT_1_BIT,
-			.tiling = VK_IMAGE_TILING_OPTIMAL,
-			.usage = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
-			.sharingMode = VK_SHARING_MODE_EXCLUSIVE,
-			.queueFamilyIndexCount = 1,
-			.pQueueFamilyIndices = &device.queueIndex.graphics
-		};
-
-		VkCheck(vkCreateImage(device.logicalDevice, &imageInfo, nullptr, &image), "Failed to create cubemap images");
-
-		VkMemoryRequirements memReqs;
-		vkGetImageMemoryRequirements(device.logicalDevice, image, &memReqs);
-
-		VkMemoryAllocateInfo allocInfo = {
-			.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
-			.allocationSize = memReqs.size,
-			.memoryTypeIndex = device.GetMemoryType(memReqs.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT)
-		};
-
-		VkDeviceMemory deviceMemory;
-		VkCheck(vkAllocateMemory(device.logicalDevice, &allocInfo, nullptr, &deviceMemory), "Failed to allocate cubemap memory");
-		VkCheck(vkBindImageMemory(device.logicalDevice, image, deviceMemory, 0), "Failed to bind cubemap memory to image");
-
-		VkCommandBuffer copyCmd = device.CreateCommandBuffer(VK_COMMAND_BUFFER_LEVEL_PRIMARY, true);
-
-		std::vector<VkBufferImageCopy> copyRegions;
-		for (u32 face = 0; face < 6; face++) {
-			copyRegions.push_back(VkBufferImageCopy{
-				.bufferOffset = layerSize * face,
-				.imageSubresource = {
-					.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-					.mipLevel = 0,
-					.baseArrayLayer = face,
-					.layerCount = 1
-				},
-				.imageExtent = { (u32)width, (u32)height, 1 }
-			});
-		}
-
-		VkImageSubresourceRange subresourceRange = {
-			.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-			.baseMipLevel = 0,
-			.levelCount = 1,
-			.layerCount = 6
-		};
-
-		ImageBarrier(copyCmd, image, subresourceRange,
-			VK_PIPELINE_STAGE_NONE, VK_PIPELINE_STAGE_TRANSFER_BIT,
-			VK_ACCESS_NONE, VK_ACCESS_TRANSFER_WRITE_BIT,
-			VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
-
-		vkCmdCopyBufferToImage(copyCmd, stagingBuffer.buffer, image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, (u32)copyRegions.size(), copyRegions.data());
-
-		ImageBarrier(copyCmd, image, subresourceRange,
-			VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
-			VK_ACCESS_TRANSFER_WRITE_BIT, VK_ACCESS_2_SHADER_SAMPLED_READ_BIT,
-			VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_READ_ONLY_OPTIMAL);
-
-		device.FlushCommandBuffer(copyCmd, device.graphicsQueue);
-
-		VkSamplerCreateInfo samplerInfo = {
-			.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
-			.magFilter = VK_FILTER_LINEAR,
-			.minFilter = VK_FILTER_LINEAR,
-			.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR,
-			.addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
-			.addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
-			.addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
-			.mipLodBias = 0.0f,
-			.anisotropyEnable = VK_TRUE,
-			.maxAnisotropy = device.properties.limits.maxSamplerAnisotropy,
-			.compareOp = VK_COMPARE_OP_NEVER,
-			.minLod = 0.0f,
-			.maxLod = 1.0f,
-			.borderColor = VK_BORDER_COLOR_FLOAT_OPAQUE_BLACK,
-		};
-
-		VkSampler sampler;
-		VkCheck(vkCreateSampler(device.logicalDevice, &samplerInfo, nullptr, &sampler), "Failed to create cubemap sampler");
-
-		VkImageViewCreateInfo viewInfo = {
-			.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
-			.image = image,
-			.viewType = VK_IMAGE_VIEW_TYPE_CUBE,
-			.format = VK_FORMAT_R8G8B8A8_UNORM,
-			.subresourceRange = {
-				.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-				.baseMipLevel = 0,
-				.levelCount = 1,
-				.baseArrayLayer = 0,
-				.layerCount = 6
-			}
-		};
-		VkImageView view;
-		VkCheck(vkCreateImageView(device.logicalDevice, &viewInfo, nullptr, &view), "Failed to create cubemap image view");
-
-		stagingBuffer.destroy(device.logicalDevice);
-
-		return CubeMap {
-			.view = view,
-			.image = image,
-			.sampler = sampler,
-			.memory = deviceMemory
-		};
-	}
-};
-
 constexpr u32 WIDTH = 1600;
 constexpr u32 HEIGHT = 900;
 
@@ -230,73 +58,44 @@ struct RenderFrame {
 	VkCommandBuffer commandBuffer;
 };
 
-struct RenderAttachmentDesc {
-	VkExtent2D extent;
-	VkFormat format;
-	VkImageUsageFlags usage;
-	VkSampleCountFlagBits samples = VK_SAMPLE_COUNT_1_BIT;
-};
-
-struct RenderAttachment {
-	VkImage image;
-	VkDeviceMemory memory;
-
-	VkImageView view;
-
-	VkFormat format;
-	VkRenderingAttachmentInfo attachmentInfo;
-};
-
-struct DepthAttachment {
-	VkImage image;
-	VkDeviceMemory memory;
-
-	VkImageView depthStencilView;
-	VkImageView depthView;
-	VkImageView stencilView;
-
-	VkFormat format;
-	VkRenderingAttachmentInfo attachmentInfo;
-};
-
 // Temporary namespace to contain globals
 namespace bz {
 	// Scene
 	Camera camera(glm::vec3(0.0f, 1.25f, 1.5f), 1.0f, 60.0f, (float)WIDTH / HEIGHT, 0.01f, -30.0f, -90.0f);
 
-	CubeMap skybox;
+	Texture   skybox;
 	BindGroup skyboxBindGroup;
 
+	bool bAnimateLight = true;
 	DirectionalLight dirLight = {
-		.direction = glm::vec3(0.0f, -1.0f, 0.0f),
-		.ambient = glm::vec3(0.05f, 0.05f, 0.05f),
-		.diffuse = glm::vec3(1.0f, 0.8f, 0.7f),
-		.specular = glm::vec3(0.1f, 0.1f, 0.1f)
+		.direction = glm::vec3(0.0f, -1.0f,  0.0f),
+		.ambient   = glm::vec3(0.05f, 0.05f, 0.05f),
+		.diffuse   = glm::vec3(1.0f,  0.8f,  0.7f),
+		.specular  = glm::vec3(0.1f,  0.1f,  0.1f)
 	};
 	PointLight pointLightR = {
-		.position = glm::vec3(0.0f, 0.25f, 0.25f),
-		.ambient = glm::vec3(0.1f, 0.1f, 0.1f),
-		.diffuse = glm::vec3(1.0f, 0.0f, 0.0f),
+		.position = glm::vec3(0.0f,  0.25f, 0.25f),
+		.ambient  = glm::vec3(0.1f,  0.1f,  0.1f),
+		.diffuse  = glm::vec3(1.0f,  0.0f,  0.0f),
 		.specular = glm::vec3(0.05f, 0.05f, 0.05f)
 	};
 	PointLight pointLightG = {
-		.position = glm::vec3(0.0f, 0.25f, 0.25f),
-		.ambient = glm::vec3(0.1f, 0.1f, 0.1f),
-		.diffuse = glm::vec3(0.0f, 1.0f, 0.0f),
+		.position = glm::vec3(0.0f,  0.25f, 0.25f),
+		.ambient  = glm::vec3(0.1f,  0.1f,  0.1f),
+		.diffuse  = glm::vec3(0.0f,  1.0f,  0.0f),
 		.specular = glm::vec3(0.05f, 0.05f, 0.05f)
 	};
 	PointLight pointLightB = {
-		.position = glm::vec3(0.0f, 0.25f, 0.25f),
-		.ambient = glm::vec3(0.1f, 0.1f, 0.1f),
-		.diffuse = glm::vec3(0.0f, 0.0f, 1.0f),
+		.position = glm::vec3(0.0f,  0.25f, 0.25f),
+		.ambient  = glm::vec3(0.1f,  0.1f,  0.1f),
+		.diffuse  = glm::vec3(0.0f,  0.0f,  1.0f),
 		.specular = glm::vec3(0.05f, 0.05f, 0.05f)
 	};
-	bool bAnimateLight = true;
 
 	// Deferred pass settings
-	u32 renderMode = 0;
-	u32 parallaxMode = 4;
-	u32 parallaxSteps = 8;
+	u32 renderMode      = 0;
+	u32 parallaxMode    = 4;
+	u32 parallaxSteps   = 8;
 	float parallaxScale = 0.05f;
 
 	// Vulkan stuff
@@ -306,18 +105,19 @@ namespace bz {
 
 	RenderFrame renderFrames[MAX_FRAMES_IN_FLIGHT];
 
+	// Uniform buffers
 	Buffer uniformBuffers[MAX_FRAMES_IN_FLIGHT];
 	Buffer deferredBuffers[MAX_FRAMES_IN_FLIGHT];
 	BindGroup globalsBindings[arraysize(uniformBuffers)];
 	BindGroup deferredBindings[arraysize(deferredBuffers)];
 
-	RenderAttachment albedo, normal, metallicRoughness;
-	DepthAttachment depth;
-	VkSampler attachmentSampler;
+	// GBuffer
+	Texture depth, albedo, normal, metallicRoughness;
 
 	BindGroupLayout materialLayout, globalsLayout, skyboxLayout;
 	BindGroup gbufferBindings;
 
+	// Pipelines
 	Pipeline offscreenPipeline, skyboxPipeline, deferredPipeline;
 
 	bool framebufferResized = false;
@@ -391,58 +191,6 @@ void CleanupWindow() {
 	glfwTerminate();
 }
 
-void CreateImage(u32 width, u32 height, u32 mipLevels, VkSampleCountFlagBits samples, VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage, VkMemoryPropertyFlags properties, VkImage& image, VkDeviceMemory& imageMemory) {
-	VkImageCreateInfo imageInfo = {
-		.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
-		.imageType = VK_IMAGE_TYPE_2D,
-		.format = format,
-		.extent = {
-			.width = width,
-			.height = height,
-			.depth = 1
-		},
-		.mipLevels = mipLevels,
-		.arrayLayers = 1,
-		.samples = samples,
-		.tiling = tiling,
-		.usage = usage,
-		.sharingMode = VK_SHARING_MODE_EXCLUSIVE,
-		.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED
-	};
-
-	VkCheck(vkCreateImage(bz::device.logicalDevice, &imageInfo, nullptr, &image), "Failed to create image");
-
-	VkMemoryRequirements memRequirements;
-	vkGetImageMemoryRequirements(bz::device.logicalDevice, image, &memRequirements);
-
-	VkMemoryAllocateInfo allocInfo = {
-		.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
-		.allocationSize = memRequirements.size,
-		.memoryTypeIndex = bz::device.GetMemoryType(memRequirements.memoryTypeBits, properties)
-	};
-
-	VkCheck(vkAllocateMemory(bz::device.logicalDevice, &allocInfo, nullptr, &imageMemory), "Failed to allocate image memory");
-	VkCheck(vkBindImageMemory(bz::device.logicalDevice, image, imageMemory, 0), "Failed to bind VkDeviceMemory to VkImage");
-}
-
-void CreateImageView(VkImage image, VkFormat format, VkImageAspectFlags aspectFlags, u32 mipLevels, VkImageView& imageView) {
-	VkImageViewCreateInfo viewInfo = {
-			.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
-			.image = image,
-			.viewType = VK_IMAGE_VIEW_TYPE_2D,
-			.format = format,
-			.subresourceRange = {
-				.aspectMask = aspectFlags,
-				.baseMipLevel = 0,
-				.levelCount = mipLevels,
-				.baseArrayLayer = 0,
-				.layerCount = 1
-			}
-	};
-
-	VkCheck(vkCreateImageView(bz::device.logicalDevice, &viewInfo, nullptr, &imageView), "Failed to create image view");
-}
-
 void CreateUniformBuffers() {
 	for (u32 i = 0; i < arraysize(bz::uniformBuffers); i++) {
 		bz::device.CreateBuffer(
@@ -463,117 +211,41 @@ void CreateUniformBuffers() {
 	}
 }
 
-void CreateRenderAttachment(RenderAttachment& attachment, RenderAttachmentDesc desc) {
-	Check(desc.usage & VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT, "CreateRenderAttachment can only be used to create color attachments");
-	attachment.format = desc.format;
-
-	VkImageAspectFlags aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-	VkImageLayout layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-
-	CreateImage(desc.extent.width, desc.extent.height, 1, desc.samples, desc.format, VK_IMAGE_TILING_OPTIMAL, desc.usage, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, attachment.image, attachment.memory);
-	CreateImageView(attachment.image, attachment.format, aspectMask, 1, attachment.view);
-
-	attachment.attachmentInfo = {
-		.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
-		.imageView = attachment.view,
-		.imageLayout = layout,
-		.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
-		.storeOp = (desc.usage & VK_IMAGE_USAGE_SAMPLED_BIT) ? VK_ATTACHMENT_STORE_OP_STORE : VK_ATTACHMENT_STORE_OP_DONT_CARE
-	};
-}
-
-void CreateDepthAttachment(DepthAttachment& attachment, RenderAttachmentDesc desc) {
-	Check(desc.usage & (VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT), "CreateDepthAttachment can only be used to create depth attachments");
-	attachment.format = desc.format;
-
-	VkImageAspectFlags aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
-	VkImageLayout layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
-
-	if (attachment.format >= VK_FORMAT_D16_UNORM_S8_UINT) {	// if format has stencil
-		aspectMask |= VK_IMAGE_ASPECT_STENCIL_BIT;
-	}
-
-	CreateImage(desc.extent.width, desc.extent.height, 1, desc.samples, desc.format, VK_IMAGE_TILING_OPTIMAL, desc.usage, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, attachment.image, attachment.memory);
-	CreateImageView(bz::depth.image, bz::depth.format, aspectMask, 1, bz::depth.depthStencilView);
-	CreateImageView(bz::depth.image, bz::depth.format, VK_IMAGE_ASPECT_DEPTH_BIT, 1, bz::depth.depthView);
-
-	if (aspectMask & VK_IMAGE_ASPECT_STENCIL_BIT) {
-		CreateImageView(bz::depth.image, bz::depth.format, VK_IMAGE_ASPECT_STENCIL_BIT, 1, bz::depth.stencilView);
-	}
-
-	attachment.attachmentInfo = {
-		.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
-		.imageView = attachment.depthStencilView,
-		.imageLayout = layout,
-		.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
-		.storeOp = (desc.usage & VK_IMAGE_USAGE_SAMPLED_BIT) ? VK_ATTACHMENT_STORE_OP_STORE : VK_ATTACHMENT_STORE_OP_DONT_CARE
-	};
-}
-
 void CreateRenderAttachments() {
-	CreateDepthAttachment(bz::depth, {
-		.extent = bz::swapchain.extent,
-		.format = VK_FORMAT_D24_UNORM_S8_UINT,
-		.usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT
+	bz::depth = Texture::Create(bz::device, {
+		.width = bz::swapchain.extent.width,
+		.height = bz::swapchain.extent.height,
+		.format = Format::D24_UNORM_S8_UINT,
+		.bindFlags = BindFlag::DEPTH_STENCIL | BindFlag::SHADER_RESOURCE
 	});
 
-	CreateRenderAttachment(bz::normal, {
-		.extent = bz::swapchain.extent,
-		.format = VK_FORMAT_R8G8B8A8_UNORM,
-		.usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT
+	bz::albedo = Texture::Create(bz::device, {
+		.width = bz::swapchain.extent.width,
+		.height = bz::swapchain.extent.height,
+		.format = Format::RGBA8_UNORM,
+		.bindFlags = BindFlag::RENDER_TARGET | BindFlag::SHADER_RESOURCE
 	});
 
-	CreateRenderAttachment(bz::albedo, {
-		.extent = bz::swapchain.extent,
-		.format = VK_FORMAT_R8G8B8A8_UNORM,
-		.usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT
+	bz::normal = Texture::Create(bz::device, {
+		.width = bz::swapchain.extent.width,
+		.height = bz::swapchain.extent.height,
+		.format = Format::RGBA8_UNORM,
+		.bindFlags = BindFlag::RENDER_TARGET | BindFlag::SHADER_RESOURCE
 	});
 
-	CreateRenderAttachment(bz::metallicRoughness, {
-		.extent = bz::swapchain.extent,
-		.format = VK_FORMAT_R8G8B8A8_UNORM,
-		.usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT
+	bz::metallicRoughness = Texture::Create(bz::device, {
+		.width = bz::swapchain.extent.width,
+		.height = bz::swapchain.extent.height,
+		.format = Format::RGBA8_UNORM,
+		.bindFlags = BindFlag::RENDER_TARGET | BindFlag::SHADER_RESOURCE
 	});
-
-	VkSamplerCreateInfo samplerInfo = {
-		.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
-		.magFilter = VK_FILTER_LINEAR,
-		.minFilter = VK_FILTER_LINEAR,
-		.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR,
-		.addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT,
-		.addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT,
-		.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT,
-		.mipLodBias = 0.0f,
-		.anisotropyEnable = bz::device.enabledFeatures.samplerAnisotropy,
-		.maxAnisotropy = bz::device.enabledFeatures.samplerAnisotropy ? bz::device.properties.limits.maxSamplerAnisotropy : 1.0f,
-		.minLod = 0.0f,
-		.maxLod = 1.0f,
-		.borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK
-	};
-
-	VkCheck(vkCreateSampler(bz::device.logicalDevice, &samplerInfo, nullptr, &bz::attachmentSampler), "Failed to create sampler");
 }
 
 void CleanupRenderAttachments() {
-	vkDestroySampler(bz::device.logicalDevice, bz::attachmentSampler, nullptr);
-
-	vkDestroyImageView(bz::device.logicalDevice, bz::albedo.view, nullptr);
-	vkDestroyImage(bz::device.logicalDevice, bz::albedo.image, nullptr);
-	vkFreeMemory(bz::device.logicalDevice, bz::albedo.memory, nullptr);
-
-	vkDestroyImageView(bz::device.logicalDevice, bz::normal.view, nullptr);
-	vkDestroyImage(bz::device.logicalDevice, bz::normal.image, nullptr);
-	vkFreeMemory(bz::device.logicalDevice, bz::normal.memory, nullptr);
-
-	vkDestroyImageView(bz::device.logicalDevice, bz::metallicRoughness.view, nullptr);
-	vkDestroyImage(bz::device.logicalDevice, bz::metallicRoughness.image, nullptr);
-	vkFreeMemory(bz::device.logicalDevice, bz::metallicRoughness.memory, nullptr);
-
-	vkDestroyImageView(bz::device.logicalDevice, bz::depth.depthStencilView, nullptr);
-	vkDestroyImageView(bz::device.logicalDevice, bz::depth.depthView, nullptr);
-	vkDestroyImageView(bz::device.logicalDevice, bz::depth.stencilView, nullptr);
-	vkDestroyImage(bz::device.logicalDevice, bz::depth.image, nullptr);
-	vkFreeMemory(bz::device.logicalDevice, bz::depth.memory, nullptr);
+	bz::depth.Destroy(bz::device);
+	bz::normal.Destroy(bz::device);
+	bz::albedo.Destroy(bz::device);
+	bz::metallicRoughness.Destroy(bz::device);
 }
 
 void RecordDeferredCommandBuffer(VkCommandBuffer cmd, u32 imageIndex) {
@@ -591,8 +263,8 @@ void RecordDeferredCommandBuffer(VkCommandBuffer cmd, u32 imageIndex) {
 	vkCmdSetViewport(cmd, 0, 1, &viewport);
 	vkCmdSetScissor(cmd, 0, 1, &scissor);
 
-	VkRenderingAttachmentInfo colorAttachments[] = { bz::albedo.attachmentInfo, bz::normal.attachmentInfo, bz::metallicRoughness.attachmentInfo };
-	VkRenderingAttachmentInfo depthAttachment[] = { bz::depth.attachmentInfo };
+	VkRenderingAttachmentInfo colorAttachments[] = { bz::albedo.GetAttachmentInfo(), bz::normal.GetAttachmentInfo(), bz::metallicRoughness.GetAttachmentInfo() };
+	VkRenderingAttachmentInfo depthAttachment[] = { bz::depth.GetAttachmentInfo() };
 
 	// OFFSCREEN PASS
 	VkRenderingInfo renderingInfo = {
@@ -769,10 +441,11 @@ void CreateBindGroupLayouts() {
 void CreateBindGroups() {
 	bz::gbufferBindings = BindGroup::Create(bz::device, bz::materialLayout, {
 		.textures = {
-			{.binding = 0, .sampler = bz::attachmentSampler, .view = bz::albedo.view, .layout = VK_IMAGE_LAYOUT_READ_ONLY_OPTIMAL },
-			{.binding = 1, .sampler = bz::attachmentSampler, .view = bz::normal.view, .layout = VK_IMAGE_LAYOUT_READ_ONLY_OPTIMAL },
-			{.binding = 2, .sampler = bz::attachmentSampler, .view = bz::metallicRoughness.view, .layout = VK_IMAGE_LAYOUT_READ_ONLY_OPTIMAL },
-			{.binding = 3, .sampler = bz::attachmentSampler, .view = bz::depth.depthView, .layout = VK_IMAGE_LAYOUT_READ_ONLY_OPTIMAL }
+			bz::albedo.GetBinding(0), bz::normal.GetBinding(1), bz::metallicRoughness.GetBinding(2), bz::depth.GetBinding(3)
+			//{.binding = 0, .sampler = bz::attachmentSampler, .view = bz::albedo.view, .layout = VK_IMAGE_LAYOUT_READ_ONLY_OPTIMAL },
+			//{.binding = 1, .sampler = bz::attachmentSampler, .view = bz::normal.view, .layout = VK_IMAGE_LAYOUT_READ_ONLY_OPTIMAL },
+			//{.binding = 2, .sampler = bz::attachmentSampler, .view = bz::metallicRoughness.view, .layout = VK_IMAGE_LAYOUT_READ_ONLY_OPTIMAL },
+			//{.binding = 3, .sampler = bz::attachmentSampler, .view = bz::depth.depthView, .layout = VK_IMAGE_LAYOUT_READ_ONLY_OPTIMAL }
 		}
 	});
 
@@ -792,10 +465,11 @@ void CreateBindGroups() {
 void UpdateGBufferBindGroup() {
 	bz::gbufferBindings.Update(bz::device, {
 		.textures = {
-			{.binding = 0, .sampler = bz::attachmentSampler, .view = bz::albedo.view, .layout = VK_IMAGE_LAYOUT_READ_ONLY_OPTIMAL },
-			{.binding = 1, .sampler = bz::attachmentSampler, .view = bz::normal.view, .layout = VK_IMAGE_LAYOUT_READ_ONLY_OPTIMAL },
-			{.binding = 2, .sampler = bz::attachmentSampler, .view = bz::metallicRoughness.view, .layout = VK_IMAGE_LAYOUT_READ_ONLY_OPTIMAL },
-			{.binding = 3, .sampler = bz::attachmentSampler, .view = bz::depth.depthView, .layout = VK_IMAGE_LAYOUT_READ_ONLY_OPTIMAL }
+			bz::albedo.GetBinding(0), bz::normal.GetBinding(1), bz::metallicRoughness.GetBinding(2), bz::depth.GetBinding(3)
+			//{.binding = 0, .sampler = bz::attachmentSampler, .view = bz::albedo.view, .layout = VK_IMAGE_LAYOUT_READ_ONLY_OPTIMAL },
+			//{.binding = 1, .sampler = bz::attachmentSampler, .view = bz::normal.view, .layout = VK_IMAGE_LAYOUT_READ_ONLY_OPTIMAL },
+			//{.binding = 2, .sampler = bz::attachmentSampler, .view = bz::metallicRoughness.view, .layout = VK_IMAGE_LAYOUT_READ_ONLY_OPTIMAL },
+			//{.binding = 3, .sampler = bz::attachmentSampler, .view = bz::depth.depthView, .layout = VK_IMAGE_LAYOUT_READ_ONLY_OPTIMAL }
 		}
 	});
 }
@@ -882,9 +556,9 @@ void CreatePipelines() {
 void InitVulkan() {
 	bz::device.CreateDevice(window);
 	bz::swapchain.CreateSwapchain(window, bz::device, {
-		.enableVSync = true, 
-		.preferredImageCount = 2, 
-		.oldSwapchain = VK_NULL_HANDLE 
+		.enableVSync = true,
+		.preferredImageCount = 2,
+		.oldSwapchain = VK_NULL_HANDLE
 	});
 
 	CreateUniformBuffers();
@@ -1099,7 +773,7 @@ int main(int argc, char* argv[]) {
 
 	bz::overlay = new UIOverlay(window, bz::device, bz::swapchain.format, bz::depth.format, OverlayRender);
 
-	bz::skybox = CubeMap::LoadFromFiles(bz::device, {
+	bz::skybox = Texture::CreateCubemap(bz::device, Format::RGBA8_UNORM, Usage::DEFAULT, BindFlag::SHADER_RESOURCE, {
 		"assets/Skybox/right.jpg",
 		"assets/Skybox/left.jpg",
 		"assets/Skybox/top.jpg",
@@ -1109,9 +783,7 @@ int main(int argc, char* argv[]) {
 	});
 
 	bz::skyboxBindGroup = BindGroup::Create(bz::device, bz::skyboxLayout, {
-		.textures = {
-			{.binding = 0, .sampler = bz::skybox.sampler, .view = bz::skybox.view, .layout = VK_IMAGE_LAYOUT_READ_ONLY_OPTIMAL }
-		}
+		.textures = { bz::skybox.GetBinding(0) }
 	});
 
 	cube = new GLTFModel(bz::device, bz::materialLayout, "assets/Box.glb");
@@ -1123,19 +795,24 @@ int main(int argc, char* argv[]) {
 	plane = new GLTFModel(bz::device, bz::materialLayout, "assets/ParallaxTest/plane.gltf");
 	{
 		plane->images.resize(3);
-		plane->images[1].LoadFromFile("assets/ParallaxTest/rocks_color_rgba.png", bz::device, bz::device.graphicsQueue, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_USAGE_SAMPLED_BIT);
-		plane->images[2].LoadFromFile("assets/ParallaxTest/rocks_normal_height_rgba.png", bz::device, bz::device.graphicsQueue, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_USAGE_SAMPLED_BIT);
+		plane->images[1] = Texture::Create(bz::device, "assets/ParallaxTest/rocks_color_rgba.png", { 
+			.generateMipLevels = true,
+			.format = Format::RGBA8_SRGB,
+			.bindFlags = BindFlag::SHADER_RESOURCE
+		});
+
+		plane->images[2] = Texture::Create(bz::device, "assets/ParallaxTest/rocks_normal_height_rgba.png", { 
+			.generateMipLevels = true,
+			.format = Format::RGBA8_UNORM,
+			.bindFlags = BindFlag::SHADER_RESOURCE
+		});
 
 		plane->materials.push_back({
 			.albedo = &plane->images[1],
 			.normal = &plane->images[2],
 			.metallicRoughness = &plane->images[0],
 			.bindGroup = BindGroup::Create(bz::device, bz::materialLayout, {
-				.textures = {
-					{.binding = 0, .sampler = plane->images[1].sampler, .view = plane->images[1].view, .layout = plane->images[1].layout },
-					{.binding = 1, .sampler = plane->images[2].sampler, .view = plane->images[2].view, .layout = plane->images[2].layout },
-					{.binding = 2, .sampler = plane->images[0].sampler, .view = plane->images[0].view, .layout = plane->images[0].layout },
-				}
+				.textures = { plane->images[1].GetBinding(0), plane->images[2].GetBinding(1), plane->images[0].GetBinding(2) }
 			})
 		});
 
@@ -1176,12 +853,12 @@ int main(int argc, char* argv[]) {
 	vkDeviceWaitIdle(bz::device.logicalDevice);
 
 	bz::skybox.Destroy(bz::device);
-	delete cube;
 	bz::skyboxPipeline.Destroy(bz::device);
 	bz::skyboxLayout.Destroy(bz::device);
 
 	delete plane;
 	delete model;
+	delete cube;
 	
 	delete bz::overlay;
 
