@@ -444,22 +444,18 @@ void CreateBindGroups() {
 	bz::gbufferBindings = BindGroup::Create(bz::device, bz::materialLayout, {
 		.textures = {
 			bz::albedo.GetBinding(0), bz::normal.GetBinding(1), bz::metallicRoughness.GetBinding(2), bz::depth.GetBinding(3)
-			//{.binding = 0, .sampler = bz::attachmentSampler, .view = bz::albedo.view, .layout = VK_IMAGE_LAYOUT_READ_ONLY_OPTIMAL },
-			//{.binding = 1, .sampler = bz::attachmentSampler, .view = bz::normal.view, .layout = VK_IMAGE_LAYOUT_READ_ONLY_OPTIMAL },
-			//{.binding = 2, .sampler = bz::attachmentSampler, .view = bz::metallicRoughness.view, .layout = VK_IMAGE_LAYOUT_READ_ONLY_OPTIMAL },
-			//{.binding = 3, .sampler = bz::attachmentSampler, .view = bz::depth.depthView, .layout = VK_IMAGE_LAYOUT_READ_ONLY_OPTIMAL }
 		}
 	});
 
 	for (u32 i = 0; i < arraysize(bz::globalsBindings); i++) {
 		bz::globalsBindings[i] = BindGroup::Create(bz::device, bz::globalsLayout, {
-			.buffers = { {.binding = 0, .buffer = bz::uniformBuffers[i].buffer, .offset = 0, .size = sizeof(CameraUBO)}}
+			.buffers = { bz::uniformBuffers[i].GetBinding(0, sizeof(CameraUBO)) }
 		});
 	}
 
 	for (u32 i = 0; i < arraysize(bz::deferredBindings); i++) {
 		bz::deferredBindings[i] = BindGroup::Create(bz::device, bz::globalsLayout, {
-			.buffers = { {.binding = 0, .buffer = bz::deferredBuffers[i].buffer, .offset = 0, .size = sizeof(DeferredUBO)}}
+			.buffers = { bz::deferredBuffers[i].GetBinding(0, sizeof(DeferredUBO)) }
 		});
 	}
 }
@@ -468,10 +464,6 @@ void UpdateGBufferBindGroup() {
 	bz::gbufferBindings.Update(bz::device, {
 		.textures = {
 			bz::albedo.GetBinding(0), bz::normal.GetBinding(1), bz::metallicRoughness.GetBinding(2), bz::depth.GetBinding(3)
-			//{.binding = 0, .sampler = bz::attachmentSampler, .view = bz::albedo.view, .layout = VK_IMAGE_LAYOUT_READ_ONLY_OPTIMAL },
-			//{.binding = 1, .sampler = bz::attachmentSampler, .view = bz::normal.view, .layout = VK_IMAGE_LAYOUT_READ_ONLY_OPTIMAL },
-			//{.binding = 2, .sampler = bz::attachmentSampler, .view = bz::metallicRoughness.view, .layout = VK_IMAGE_LAYOUT_READ_ONLY_OPTIMAL },
-			//{.binding = 3, .sampler = bz::attachmentSampler, .view = bz::depth.depthView, .layout = VK_IMAGE_LAYOUT_READ_ONLY_OPTIMAL }
 		}
 	});
 }
@@ -795,16 +787,16 @@ int main(int argc, char* argv[]) {
 	plane = new GLTFModel(bz::device, bz::materialLayout, "assets/ParallaxTest/plane.gltf");
 	{
 		plane->images.resize(3);
-		plane->images[1] = Texture::Create(bz::device, "assets/ParallaxTest/rocks_color_rgba.png", { 
-			.generateMipLevels = true,
+		plane->images[1] = Texture::Create(bz::device, "assets/ParallaxTest/rocks_color_rgba.png", {
 			.format = Format::RGBA8_SRGB,
-			.usage = Usage::SHADER_RESOURCE
+			.usage = Usage::SHADER_RESOURCE,
+			.generateMipLevels = true,
 		});
 
-		plane->images[2] = Texture::Create(bz::device, "assets/ParallaxTest/rocks_normal_height_rgba.png", { 
-			.generateMipLevels = true,
+		plane->images[2] = Texture::Create(bz::device, "assets/ParallaxTest/rocks_normal_height_rgba.png", {
 			.format = Format::RGBA8_UNORM,
-			.usage = Usage::SHADER_RESOURCE
+			.usage = Usage::SHADER_RESOURCE,
+			.generateMipLevels = true,
 		});
 
 		plane->materials.push_back({

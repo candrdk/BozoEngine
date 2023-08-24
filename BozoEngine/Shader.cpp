@@ -46,7 +46,7 @@ Shader Shader::Create(const Device& device, const char* path, const char* entry)
                 .type = (u32)descriptorBinding.descriptor_type,
                 .stages = (VkShaderStageFlags)shader.stage
             }
-            });
+        });
     }
 
     if (spvModule.push_constant_block_count > 0) {

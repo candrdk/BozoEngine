@@ -147,9 +147,9 @@ void GLTFModel::LoadImages(tinygltf::Model& model) {
 		images[i] = Texture::Create(device, TextureDesc{
 			.width = (u32)gltfImage.width,
 			.height = (u32)gltfImage.height,
-			.generateMipLevels = true,
 			.format = srgb ? Format::RGBA8_SRGB : Format::RGBA8_UNORM,
 			.usage = Usage::SHADER_RESOURCE,
+			.generateMipLevels = true,
 			.initialData = span<const u8>(buffer, bufferSize)
 		});
 	}
@@ -157,9 +157,9 @@ void GLTFModel::LoadImages(tinygltf::Model& model) {
 	images.back() = Texture::Create(device, TextureDesc{
 		.width = 1,
 		.height = 1,
-		.generateMipLevels = false,
 		.format = Format::RGBA8_UNORM,
 		.usage = Usage::SHADER_RESOURCE,
+		.generateMipLevels = false,
 		.initialData = { 0xFF, 0x00, 0xFF, 0xFF }
 	});
 }

@@ -2,11 +2,13 @@
 
 #include "Common.h"
 #include "Device.h"
+#include "Buffer.h"
+#include "Texture.h"
 
-// TODO: Find a way to create buffer/texture bindings by just giving a Buffer/Texture directly.
 // TODO: Figure out if user should be responsible for freeing bindgroups / how to handle their reuse
 // TODO: should BindGroup keep a reference/pointer to the BindGroupLayout instead?
 //          - want to make ownership/responsibility for destroying the layout clearer.
+// TODO: move these enums to enum classes
 
 struct Binding {
     enum Type {
@@ -34,37 +36,9 @@ struct BindGroupLayout {
     void Destroy(const Device& device);
 };
 
-// TODO:
-// 
-// Move the definition of the TextureBinding and BufferBinding structs 
-// to the Texture and Buffer classes respectively BindGroupDesc then contains
-// 
-//		vector<Buffer::Binding> buffers;
-//		vector<Texture::Binding> textures;
-//
-// Or maybe just have BindGroup's take references to textures directly?
-//
-//		vector<const Texture&> textures
-//
 struct BindGroupDesc {
-    struct TextureBinding {
-        u32 binding;
-
-        VkSampler sampler;
-        VkImageView view;
-        VkImageLayout layout;
-    };
-
-    struct BufferBinding {
-        u32 binding;
-
-        VkBuffer buffer;
-        VkDeviceSize offset;
-        VkDeviceSize size;
-    };
-
-    span<const BufferBinding> buffers;
-    span<const TextureBinding> textures;
+    span<const Buffer::Binding>  buffers;
+    span<const Texture::Binding> textures;
 };
 
 struct BindGroup {

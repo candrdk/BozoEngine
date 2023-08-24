@@ -2,7 +2,6 @@
 
 #include "Common.h"
 #include "Device.h"
-#include "BindGroup.h"
 
 struct TextureDesc {
 	enum class Type : u32 {
@@ -16,13 +15,13 @@ struct TextureDesc {
 	u32 height;
 	u32 depth       = 1;
 	u32 arrayLayers = 1;
-	u32 mipLevels   = 1;	// 1 indicates we have to generate them ourselves
-	bool generateMipLevels = false;
+	u32 mipLevels   = 1;
 	u32 samples     = 1;
 
 	Format format = Format::UNDEFINED;
 	Memory memory = Memory::DEFAULT;
 	Usage  usage  = Usage::NONE;
+	bool generateMipLevels = false;
 
 	span<const u8> initialData;
 };
@@ -43,7 +42,12 @@ struct Texture {
 	VkImageView srv = VK_NULL_HANDLE;
 	VkImageView dsv = VK_NULL_HANDLE;
 
-	BindGroupDesc::TextureBinding GetBinding(u32 binding) const {
+	struct Binding {
+		u32 binding;
+		VkSampler sampler;
+		VkImageView view;
+		VkImageLayout layout;
+	} GetBinding(u32 binding) const {
 		return { binding, sampler, srv, VK_IMAGE_LAYOUT_READ_ONLY_OPTIMAL };
 	}
 

@@ -41,21 +41,23 @@ BindGroup BindGroup::Create(const Device& device, const BindGroupLayout& layout,
     BindGroup bindGroup = { .layout = layout };
     vkAllocateDescriptorSets(device.logicalDevice, &allocInfo, &bindGroup.descriptorSet);
 
-    bindGroup.Update(device, std::forward<const BindGroupDesc&&>(desc));
+    bindGroup.Update(device, std::forward<const BindGroupDesc>(desc));
     return bindGroup;
 }
 
+// TODO: should probablt batch these descriptor set updates instead of calling
+// vkUpdateDescriptorSets once for every binding...
 void BindGroup::Update(const Device& device, const BindGroupDesc&& desc) {
-    for (const auto& bufferBinding : desc.buffers) {
+    for (const Buffer::Binding& buffer : desc.buffers) {
         VkDescriptorBufferInfo bufferInfo = {
-            .buffer = bufferBinding.buffer,
-            .offset = bufferBinding.offset,
-            .range = bufferBinding.size
+            .buffer = buffer.buffer,
+            .offset = buffer.offset,
+            .range = buffer.size
         };
         VkWriteDescriptorSet write = {
             .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
             .dstSet = descriptorSet,
-            .dstBinding = bufferBinding.binding,
+            .dstBinding = buffer.binding,
             .dstArrayElement = 0,
             .descriptorCount = 1,
             .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
@@ -64,7 +66,7 @@ void BindGroup::Update(const Device& device, const BindGroupDesc&& desc) {
         vkUpdateDescriptorSets(device.logicalDevice, 1, &write, 0, nullptr);
     }
 
-    for (const auto& texture : desc.textures) {
+    for (const Texture::Binding& texture : desc.textures) {
         VkDescriptorImageInfo imageInfo = {
             .sampler = texture.sampler,
             .imageView = texture.view,
