@@ -1,32 +1,33 @@
 #include "Texture.h"
 #include "Tools.h"
+#include "Buffer.h"
 
 #pragma warning(disable : 26451 6262)
 	#define STB_IMAGE_IMPLEMENTATION
 	#include <stb_image.h>
 #pragma warning(default : 26451 6262)
 
-static constexpr VkAccessFlags2 ParseAccessFlags(BindFlag value) {
+static constexpr VkAccessFlags2 ParseAccessFlags(Usage value) {
 	VkAccessFlags2 flags = 0;
 
-	if (HasFlag(value, BindFlag::SHADER_RESOURCE)) {
+	if (HasFlag(value, Usage::SHADER_RESOURCE)) {
 		flags |= VK_ACCESS_2_SHADER_READ_BIT;
 	}
-	if (HasFlag(value, BindFlag::RENDER_TARGET)) {
+	if (HasFlag(value, Usage::RENDER_TARGET)) {
 		flags |= VK_ACCESS_2_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT;
 	}
-	if (HasFlag(value, BindFlag::DEPTH_STENCIL)) {
+	if (HasFlag(value, Usage::DEPTH_STENCIL)) {
 		flags |= VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_READ_BIT | VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
 	}
 
 	return flags;
 }
 
-static constexpr VkImageLayout ParseImageLayout(BindFlag value) {
-	if (HasFlag(value, BindFlag::RENDER_TARGET) || HasFlag(value, BindFlag::DEPTH_STENCIL)) {
+static constexpr VkImageLayout ParseImageLayout(Usage value) {
+	if (HasFlag(value, Usage::RENDER_TARGET) || HasFlag(value, Usage::DEPTH_STENCIL)) {
 		return VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL;
 	}
-	else if (HasFlag(value, BindFlag::SHADER_RESOURCE)) {
+	else if (HasFlag(value, Usage::SHADER_RESOURCE)) {
 		return VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 	}
 	else {
@@ -34,16 +35,16 @@ static constexpr VkImageLayout ParseImageLayout(BindFlag value) {
 	}
 }
 
-static constexpr VkImageUsageFlags ParseImageUsage(BindFlag value) {
+static constexpr VkImageUsageFlags ParseImageUsage(Usage value) {
 	VkImageUsageFlags usage = 0;
 
-	if (HasFlag(value, BindFlag::SHADER_RESOURCE)) {
+	if (HasFlag(value, Usage::SHADER_RESOURCE)) {
 		usage |= VK_IMAGE_USAGE_SAMPLED_BIT;
 	}
-	if (HasFlag(value, BindFlag::RENDER_TARGET)) {
+	if (HasFlag(value, Usage::RENDER_TARGET)) {
 		usage |= VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
 	}
-	if (HasFlag(value, BindFlag::DEPTH_STENCIL)) {
+	if (HasFlag(value, Usage::DEPTH_STENCIL)) {
 		usage |= VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
 	}
 
@@ -59,7 +60,6 @@ static constexpr VkFormat ConvertFormat(Format format) {
 
 	default: return VK_FORMAT_UNDEFINED;
 	}
-
 }
 
 static constexpr u32 FormatStride(Format format) {
@@ -71,26 +71,17 @@ static constexpr u32 FormatStride(Format format) {
 
 	default:
 		// TODO: maybe warn here?
-		return 1;
+		Check(false, "Unsupported format or no known stride, %i", (int)format);
+		return 0;
 	}
 }
 
 static constexpr bool HasDepth(Format format) {
-	switch (format) {
-	case Format::D24_UNORM_S8_UINT:
-		return true;
-	default:
-		return false;
-	}
+	return format == Format::D24_UNORM_S8_UINT;
 }
 
 static constexpr bool HasStencil(Format format) {
-	switch (format) {
-	case Format::D24_UNORM_S8_UINT:
-		return true;
-	default:
-		return false;
-	}
+	return format == Format::D24_UNORM_S8_UINT;
 }
 
 static VkImageView CreateView(const Device& device, VkImage image, VkFormat format, TextureDesc::Type type, VkImageAspectFlags aspect, u32 firstMip = 0, u32 mipCount = -1, u32 firstLayer = 0, u32 layerCount = -1) {
@@ -133,7 +124,7 @@ void Texture::Destroy(const Device& device) {
 }
 
 // TODO: handle channels properly
-Texture Texture::CreateCubemap(Device& device, Format format, Usage usage, BindFlag bindFlags, span<const char* const> files) {
+Texture Texture::CreateCubemap(Device& device, Format format, Memory memory, Usage usage, span<const char* const> files) {
 	Check(files.size() == 6, "CubeMaps require a texture for each face");
 
 	int width, height, channels;
@@ -170,8 +161,8 @@ Texture Texture::CreateCubemap(Device& device, Format format, Usage usage, BindF
 		.height = (u32)height,
 		.arrayLayers = 6,
 		.format = format,
+		.memory = memory,
 		.usage = usage,
-		.bindFlags = bindFlags,
 		.initialData = span<const u8>(textureData, width * height * 4 * 6)
 	});
 
@@ -202,7 +193,7 @@ Texture Texture::Create(Device& device, const char* file, TextureDesc&& desc) {
 Texture Texture::Create(Device& device, const TextureDesc&& desc) {
 	Texture texture = {
 		.format = ConvertFormat(desc.format),
-		.layout = ParseImageLayout(desc.bindFlags),
+		.layout = ParseImageLayout(desc.usage),
 		.width = desc.width,
 		.height = desc.height,
 		.mipLevels = desc.generateMipLevels ? u32(std::floor(std::log2(std::max(desc.width, desc.height))) + 1) : desc.mipLevels
@@ -220,7 +211,7 @@ Texture Texture::Create(Device& device, const TextureDesc&& desc) {
 		.arrayLayers = desc.arrayLayers,
 		.samples = (VkSampleCountFlagBits)desc.samples,
 		.tiling = VK_IMAGE_TILING_OPTIMAL,
-		.usage = ParseImageUsage(desc.bindFlags)	// Parse usage based on bindflags (shader_resource -> sampled, rendertarget -> attachmemt, etc)
+		.usage = ParseImageUsage(desc.usage)		// Parse usage (shader_resource -> sampled, rendertarget -> attachmemt, etc)
 		       | VK_IMAGE_USAGE_TRANSFER_DST_BIT	// We will be copying from staging buffer to the image
 			   | (desc.generateMipLevels ? VK_IMAGE_USAGE_TRANSFER_SRC_BIT : 0ull),	// We will be coping from the image to the image to create mip levels
 		.sharingMode = VK_SHARING_MODE_EXCLUSIVE,
@@ -240,7 +231,7 @@ Texture Texture::Create(Device& device, const TextureDesc&& desc) {
 		Check(desc.arrayLayers == 6, "Cubemaps must have 6 layers! Array textures aren't supported yet.");
 	}
 
-	if (desc.usage == Usage::DEFAULT) {
+	if (desc.memory == Memory::DEFAULT) {
 		VkCheck(vkCreateImage(device.logicalDevice, &imageInfo, nullptr, &texture.image), "Failed to create image");
 
 		VkMemoryRequirements memRequirements;
@@ -256,13 +247,17 @@ Texture Texture::Create(Device& device, const TextureDesc&& desc) {
 		VkCheck(vkBindImageMemory(device.logicalDevice, texture.image, texture.deviceMemory, 0), "Failed to bind VkDeviceMemory to VkImage");
 	}
 	else {
-		Check(desc.usage == Usage::DEFAULT, "Only default usage has been implemented.");
+		Check(desc.memory == Memory::DEFAULT, "Only default usage has been implemented.");
 	}
 
 	// TODO: this part has not really been tested extensively - specifically when it comes to generating mips for texture arrays.
 	if (desc.initialData.data() != nullptr) {
-		Buffer stagingBuffer;
-		device.CreateBuffer(VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, desc.initialData.size(), &stagingBuffer, desc.initialData.data());
+		Buffer stagingBuffer = Buffer::Create(device, {
+			.debugName = "Texture staging buffer",
+			.usage = Usage::TRANSFER_SRC,
+			.memory = Memory::UPLOAD,
+			.initialData = desc.initialData
+		});
 
 		std::vector<VkBufferImageCopy> bufferCopyRegions;
 		u32 copyOffset = 0;
@@ -319,7 +314,7 @@ Texture Texture::Create(Device& device, const TextureDesc&& desc) {
 		if (!desc.generateMipLevels) {
 			ImageBarrier(copyCmd, texture.image, subresourceRange,
 				VK_PIPELINE_STAGE_TRANSFER_BIT,			VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
-				VK_ACCESS_TRANSFER_WRITE_BIT,			ParseAccessFlags(desc.bindFlags),
+				VK_ACCESS_TRANSFER_WRITE_BIT,			ParseAccessFlags(desc.usage),
 				VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,	texture.layout);
 		}
 		else {
@@ -376,31 +371,31 @@ Texture Texture::Create(Device& device, const TextureDesc&& desc) {
 
 				ImageBarrier(copyCmd, texture.image, subresourceRange,
 					VK_PIPELINE_STAGE_TRANSFER_BIT,			VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
-					VK_ACCESS_TRANSFER_READ_BIT,			ParseAccessFlags(desc.bindFlags),
+					VK_ACCESS_TRANSFER_READ_BIT,			ParseAccessFlags(desc.usage),
 					VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,	texture.layout);
 			}
 
 			subresourceRange.baseMipLevel = texture.mipLevels - 1;
 			ImageBarrier(copyCmd, texture.image, subresourceRange,
 				VK_PIPELINE_STAGE_TRANSFER_BIT,			VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
-				VK_ACCESS_TRANSFER_WRITE_BIT,			ParseAccessFlags(desc.bindFlags),
+				VK_ACCESS_TRANSFER_WRITE_BIT,			ParseAccessFlags(desc.usage),
 				VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,	texture.layout);
 		}
 
 		device.FlushCommandBuffer(copyCmd, device.graphicsQueue);
 
 		// Clean up staging resources
-		stagingBuffer.destroy(device.logicalDevice);
+		stagingBuffer.Destroy(device);
 	}
 
 	// Create image views
-	if (HasFlag(desc.bindFlags, BindFlag::SHADER_RESOURCE)) {
+	if (HasFlag(desc.usage, Usage::SHADER_RESOURCE)) {
 		texture.srv = CreateView(device, texture.image, texture.format, desc.type, HasDepth(desc.format) ? VK_IMAGE_ASPECT_DEPTH_BIT : VK_IMAGE_ASPECT_COLOR_BIT);
 	}
-	if (HasFlag(desc.bindFlags, BindFlag::RENDER_TARGET)) {
+	if (HasFlag(desc.usage, Usage::RENDER_TARGET)) {
 		texture.rtv = CreateView(device, texture.image, texture.format, desc.type, VK_IMAGE_ASPECT_COLOR_BIT);
 	}
-	if (HasFlag(desc.bindFlags, BindFlag::DEPTH_STENCIL)) {
+	if (HasFlag(desc.usage, Usage::DEPTH_STENCIL)) {
 		texture.dsv = CreateView(device, texture.image, texture.format, desc.type, VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT);
 	}
 

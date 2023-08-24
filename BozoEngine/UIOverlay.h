@@ -3,6 +3,7 @@
 #include "Common.h"
 #include "Device.h"
 #include "Texture.h"
+#include "Buffer.h"
 #include "Pipeline.h"
 #include "Swapchain.h"
 

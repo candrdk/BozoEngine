@@ -2,62 +2,45 @@
 
 #include "Common.h"
 
-// TODO: move this to separate buffer.h file.
-//		 Everything regarding buffers will likely be heavliy changed once we start working with larger scenes 
-//		 and implement a resource manager. It's okay to elave it like this for now, though.
-struct Buffer {
-	VkBuffer buffer = VK_NULL_HANDLE;
-	VkDeviceMemory memory = VK_NULL_HANDLE;
-	void* mapped = nullptr;
+// TODO: should these enums really be here?
 
-	VkDeviceSize size = 0;
+enum class Memory {
+	DEFAULT,	// GPU only			VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT
+	UPLOAD,	    // CPU --> GPU		VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+	READBACK	// CPU <-> GPU		VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_CACHED_BIT,
+};
 
-	VkResult map(VkDevice device, VkDeviceSize size = VK_WHOLE_SIZE, VkDeviceSize offset = 0) {
-		return vkMapMemory(device, memory, offset, size, 0, &mapped);
-	}
+enum class Format {
+	UNDEFINED,
+	RGBA8_UNORM,
+	RGBA8_SRGB,
+	D24_UNORM_S8_UINT
+};
 
-	void unmap(VkDevice device) {
-		if (mapped) {
-			vkUnmapMemory(device, memory);
-			mapped = nullptr;
-		}
-	}
+enum class Usage {
+	NONE			= 0,
+	SHADER_RESOURCE = 1 << 0,
+	TRANSFER_SRC	= 1 << 1,
+	TRANSFER_DST	= 1 << 2,
 
-	VkResult bind(VkDevice device, VkDeviceSize offset = 0) {
-		return vkBindBufferMemory(device, buffer, memory, offset);
-	}
+	RENDER_TARGET	= 1 << 3,
+	DEPTH_STENCIL	= 1 << 4,
 
-	void destroy(VkDevice device) {
-		if (buffer) {
-			vkDestroyBuffer(device, buffer, nullptr);
-		}
-		if (memory) {
-			vkFreeMemory(device, memory, nullptr);
-		}
-	}
-
-	VkResult Flush(VkDevice device, VkDeviceSize offset = 0) {
-		VkMappedMemoryRange mappedRange = {
-			.sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE,
-			.memory = memory,
-			.offset = offset,
-			.size = size
-		};
-
-		return vkFlushMappedMemoryRanges(device, 1, &mappedRange);
-	}
+	VERTEX_BUFFER	= 1 << 5,
+	INDEX_BUFFER	= 1 << 6,
+	UNIFORM_BUFFER	= 1 << 7
 };
 
 class Device {
 public:
-	VkInstance instance = VK_NULL_HANDLE;
-	VkDebugUtilsMessengerEXT debugMessenger = VK_NULL_HANDLE;
-	VkSurfaceKHR surface = VK_NULL_HANDLE;
-	VkPhysicalDevice physicalDevice = VK_NULL_HANDLE;
-	VkDevice logicalDevice = VK_NULL_HANDLE;
-	VkQueue graphicsQueue = VK_NULL_HANDLE;
-	VkCommandPool commandPool = VK_NULL_HANDLE;
-	VkDescriptorPool descriptorPool = VK_NULL_HANDLE;
+	VkInstance					instance		= VK_NULL_HANDLE;
+	VkDebugUtilsMessengerEXT	debugMessenger	= VK_NULL_HANDLE;
+	VkSurfaceKHR				surface			= VK_NULL_HANDLE;
+	VkPhysicalDevice			physicalDevice	= VK_NULL_HANDLE;
+	VkDevice					logicalDevice	= VK_NULL_HANDLE;
+	VkQueue						graphicsQueue	= VK_NULL_HANDLE;
+	VkCommandPool				commandPool		= VK_NULL_HANDLE;
+	VkDescriptorPool			descriptorPool	= VK_NULL_HANDLE;
 
 	struct {
 		u32 graphics;
@@ -65,10 +48,10 @@ public:
 		u32 transfer;
 	} queueIndex;
 
-	std::vector<VkQueueFamilyProperties> queueFamilyProperties = {};
-	VkPhysicalDeviceFeatures enabledFeatures = {};
-	VkPhysicalDeviceProperties properties = {};
-	VkPhysicalDeviceMemoryProperties memoryProperties = {};
+	std::vector<VkQueueFamilyProperties>	queueFamilyProperties	= {};
+	VkPhysicalDeviceFeatures				enabledFeatures			= {};
+	VkPhysicalDeviceProperties				properties				= {};
+	VkPhysicalDeviceMemoryProperties		memoryProperties		= {};
 
 	void CreateDevice(GLFWwindow* window);
 	void DestroyDevice();
@@ -83,43 +66,6 @@ public:
 
 	// Note: This will also free the commandBuffer
 	void FlushCommandBuffer(VkCommandBuffer commandBuffer, VkQueue queue) const;
-
-	// TODO: move to device.cpp, or buffer.cpp
-	VkResult CreateBuffer(VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkDeviceSize size, Buffer* buffer, const void* data = nullptr) const {
-		VkBufferCreateInfo bufferInfo = {
-			.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
-			.size = size,
-			.usage = usage,
-			.sharingMode = VK_SHARING_MODE_EXCLUSIVE
-		};
-
-		VkCheck(vkCreateBuffer(logicalDevice, &bufferInfo, nullptr, &buffer->buffer), "Failed to create buffer");
-
-		VkMemoryRequirements memRequirements;
-		vkGetBufferMemoryRequirements(logicalDevice, buffer->buffer, &memRequirements);
-
-		VkMemoryAllocateInfo allocInfo = {
-			.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
-			.allocationSize = memRequirements.size,
-			.memoryTypeIndex = GetMemoryType(memRequirements.memoryTypeBits, properties)
-		};
-
-		VkCheck(vkAllocateMemory(logicalDevice, &allocInfo, nullptr, &buffer->memory), "Failed to allocate buffer memory");
-		buffer->size = memRequirements.size;
-
-		if (data != nullptr) {
-			VkAssert(buffer->map(logicalDevice));
-			memcpy(buffer->mapped, data, size);
-			if ((properties & VK_MEMORY_PROPERTY_HOST_COHERENT_BIT) == 0) {
-				buffer->Flush(logicalDevice);
-			}
-			buffer->unmap(logicalDevice);
-		}
-
-		buffer->bind(logicalDevice);
-
-		return VK_SUCCESS;
-	}
 
 	u32 GetMemoryType(u32 memoryTypeBits, VkMemoryPropertyFlags properties) const;
 	VkSampleCountFlagBits GetMaxUsableSampleCount() const;

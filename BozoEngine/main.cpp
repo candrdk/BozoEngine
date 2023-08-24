@@ -193,21 +193,23 @@ void CleanupWindow() {
 
 void CreateUniformBuffers() {
 	for (u32 i = 0; i < arraysize(bz::uniformBuffers); i++) {
-		bz::device.CreateBuffer(
-			VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
-			VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-			sizeof(CameraUBO), &bz::uniformBuffers[i]);
-
-		bz::uniformBuffers[i].map(bz::device.logicalDevice);
+		bz::uniformBuffers[i] = Buffer::Create(bz::device, {
+			.debugName = "Uniform buffer",
+			.byteSize = sizeof(CameraUBO),
+			.usage = Usage::UNIFORM_BUFFER,
+			.memory = Memory::UPLOAD
+		});
+		bz::uniformBuffers[i].Map(bz::device);
 	}
 
 	for (u32 i = 0; i < arraysize(bz::uniformBuffers); i++) {
-		bz::device.CreateBuffer(
-			VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
-			VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-			sizeof(DeferredUBO), &bz::deferredBuffers[i]);
-
-		bz::deferredBuffers[i].map(bz::device.logicalDevice);
+		bz::deferredBuffers[i] = Buffer::Create(bz::device, {
+			.debugName = "Deferred uniform buffer",
+			.byteSize = sizeof(DeferredUBO),
+			.usage = Usage::UNIFORM_BUFFER,
+			.memory = Memory::UPLOAD
+		});
+		bz::deferredBuffers[i].Map(bz::device);
 	}
 }
 
@@ -216,28 +218,28 @@ void CreateRenderAttachments() {
 		.width = bz::swapchain.extent.width,
 		.height = bz::swapchain.extent.height,
 		.format = Format::D24_UNORM_S8_UINT,
-		.bindFlags = BindFlag::DEPTH_STENCIL | BindFlag::SHADER_RESOURCE
+		.usage = Usage::DEPTH_STENCIL | Usage::SHADER_RESOURCE
 	});
 
 	bz::albedo = Texture::Create(bz::device, {
 		.width = bz::swapchain.extent.width,
 		.height = bz::swapchain.extent.height,
 		.format = Format::RGBA8_UNORM,
-		.bindFlags = BindFlag::RENDER_TARGET | BindFlag::SHADER_RESOURCE
+		.usage = Usage::RENDER_TARGET | Usage::SHADER_RESOURCE
 	});
 
 	bz::normal = Texture::Create(bz::device, {
 		.width = bz::swapchain.extent.width,
 		.height = bz::swapchain.extent.height,
 		.format = Format::RGBA8_UNORM,
-		.bindFlags = BindFlag::RENDER_TARGET | BindFlag::SHADER_RESOURCE
+		.usage = Usage::RENDER_TARGET | Usage::SHADER_RESOURCE
 	});
 
 	bz::metallicRoughness = Texture::Create(bz::device, {
 		.width = bz::swapchain.extent.width,
 		.height = bz::swapchain.extent.height,
 		.format = Format::RGBA8_UNORM,
-		.bindFlags = BindFlag::RENDER_TARGET | BindFlag::SHADER_RESOURCE
+		.usage = Usage::RENDER_TARGET | Usage::SHADER_RESOURCE
 	});
 }
 
@@ -603,13 +605,11 @@ void CleanupVulkan() {
 	CleanupSwapchain();
 
 	for (int i = 0; i < arraysize(bz::uniformBuffers); i++) {
-		bz::uniformBuffers[i].unmap(bz::device.logicalDevice);
-		bz::uniformBuffers[i].destroy(bz::device.logicalDevice);
+		bz::uniformBuffers[i].Destroy(bz::device);
 	}
 
 	for (int i = 0; i < arraysize(bz::deferredBuffers); i++) {
-		bz::deferredBuffers[i].unmap(bz::device.logicalDevice);
-		bz::deferredBuffers[i].destroy(bz::device.logicalDevice);
+		bz::deferredBuffers[i].Destroy(bz::device);
 	}
 
 	for (int i = 0; i < arraysize(bz::renderFrames); i++) {
@@ -773,7 +773,7 @@ int main(int argc, char* argv[]) {
 
 	bz::overlay = new UIOverlay(window, bz::device, bz::swapchain.format, bz::depth.format, OverlayRender);
 
-	bz::skybox = Texture::CreateCubemap(bz::device, Format::RGBA8_UNORM, Usage::DEFAULT, BindFlag::SHADER_RESOURCE, {
+	bz::skybox = Texture::CreateCubemap(bz::device, Format::RGBA8_UNORM, Memory::DEFAULT, Usage::SHADER_RESOURCE, {
 		"assets/Skybox/right.jpg",
 		"assets/Skybox/left.jpg",
 		"assets/Skybox/top.jpg",
@@ -798,13 +798,13 @@ int main(int argc, char* argv[]) {
 		plane->images[1] = Texture::Create(bz::device, "assets/ParallaxTest/rocks_color_rgba.png", { 
 			.generateMipLevels = true,
 			.format = Format::RGBA8_SRGB,
-			.bindFlags = BindFlag::SHADER_RESOURCE
+			.usage = Usage::SHADER_RESOURCE
 		});
 
 		plane->images[2] = Texture::Create(bz::device, "assets/ParallaxTest/rocks_normal_height_rgba.png", { 
 			.generateMipLevels = true,
 			.format = Format::RGBA8_UNORM,
-			.bindFlags = BindFlag::SHADER_RESOURCE
+			.usage = Usage::SHADER_RESOURCE
 		});
 
 		plane->materials.push_back({

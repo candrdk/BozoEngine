@@ -30,9 +30,7 @@ UIOverlay::~UIOverlay() {
 		ImGui::DestroyContext();
 	}
 
-
-	drawDataBuffer.unmap(device.logicalDevice);
-	drawDataBuffer.destroy(device.logicalDevice);
+	drawDataBuffer.Destroy(device);
 
 	font.Destroy(device);
 	bindGroupLayout.Destroy(device);
@@ -51,7 +49,7 @@ void UIOverlay::InitializeVulkanResources() {
 		.width = (u32)texWidth,
 		.height = (u32)texHeight,
 		.format = Format::RGBA8_UNORM,
-		.bindFlags = BindFlag::SHADER_RESOURCE,
+		.usage = Usage::SHADER_RESOURCE,
 		.initialData = span<const u8>(fontData, uploadSize)
 	});
 
@@ -68,8 +66,15 @@ void UIOverlay::InitializeVulkanResources() {
 	// [  VkDeviceMemory  ]
 	// [     VkBuffer     ]
 	// [ vertex ] [ index ]
-	device.CreateBuffer(VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT, 1 << 20, &drawDataBuffer);
-	drawDataBuffer.map(device.logicalDevice);
+	drawDataBuffer = Buffer::Create(device, {
+		.debugName = "UI Overlay combined vertex/index buffer",
+		.byteSize = 1 << 20,
+		.usage = Usage::VERTEX_BUFFER | Usage::INDEX_BUFFER,
+		.memory = Memory::UPLOAD
+	});
+
+	drawDataBuffer.Map(device);
+
 	vertexBufferOffset = 0;
 	vertexBufferStart = (u8*)drawDataBuffer.mapped + vertexBufferOffset;
 	indexBufferOffset = drawDataBuffer.size - (drawDataBuffer.size >> 2);
@@ -175,8 +180,6 @@ void UIOverlay::Update() {
 		vertexDst += cmdList->VtxBuffer.Size;
 		indexDst += cmdList->IdxBuffer.Size;
 	}
-
-	VkCheck(drawDataBuffer.Flush(device.logicalDevice), "Failed to flush ui overlay draw data buffer to device memory");
 }
 
 void UIOverlay::Draw(VkCommandBuffer cmdBuffer, VkExtent2D extent, const VkRenderingAttachmentInfo& colorAttachment) {

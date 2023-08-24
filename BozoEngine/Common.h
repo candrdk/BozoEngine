@@ -54,3 +54,33 @@ template <typename T, size_t N>
 char(&ArraySizeHelper(T(&array)[N]))[N];
 
 #define arraysize(array) (sizeof(ArraySizeHelper(array)))
+
+// Scoped enum concept (enum class, class {enum} and struct{enum})
+template <typename T>
+concept scoped_enum = std::is_enum_v<T>
+&& not std::is_convertible_v<T, std::underlying_type_t<T>>;
+
+// Define bitwise operators for scoped enums: &, |, ^, ~, &=, |=
+template <scoped_enum E, typename underlying = std::underlying_type<E>::type>
+constexpr E operator&(E lhs, E rhs) { return static_cast<E>(static_cast<underlying>(lhs) & static_cast<underlying>(rhs)); }
+
+template <scoped_enum E, typename underlying = std::underlying_type<E>::type>
+constexpr E operator|(E lhs, E rhs) { return static_cast<E>(static_cast<underlying>(lhs) | static_cast<underlying>(rhs)); }
+
+template <scoped_enum E, typename underlying = std::underlying_type<E>::type>
+constexpr E operator^(E lhs, E rhs) { return static_cast<E>(static_cast<underlying>(lhs) ^ static_cast<underlying>(rhs)); }
+
+template <scoped_enum E, typename underlying = std::underlying_type<E>::type>
+constexpr E operator~(E v) { return static_cast<E>(~static_cast<underlying>(v)); }
+
+template <scoped_enum E, typename underlying = std::underlying_type<E>::type>
+constexpr E operator&=(E & lhs, E rhs) { lhs = static_cast<E>(static_cast<underlying>(lhs) & static_cast<underlying>(rhs)); return lhs; }
+
+template <scoped_enum E, typename underlying = std::underlying_type<E>::type>
+constexpr E operator|=(E & lhs, E rhs) { lhs = static_cast<E>(static_cast<underlying>(lhs) | static_cast<underlying>(rhs)); return lhs; }
+
+template <scoped_enum E, typename underlying = std::underlying_type<E>::type>
+constexpr E operator^=(E & lhs, E rhs) { lhs = static_cast<E>(static_cast<underlying>(lhs) ^ static_cast<underlying>(rhs)); return lhs; }
+
+template <scoped_enum E>
+constexpr bool HasFlag(E lhs, E rhs) { return (lhs & rhs) == rhs; }

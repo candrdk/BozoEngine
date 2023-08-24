@@ -66,8 +66,8 @@ GLTFModel::~GLTFModel() {
 		delete node;
 	}
 
-	vertices.destroy(device.logicalDevice);
-	indices.destroy(device.logicalDevice);
+	vertices.Destroy(device);
+	indices.Destroy(device);
 
 	for (Texture image : images) {
 		image.Destroy(device);
@@ -149,7 +149,7 @@ void GLTFModel::LoadImages(tinygltf::Model& model) {
 			.height = (u32)gltfImage.height,
 			.generateMipLevels = true,
 			.format = srgb ? Format::RGBA8_SRGB : Format::RGBA8_UNORM,
-			.bindFlags = BindFlag::SHADER_RESOURCE,
+			.usage = Usage::SHADER_RESOURCE,
 			.initialData = span<const u8>(buffer, bufferSize)
 		});
 	}
@@ -159,7 +159,7 @@ void GLTFModel::LoadImages(tinygltf::Model& model) {
 		.height = 1,
 		.generateMipLevels = false,
 		.format = Format::RGBA8_UNORM,
-		.bindFlags = BindFlag::SHADER_RESOURCE,
+		.usage = Usage::SHADER_RESOURCE,
 		.initialData = { 0xFF, 0x00, 0xFF, 0xFF }
 	});
 }
@@ -367,12 +367,31 @@ void GLTFModel::LoadGLTFFile(const char* filename) {
 	size_t vertexBufferSize = vertexBuffer.size() * sizeof(Vertex);
 	size_t indexBufferSize = indexBuffer.size() * sizeof(u32);
 
-	Buffer vertexStaging, indexStaging;
-	device.CreateBuffer(VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, vertexBufferSize, &vertexStaging, vertexBuffer.data());
-	device.CreateBuffer(VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, indexBufferSize, &indexStaging, indexBuffer.data());
+	Buffer vertexStaging = Buffer::Create(device, {
+		.debugName = "glTF vertex staging",
+		.usage = Usage::TRANSFER_SRC,
+		.memory = Memory::UPLOAD,
+		.initialData = span((const u8*)vertexBuffer.data(), vertexBufferSize)
+	});
 
-	device.CreateBuffer(VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, vertexBufferSize, &vertices);
-	device.CreateBuffer(VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, indexBufferSize, &indices);
+	Buffer indexStaging = Buffer::Create(device, {
+		.debugName = "glTF index staging",
+		.usage = Usage::TRANSFER_SRC,
+		.memory = Memory::UPLOAD,
+		.initialData = span((const u8*)indexBuffer.data(), indexBufferSize)
+	});
+
+	vertices = Buffer::Create(device, {
+		.debugName = "glTF vertex buffer",
+		.byteSize = vertexBufferSize,
+		.usage = Usage::VERTEX_BUFFER | Usage::TRANSFER_DST
+	});
+
+	indices = Buffer::Create(device, {
+		.debugName = "glTF vertex buffer",
+		.byteSize = indexBufferSize,
+		.usage = Usage::INDEX_BUFFER | Usage::TRANSFER_DST
+	});
 
 	VkBufferCopy copyRegion = {};
 	VkCommandBuffer copyCmd = device.CreateCommandBuffer(VK_COMMAND_BUFFER_LEVEL_PRIMARY, true);
@@ -385,6 +404,6 @@ void GLTFModel::LoadGLTFFile(const char* filename) {
 
 	device.FlushCommandBuffer(copyCmd, device.graphicsQueue);
 
-	vertexStaging.destroy(device.logicalDevice);
-	indexStaging.destroy(device.logicalDevice);
+	vertexStaging.Destroy(device);
+	indexStaging.Destroy(device);
 }

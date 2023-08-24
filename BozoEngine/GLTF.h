@@ -3,6 +3,7 @@
 
 #include "Device.h"
 #include "Texture.h"
+#include "Buffer.h"
 #include "BindGroup.h"
 
 #pragma warning(push, 0)
