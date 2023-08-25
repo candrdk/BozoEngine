@@ -2,6 +2,15 @@
 
 #include <spirv_reflect.h>
 
+static ShaderStage ConvertShaderStage(VkShaderStageFlags value) {
+    ShaderStage stages = ShaderStage::NONE;
+
+    if (value & VK_SHADER_STAGE_VERTEX_BIT)     stages |= ShaderStage::VERTEX;
+    if (value & VK_SHADER_STAGE_FRAGMENT_BIT)   stages |= ShaderStage::FRAGMENT;
+
+    return stages;
+}
+
 // TODO: move this to some util header
 static std::vector<u8> ReadFile(const char* path) {
     FILE* fp = fopen(path, "rb");
@@ -26,7 +35,7 @@ Shader Shader::Create(const Device& device, const char* path, const char* entry)
     SpvReflectShaderModule spvModule;
     SpvReflectResult res = spvReflectCreateShaderModule(spv.size(), spv.data(), &spvModule);
 
-    Shader shader = { .stage = (VkShaderStageFlagBits)spvModule.shader_stage, .pEntry = entry };
+    Shader shader = { .stage = VkShaderStageFlags(spvModule.shader_stage), .pEntry = entry };
 
     VkShaderModuleCreateInfo createInfo = {
         .sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
@@ -39,19 +48,16 @@ Shader Shader::Create(const Device& device, const char* path, const char* entry)
     Check(spvModule.descriptor_set_count <= 4, "Only 4 descriptor sets can be bound at a time");
     for (u32 i = 0; i < spvModule.descriptor_binding_count; i++) {
         SpvReflectDescriptorBinding descriptorBinding = spvModule.descriptor_bindings[i];
-        shader.shaderBindings.push_back({
-            .slot = descriptorBinding.set,
-            .desc = {
-                .binding = descriptorBinding.binding,
-                .type = (u32)descriptorBinding.descriptor_type,
-                .stages = (VkShaderStageFlags)shader.stage
-            }
+        shader.shaderBindings[descriptorBinding.set].push_back({
+            .binding = descriptorBinding.binding,
+            .type = (u32)descriptorBinding.descriptor_type,
+            .stages = ConvertShaderStage(shader.stage)
         });
     }
 
     if (spvModule.push_constant_block_count > 0) {
         shader.pushConstants = {
-            .stageFlags = (VkShaderStageFlags)shader.stage,
+            .stageFlags = VkShaderStageFlags(shader.stage),
             .offset = spvModule.push_constant_blocks->offset,
             .size = spvModule.push_constant_blocks->size
         };
@@ -69,7 +75,7 @@ void Shader::Destroy(const Device& device) {
 VkPipelineShaderStageCreateInfo Shader::GetShaderStageCreateInfo() const {
     return {
         .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
-        .stage = stage,
+        .stage = (VkShaderStageFlagBits)ConvertShaderStage(stage),
         .module = module,
         .pName = pEntry
     };

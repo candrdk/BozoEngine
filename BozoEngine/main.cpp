@@ -425,10 +425,10 @@ void CreateRenderFrames() {
 
 void CreateBindGroupLayouts() {
 	bz::materialLayout = BindGroupLayout::Create(bz::device, {
-		{.binding = 0, .type = Binding::TEXTURE, .stages = Binding::FRAGMENT },
-		{.binding = 1, .type = Binding::TEXTURE, .stages = Binding::FRAGMENT },
-		{.binding = 2, .type = Binding::TEXTURE, .stages = Binding::FRAGMENT },
-		{.binding = 3, .type = Binding::TEXTURE, .stages = Binding::FRAGMENT }
+		{.binding = 0, .type = Binding::TEXTURE, .stages = ShaderStage::FRAGMENT },
+		{.binding = 1, .type = Binding::TEXTURE, .stages = ShaderStage::FRAGMENT },
+		{.binding = 2, .type = Binding::TEXTURE, .stages = ShaderStage::FRAGMENT },
+		{.binding = 3, .type = Binding::TEXTURE, .stages = ShaderStage::FRAGMENT }
 	});
 
 	bz::globalsLayout = BindGroupLayout::Create(bz::device, {
@@ -436,7 +436,7 @@ void CreateBindGroupLayouts() {
 	});
 
 	bz::skyboxLayout = BindGroupLayout::Create(bz::device, {
-		{.binding = 0, .type = Binding::TEXTURE, .stages = Binding::FRAGMENT }
+		{.binding = 0, .type = Binding::TEXTURE, .stages = ShaderStage::FRAGMENT }
 	});
 }
 

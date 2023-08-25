@@ -1,5 +1,14 @@
 #include "BindGroup.h"
 
+static VkShaderStageFlags ConvertShaderStage(ShaderStage value) {
+    VkShaderStageFlags stages = 0;
+
+    if (HasFlag(value, ShaderStage::VERTEX))     stages |= VK_SHADER_STAGE_VERTEX_BIT;
+    if (HasFlag(value, ShaderStage::FRAGMENT))   stages |= VK_SHADER_STAGE_FRAGMENT_BIT;
+
+    return stages;
+}
+
 BindGroupLayout BindGroupLayout::Create(const Device& device, std::vector<Binding> bindings) {
     std::vector<VkDescriptorSetLayoutBinding> descriptorBindings;
     for (u32 i = 0; i < bindings.size(); i++) {
@@ -7,7 +16,7 @@ BindGroupLayout BindGroupLayout::Create(const Device& device, std::vector<Bindin
             .binding = bindings[i].binding,
             .descriptorType = (VkDescriptorType)bindings[i].type,
             .descriptorCount = bindings[i].count,
-            .stageFlags = bindings[i].stages
+            .stageFlags = ConvertShaderStage(bindings[i].stages)
         });
     }
 

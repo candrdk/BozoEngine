@@ -5,9 +5,9 @@ static VkBufferUsageFlags ParseUsageFlags(Usage value) {
 
 	if (HasFlag(value, Usage::TRANSFER_SRC))		usage |= VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
 	if (HasFlag(value, Usage::TRANSFER_DST))		usage |= VK_BUFFER_USAGE_TRANSFER_DST_BIT;
-	if (HasFlag(value, Usage::VERTEX_BUFFER))	usage |= VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
+	if (HasFlag(value, Usage::VERTEX_BUFFER))		usage |= VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
 	if (HasFlag(value, Usage::INDEX_BUFFER))		usage |= VK_BUFFER_USAGE_INDEX_BUFFER_BIT;
-	if (HasFlag(value, Usage::UNIFORM_BUFFER))	usage |= VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT;
+	if (HasFlag(value, Usage::UNIFORM_BUFFER))		usage |= VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT;
 
 	return usage;
 }

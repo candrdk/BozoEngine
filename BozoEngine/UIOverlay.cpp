@@ -54,7 +54,7 @@ void UIOverlay::InitializeVulkanResources() {
 	});
 
 	bindGroupLayout = BindGroupLayout::Create(device, {
-		{.binding = 0, .type = Binding::TEXTURE, .stages = Binding::FRAGMENT }
+		{.binding = 0, .type = Binding::TEXTURE, .stages = ShaderStage::FRAGMENT }
 	});
 
 	bindGroup = BindGroup::Create(device, bindGroupLayout, {

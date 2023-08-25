@@ -4,7 +4,7 @@
 #include "Device.h"
 
 struct TextureDesc {
-	enum class Type : u32 {
+	enum class Type {
 		TEXTURE1D,
 		TEXTURE2D,
 		TEXTURE3D,

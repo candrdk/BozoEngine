@@ -1,30 +1,16 @@
 #include "Pipeline.h"
 
-static bool TryUpdateShaderBindingStage(std::vector<ShaderBinding> existingBindings, ShaderBinding newBinding) {
-    for (ShaderBinding& binding : existingBindings) {
-        if (binding.desc.binding == newBinding.desc.binding && binding.slot == newBinding.slot) {
-            Check(binding.desc.type == newBinding.desc.type, "Overlapping descriptors when creating pipeline");
-            binding.desc.stages |= newBinding.desc.stages;
-            return true;
-        }
-    }
-    return false;
-}
-
-static std::vector<ShaderBinding> MergeShaderBindings(const Device& device, span<const Shader> shaders) {
-    std::vector<ShaderBinding> mergedShaderBindings{};
-
-    for (const Shader& shader : shaders) {
-        for (const ShaderBinding& shaderBinding : shader.shaderBindings) {
-            if (TryUpdateShaderBindingStage(mergedShaderBindings, shaderBinding)) {
-                continue;
+static void MergeShaderBindings(std::vector<Binding>& bindings, const std::vector<Binding>& shaderBindings) {
+    for (const Binding& shaderBinding : shaderBindings) {
+        for (Binding& binding : bindings) {
+            if ((binding.binding == shaderBinding.binding) && (binding.type == shaderBinding.type)) {
+                binding.stages |= shaderBinding.stages;
             }
-
-            mergedShaderBindings.push_back(shaderBinding);
+            else {
+                bindings.push_back(shaderBinding);
+            }
         }
     }
-
-    return mergedShaderBindings;
 }
 
 static VkPushConstantRange MergePushConstants(span<const Shader> shaders) {
@@ -46,26 +32,6 @@ static VkPushConstantRange MergePushConstants(span<const Shader> shaders) {
     }
 
     return mergedPushConstants;
-}
-
-static std::vector<BindGroupLayout> CreatePipelineBindGroupLayouts(const Device& device, std::vector<ShaderBinding> shaderBindings) {
-    std::vector<Binding> bindings[4];
-    u32 maxBindGroupSlot = 0;
-    for (u32 i = 0; i < arraysize(bindings); i++) {
-        for (const ShaderBinding& shaderBinding : shaderBindings) {
-            if (shaderBinding.slot == i) {
-                bindings[i].push_back(shaderBinding.desc);
-                maxBindGroupSlot = i + 1;
-            }
-        }
-    }
-
-    std::vector<BindGroupLayout> bindGroupLayouts(maxBindGroupSlot);
-    for (u32 i = 0; i < maxBindGroupSlot; i++) {
-        bindGroupLayouts[i] = BindGroupLayout::Create(device, bindings[i]);
-    }
-
-    return bindGroupLayouts;
 }
 
 static VkPipelineLayout CreatePipelineLayout(const Device& device, span<const BindGroupLayout> bindGroupLayouts, VkPushConstantRange* pushConstants) {
@@ -107,7 +73,7 @@ static VkPipeline CreatePipeline(const Device& device, VkPipelineLayout pipeline
     for (const Shader& shader : shaders) {
         shaderStageCreateInfos.push_back({
             .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
-            .stage = shader.stage,
+            .stage = (VkShaderStageFlagBits)shader.stage,
             .module = shader.module,
             .pName = shader.pEntry,
             .pSpecializationInfo = &specializationInfo
@@ -216,10 +182,15 @@ Pipeline Pipeline::Create(const Device& device, VkPipelineBindPoint bindPoint, c
     //
     //       Idk what the best solution is here, so just going to force the user to specify bindgroup layouts for now.
     if (bindGroupLayouts.size() == 0) {
-        //Check(bindGroupLayouts.size() > 0, "Generating bindgroup layouts from shader reflection data is disabled until a cleaner interface is figured out. User code should manually create bindgroup layouts that match the shaders and pass them in PipelineDesc.");
+        Check(bindGroupLayouts.size() > 0, "Generating bindgroup layouts from shader reflection data is disabled until a cleaner interface is figured out. User code should manually create bindgroup layouts that match the shaders and pass them in PipelineDesc.");
 
-        std::vector<ShaderBinding> mergedShaderBindings = MergeShaderBindings(device, desc.shaders);
-        bindGroupLayouts = CreatePipelineBindGroupLayouts(device, mergedShaderBindings);
+        for (u32 slot = 0; slot < arraysize(Shader::shaderBindings); slot++) {
+            std::vector<Binding> bindings;
+            for (const Shader& shader : desc.shaders) {
+                MergeShaderBindings(bindings, shader.shaderBindings[slot]);
+            }
+            bindGroupLayouts.push_back(BindGroupLayout::Create(device, bindings));
+        }
     }
 
     VkPushConstantRange pushConstants = MergePushConstants(desc.shaders);

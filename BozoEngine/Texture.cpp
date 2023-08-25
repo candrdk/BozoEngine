@@ -77,11 +77,11 @@ static constexpr u32 FormatStride(Format format) {
 }
 
 static constexpr bool HasDepth(Format format) {
-	return format == Format::D24_UNORM_S8_UINT;
+	return HasFlag(format, Format::D24_UNORM_S8_UINT);
 }
 
 static constexpr bool HasStencil(Format format) {
-	return format == Format::D24_UNORM_S8_UINT;
+	return HasFlag(format, Format::D24_UNORM_S8_UINT);
 }
 
 static VkImageView CreateView(const Device& device, VkImage image, VkFormat format, TextureDesc::Type type, VkImageAspectFlags aspect, u32 firstMip = 0, u32 mipCount = -1, u32 firstLayer = 0, u32 layerCount = -1) {
