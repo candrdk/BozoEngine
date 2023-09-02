@@ -2,7 +2,7 @@
 Small `Vulkan 1.3` engine written in my spare time. The goal is to implement a real-time physically based deferred renderer along with some basic rendering techniques.
 
 ## Why
-Beyond being fun? To learn vulkan, graphics programming, and the theory behind modern rendering techniques.
+Beyond being fun? To learn vulkan, graphics programming, and the theory behind modern(ish) rendering techniques.
 
 ## Features
 - Cascaded shadow mapping (still needs a bit of work). Based on the implementation described in Eric Lengyels FGED2.
