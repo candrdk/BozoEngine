@@ -2,17 +2,18 @@
 What kinda bozo would try to write an engine from scratch?
 
 ## What
-Small `Vulkan 1.3` hobby engine/renderer written in `c++20` for Windows. The goal is to implement a very basic physically based deferred renderer along with some basic rendering techniques.
+Small `Vulkan 1.3` engine written in my spare time. The goal is to implement a real-time physically based deferred renderer along with some basic rendering techniques.
 
 ## Why
-To learn vulkan, graphics programming, and the theory behind modern rendering techniques.
+Beyond being fun? To learn vulkan, graphics programming, and the theory behind modern rendering techniques.
 
 ## Features
-- Basic deferred rendering of lights. Albedo, normal, depth, metal/roughness are all written to gbuffer. Material parameters like roughness are not used yet.
+- Cascaded shadow mapping (still needs a bit of work). Based on the implementation described in Eric Lengyels FGED2.
+- Basic deferred renderer. Albedo, normal, depth, metal/roughness are all written to gbuffer. Material parameters like roughness are not used yet.
 - Implementations of naive parallax mapping, steep parallax mapping and parallax occlusion mapping.
-- Cubemap skybox.
 - Reversed depth buffering for better precision.
-- Basic point lights + directional lights (no shadows yet).
+- Cubemapped skybox.
+- Basic point lights + directional lights.
 - Very basic support for rendering glTF 2.0 models. Only glTF features used by the sample assets are implemented.
 - Small custom [Dear ImGui](https://github.com/ocornut/imgui) vulkan backend for use with dynamic rendering.
 - *Very* basic spir-v reflection of shaders for pipeline layout generation. Not used atm, and not sure if I'll keep it around, but the skeleton of an implementation is there.
