@@ -18,6 +18,7 @@ struct PipelineDesc {
         } attachments;
 
         struct RasterizationState {
+            VkBool32 depthClampEnable = VK_FALSE;
             VkCullModeFlags cullMode;
             VkFrontFace frontFace;
         } rasterization;

@@ -96,7 +96,7 @@ static VkPipeline CreatePipeline(const Device& device, VkPipelineLayout pipeline
 
     VkPipelineRasterizationStateCreateInfo rasterizationInfo = {
         .sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
-        .depthClampEnable = VK_FALSE,		// depth clamp discards fragments outside the near/far planes. Usefull for shadow maps, requires enabling a GPU feature.
+        .depthClampEnable = desc.rasterization.depthClampEnable,		// depth clamp discards fragments outside the near/far planes. Usefull for shadow maps, requires enabling a GPU feature.
         .rasterizerDiscardEnable = VK_FALSE,
         .polygonMode = VK_POLYGON_MODE_FILL,
         .cullMode = desc.rasterization.cullMode,
@@ -136,12 +136,15 @@ static VkPipeline CreatePipeline(const Device& device, VkPipelineLayout pipeline
         colorBlendStateInfo.pAttachments = emptyBlendStates.data();
     }
 
+    // TODO: these should be set using HasDepth and HasStencil once we start using Format enum in PipelineDesc instead of raw vulkan formats...
+    VkFormat depthFormat = desc.attachments.depthStencilFormat;
+    VkFormat stencilFormat = desc.attachments.depthStencilFormat == VK_FORMAT_D24_UNORM_S8_UINT ? VK_FORMAT_D24_UNORM_S8_UINT : VK_FORMAT_UNDEFINED;
     VkPipelineRenderingCreateInfo renderingCreateInfo = {
         .sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO,
         .colorAttachmentCount = (u32)desc.attachments.formats.size(),
         .pColorAttachmentFormats = desc.attachments.formats.data(),
-        .depthAttachmentFormat = desc.attachments.depthStencilFormat,
-        .stencilAttachmentFormat = desc.attachments.depthStencilFormat
+        .depthAttachmentFormat = depthFormat,
+        .stencilAttachmentFormat = stencilFormat
     };
 
     VkGraphicsPipelineCreateInfo pipelineInfo = {

@@ -13,6 +13,7 @@
 class GLTFModel {
 public:
 
+	// TODO: slim down vertices. We for example dont need vertex colors
 	struct Vertex {
 		glm::vec3 pos;
 		glm::vec3 normal;
@@ -66,7 +67,7 @@ public:
 	GLTFModel(Device& device, BindGroupLayout materialLayout, const char* path);
 	~GLTFModel();
 
-	void Draw(VkCommandBuffer cmdBuffer, VkPipelineLayout pipelineLayout);
+	void Draw(VkCommandBuffer cmdBuffer, VkPipelineLayout pipelineLayout, bool bindMaterial = true);
 
 private:
 	struct PushConstants {
@@ -76,7 +77,7 @@ private:
 		float parallaxScale;
 	};
 
-	void DrawNode(VkCommandBuffer cmdBuffer, VkPipelineLayout pipelineLayout, Node* node);
+	void DrawNode(VkCommandBuffer cmdBuffer, VkPipelineLayout pipelineLayout, Node* node, bool bindMaterial);
 
 	void LoadImages(tinygltf::Model& model);
 

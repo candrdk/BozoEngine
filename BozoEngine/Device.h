@@ -20,7 +20,8 @@ enum class Format {
 	UNDEFINED			= 1 << 0,
 	RGBA8_UNORM			= 1 << 1,
 	RGBA8_SRGB			= 1 << 2,
-	D24_UNORM_S8_UINT	= 1 << 3
+	D24_UNORM_S8_UINT	= 1 << 3,
+	D32_SFLOAT			= 1 << 4
 };
 
 enum class Usage {

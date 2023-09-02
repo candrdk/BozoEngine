@@ -74,17 +74,17 @@ GLTFModel::~GLTFModel() {
 	}
 }
 
-void GLTFModel::Draw(VkCommandBuffer cmdBuffer, VkPipelineLayout pipelineLayout) {
+void GLTFModel::Draw(VkCommandBuffer cmdBuffer, VkPipelineLayout pipelineLayout, bool bindMaterial) {
 	VkDeviceSize offsets[] = { 0 };
 	vkCmdBindVertexBuffers(cmdBuffer, 0, 1, &vertices.buffer, offsets);
 	vkCmdBindIndexBuffer(cmdBuffer, indices.buffer, 0, VK_INDEX_TYPE_UINT32);
 
 	for (const auto& node : nodes) {
-		DrawNode(cmdBuffer, pipelineLayout, node);
+		DrawNode(cmdBuffer, pipelineLayout, node, bindMaterial);
 	}
 }
 
-void GLTFModel::DrawNode(VkCommandBuffer cmdBuffer, VkPipelineLayout pipelineLayout, Node* node) {
+void GLTFModel::DrawNode(VkCommandBuffer cmdBuffer, VkPipelineLayout pipelineLayout, Node* node, bool bindMaterial) {
 	if (node->mesh.primitives.size() > 0) {
 		// Calculate primitive matrix transform by traversing the node hiearchy to the root
 		glm::mat4 nodeTransform = node->transform;
@@ -97,7 +97,8 @@ void GLTFModel::DrawNode(VkCommandBuffer cmdBuffer, VkPipelineLayout pipelineLay
 		for (const Primitive& primitive : node->mesh.primitives) {
 			if (primitive.indexCount > 0) {
 				// Bind the descriptor for the current primitives' material
-				vkCmdBindDescriptorSets(cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 1, 1, &materials[primitive.materialIndex].bindGroup.descriptorSet, 0, nullptr);
+				if (bindMaterial)
+					vkCmdBindDescriptorSets(cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 1, 1, &materials[primitive.materialIndex].bindGroup.descriptorSet, 0, nullptr);
 
 				PushConstants p = {
 					.model = nodeTransform,
@@ -113,7 +114,7 @@ void GLTFModel::DrawNode(VkCommandBuffer cmdBuffer, VkPipelineLayout pipelineLay
 	}
 
 	for (const auto& child : node->children) {
-		DrawNode(cmdBuffer, pipelineLayout, child);
+		DrawNode(cmdBuffer, pipelineLayout, child, bindMaterial);
 	}
 }
 

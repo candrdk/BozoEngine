@@ -190,6 +190,7 @@ static VkDevice CreateLogicalDevice(VkPhysicalDevice physicalDevice, u32 queueFa
 		.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2,
 		.pNext = &features11,
 		.features = {
+			.depthClamp = VK_TRUE,
 			.samplerAnisotropy = VK_TRUE
 		}
 	};

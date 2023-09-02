@@ -57,6 +57,7 @@ static constexpr VkFormat ConvertFormat(Format format) {
 	case Format::RGBA8_UNORM:		return VK_FORMAT_R8G8B8A8_UNORM;
 	case Format::RGBA8_SRGB:		return VK_FORMAT_R8G8B8A8_SRGB;
 	case Format::D24_UNORM_S8_UINT: return VK_FORMAT_D24_UNORM_S8_UINT;
+	case Format::D32_SFLOAT:		return VK_FORMAT_D32_SFLOAT;
 
 	default: return VK_FORMAT_UNDEFINED;
 	}
@@ -67,6 +68,7 @@ static constexpr u32 FormatStride(Format format) {
 	case Format::RGBA8_UNORM:
 	case Format::RGBA8_SRGB:
 	case Format::D24_UNORM_S8_UINT:
+	case Format::D32_SFLOAT:
 		return 4;
 
 	default:
@@ -77,14 +79,25 @@ static constexpr u32 FormatStride(Format format) {
 }
 
 static constexpr bool HasDepth(Format format) {
-	return HasFlag(format, Format::D24_UNORM_S8_UINT);
+	switch (format) {
+	case Format::D24_UNORM_S8_UINT:
+	case Format::D32_SFLOAT:
+		return true;
+	default:
+		return false;
+	}
 }
 
 static constexpr bool HasStencil(Format format) {
-	return HasFlag(format, Format::D24_UNORM_S8_UINT);
+	switch (format) {
+	case Format::D24_UNORM_S8_UINT:
+		return true;
+	default:
+		return false;
+	}
 }
 
-static VkImageView CreateView(const Device& device, VkImage image, VkFormat format, TextureDesc::Type type, VkImageAspectFlags aspect, u32 firstMip = 0, u32 mipCount = -1, u32 firstLayer = 0, u32 layerCount = -1) {
+static VkImageView CreateView(const Device& device, VkImage image, VkFormat format, TextureDesc::Type type, VkImageAspectFlags aspect, u32 firstLayer, u32 layerCount, u32 firstMip, u32 mipCount) {
 	VkImageViewCreateInfo viewInfo = {
 		.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
 		.image = image,
@@ -101,10 +114,10 @@ static VkImageView CreateView(const Device& device, VkImage image, VkFormat form
 
 	// TODO: Lot of special cases to handle here once we take texture arrays into account
 	switch (type) {
-	case TextureDesc::Type::TEXTURE1D: viewInfo.viewType = VK_IMAGE_VIEW_TYPE_1D; break;
-	case TextureDesc::Type::TEXTURE2D: viewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D; break;
-	case TextureDesc::Type::TEXTURE3D: viewInfo.viewType = VK_IMAGE_VIEW_TYPE_3D; break;
-	case TextureDesc::Type::TEXTURECUBE: viewInfo.viewType = VK_IMAGE_VIEW_TYPE_CUBE; break;
+	case TextureDesc::Type::TEXTURE2D:		viewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;		 break;
+	case TextureDesc::Type::TEXTURE2DARRAY:	viewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D_ARRAY; break;
+	case TextureDesc::Type::TEXTURE3D:		viewInfo.viewType = VK_IMAGE_VIEW_TYPE_3D;		 break;
+	case TextureDesc::Type::TEXTURECUBE:	viewInfo.viewType = VK_IMAGE_VIEW_TYPE_CUBE;	 break;
 	}
 
 	VkImageView view;
@@ -114,9 +127,12 @@ static VkImageView CreateView(const Device& device, VkImage image, VkFormat form
 }
 
 void Texture::Destroy(const Device& device) {
-	if (rtv) vkDestroyImageView(device.logicalDevice, rtv, nullptr);
 	if (srv) vkDestroyImageView(device.logicalDevice, srv, nullptr);
-	if (dsv) vkDestroyImageView(device.logicalDevice, dsv, nullptr);
+
+	for (u32 layer = 0; layer < layerCount; layer++) {
+		if (rtv[layer]) vkDestroyImageView(device.logicalDevice, rtv[layer], nullptr);
+		if (dsv[layer]) vkDestroyImageView(device.logicalDevice, dsv[layer], nullptr);
+	}
 
 	vkDestroySampler(device.logicalDevice, sampler, nullptr);
 	vkDestroyImage(device.logicalDevice, image, nullptr);
@@ -196,7 +212,8 @@ Texture Texture::Create(Device& device, const TextureDesc&& desc) {
 		.layout = ParseImageLayout(desc.usage),
 		.width = desc.width,
 		.height = desc.height,
-		.mipLevels = desc.generateMipLevels ? u32(std::floor(std::log2(std::max(desc.width, desc.height))) + 1) : desc.mipLevels
+		.mipLevels = desc.generateMipLevels ? u32(std::floor(std::log2(std::max(desc.width, desc.height))) + 1) : desc.mipLevels,
+		.layerCount = desc.arrayLayers
 	};
 
 	VkImageCreateInfo imageInfo = {
@@ -208,7 +225,7 @@ Texture Texture::Create(Device& device, const TextureDesc&& desc) {
 			.depth = desc.depth
 		},
 		.mipLevels = texture.mipLevels,
-		.arrayLayers = desc.arrayLayers,
+		.arrayLayers = texture.layerCount,
 		.samples = (VkSampleCountFlagBits)desc.samples,
 		.tiling = VK_IMAGE_TILING_OPTIMAL,
 		.usage = ParseImageUsage(desc.usage)		// Parse usage (shader_resource -> sampled, rendertarget -> attachmemt, etc)
@@ -219,16 +236,18 @@ Texture Texture::Create(Device& device, const TextureDesc&& desc) {
 	};
 
 	switch (desc.type) {
-	case TextureDesc::Type::TEXTURE1D:	 imageInfo.imageType = VK_IMAGE_TYPE_1D; break;
-	case TextureDesc::Type::TEXTURE2D:	 imageInfo.imageType = VK_IMAGE_TYPE_2D; break;
-	case TextureDesc::Type::TEXTURE3D:	 imageInfo.imageType = VK_IMAGE_TYPE_3D; break;
-	case TextureDesc::Type::TEXTURECUBE: imageInfo.imageType = VK_IMAGE_TYPE_2D; break;
+	case TextureDesc::Type::TEXTURE2D:
+	case TextureDesc::Type::TEXTURE2DARRAY:
+	case TextureDesc::Type::TEXTURECUBE:
+		imageInfo.imageType = VK_IMAGE_TYPE_2D; break;
+	case TextureDesc::Type::TEXTURE3D:
+		imageInfo.imageType = VK_IMAGE_TYPE_3D; break;
 	}
 
 	// TODO: is this check appropriate? Are more checks needed?
 	if (desc.type == TextureDesc::Type::TEXTURECUBE) {
 		imageInfo.flags |= VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT;
-		Check(desc.arrayLayers == 6, "Cubemaps must have 6 layers! Array textures aren't supported yet.");
+		Check(texture.layerCount == 6, "Cubemaps must have 6 layers! Array textures aren't supported yet.");
 	}
 
 	if (desc.memory == Memory::DEFAULT) {
@@ -261,7 +280,7 @@ Texture Texture::Create(Device& device, const TextureDesc&& desc) {
 
 		std::vector<VkBufferImageCopy> bufferCopyRegions;
 		u32 copyOffset = 0;
-		for (u32 layer = 0; layer < desc.arrayLayers; layer++) {
+		for (u32 layer = 0; layer < texture.layerCount; layer++) {
 			u32 width  = imageInfo.extent.width;
 			u32 height = imageInfo.extent.height;
 			u32 depth  = imageInfo.extent.depth;
@@ -388,15 +407,23 @@ Texture Texture::Create(Device& device, const TextureDesc&& desc) {
 		stagingBuffer.Destroy(device);
 	}
 
-	// Create image views
+	// shader resource views
 	if (HasFlag(desc.usage, Usage::SHADER_RESOURCE)) {
-		texture.srv = CreateView(device, texture.image, texture.format, desc.type, HasDepth(desc.format) ? VK_IMAGE_ASPECT_DEPTH_BIT : VK_IMAGE_ASPECT_COLOR_BIT);
+		VkImageAspectFlags aspect = HasDepth(desc.format) ? VK_IMAGE_ASPECT_DEPTH_BIT : VK_IMAGE_ASPECT_COLOR_BIT;
+		texture.srv = CreateView(device, texture.image, texture.format, desc.type, aspect, 0, -1, 0, -1);
 	}
+
+	// Render target views. As each layer is rendered to individually, we create a texture2d view for each layer
 	if (HasFlag(desc.usage, Usage::RENDER_TARGET)) {
-		texture.rtv = CreateView(device, texture.image, texture.format, desc.type, VK_IMAGE_ASPECT_COLOR_BIT);
+		for (u32 layer = 0; layer < texture.layerCount; layer++) {
+			texture.rtv[layer] = CreateView(device, texture.image, texture.format, TextureDesc::Type::TEXTURE2D, VK_IMAGE_ASPECT_COLOR_BIT, layer, 1, 0, 1);
+		}
 	}
 	if (HasFlag(desc.usage, Usage::DEPTH_STENCIL)) {
-		texture.dsv = CreateView(device, texture.image, texture.format, desc.type, VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT);
+		VkImageAspectFlags aspect = VK_IMAGE_ASPECT_DEPTH_BIT | (HasStencil(desc.format) ? VK_IMAGE_ASPECT_STENCIL_BIT : 0);
+		for (u32 layer = 0; layer < texture.layerCount; layer++) {
+			texture.dsv[layer] = CreateView(device, texture.image, texture.format, TextureDesc::Type::TEXTURE2D, aspect, layer, 1, 0, 1);
+		}
 	}
 
 	VkSamplerCreateInfo samplerInfo = {

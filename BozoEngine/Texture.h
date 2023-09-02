@@ -5,10 +5,10 @@
 
 struct TextureDesc {
 	enum class Type {
-		TEXTURE1D,
 		TEXTURE2D,
+		TEXTURE2DARRAY,
 		TEXTURE3D,
-		TEXTURECUBE		// TODO: kind of the odd one out in this enum, but fine to keep it here for now?
+		TEXTURECUBE
 	} type = Type::TEXTURE2D;
 
 	u32 width;
@@ -37,10 +37,12 @@ struct Texture {
 	u32 width;
 	u32 height;
 	u32 mipLevels;
+	u32 layerCount;
 
-	VkImageView rtv = VK_NULL_HANDLE;
 	VkImageView srv = VK_NULL_HANDLE;
-	VkImageView dsv = VK_NULL_HANDLE;
+	// Maximum of 8 layers
+	VkImageView rtv[8] = {};
+	VkImageView dsv[8] = {};
 
 	struct Binding {
 		u32 binding;
@@ -51,10 +53,10 @@ struct Texture {
 		return { binding, sampler, srv, VK_IMAGE_LAYOUT_READ_ONLY_OPTIMAL };
 	}
 
-	VkRenderingAttachmentInfo GetAttachmentInfo() const {
+	VkRenderingAttachmentInfo GetAttachmentInfo(u32 layer = 0) const {
 		return {
 			.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
-			.imageView = dsv ? dsv : rtv,
+			.imageView = dsv[layer] ? dsv[layer] : rtv[layer],
 			.imageLayout = layout,
 			.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
 			.storeOp = srv ? VK_ATTACHMENT_STORE_OP_STORE : VK_ATTACHMENT_STORE_OP_DONT_CARE

@@ -328,6 +328,8 @@
     <None Include="shaders\deferred.vert.glsl" />
     <None Include="shaders\offscreen.frag.glsl" />
     <None Include="shaders\offscreen.vert.glsl" />
+    <None Include="shaders\shadowMap.frag.glsl" />
+    <None Include="shaders\shadowMap.vert.glsl" />
     <None Include="shaders\skybox.frag.glsl" />
     <None Include="shaders\skybox.vert.glsl" />
     <None Include="shaders\uioverlay.frag.glsl" />
