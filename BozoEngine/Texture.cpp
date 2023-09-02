@@ -188,7 +188,7 @@ Texture Texture::CreateCubemap(Device& device, Format format, Memory memory, Usa
 }
 
 // TODO: handle when image has more or fewer channels than 4 (i.e. rgb textures w/o alpha)
-Texture Texture::Create(Device& device, const char* file, TextureDesc&& desc) {
+Texture Texture::Create(const Device& device, const char* file, TextureDesc&& desc) {
 	stbi_set_flip_vertically_on_load(true);
 	i32 texWidth, texHeight, channels;
 	stbi_uc* buffer = stbi_load(file, &texWidth, &texHeight, &channels, STBI_rgb_alpha);
@@ -206,7 +206,7 @@ Texture Texture::Create(Device& device, const char* file, TextureDesc&& desc) {
 	return texture;
 }
 
-Texture Texture::Create(Device& device, const TextureDesc&& desc) {
+Texture Texture::Create(const Device& device, const TextureDesc&& desc) {
 	Texture texture = {
 		.format = ConvertFormat(desc.format),
 		.layout = ParseImageLayout(desc.usage),

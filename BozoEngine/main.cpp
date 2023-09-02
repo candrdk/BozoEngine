@@ -37,32 +37,30 @@ struct DirectionalLight {
 	alignas(16) glm::vec3 specular;
 };
 
-// TODO: clean this up
 struct CascadedShadowMap {
 	static const int max_cascades = 4;
 	const Device& device;
+	const Camera& camera;
 
 	const u32 n = 4096;		// Shadow map resolution
 
-	// TODO: Dont need to recalculate all of this every update
+	// TODO: should probably move away from the "view" matrix naming
+	// Just use	worldToCascade/cascadeToWorld naming. Same goes for the camera.
 	struct Cascade {
-		glm::vec3 v0, v1, v2, v3;	// near plane of the cascade portion of the camera view frustum
-		glm::vec3 v4, v5, v6, v7;	// far  plane of the cascade portion of the camera view frustum
+		glm::vec3 v0, v1, v2, v3;	// near plane of the cascade portion of the camera frustum
+		glm::vec3 v4, v5, v6, v7;	// far  plane of the cascade portion of the camera frustum
 
+		// Diameter of the cascade portion of the camera frustum
 		float d;
 
 		// Light-space bounding box of cascade
 		float xmin, ymin, zmin;
 		float xmax, ymax, zmax;
 
-		glm::mat4 cascadeInvView;
-		glm::mat4 cascadeProj;
-		glm::mat4 viewProj;
+		glm::mat4 cascadeInvView;	// world to cascade camera space
+		glm::mat4 cascadeProj;		// cascade projection matrix
+		glm::mat4 viewProj;			// cascadeProj * cascadeInvView
 	} cascades[max_cascades];
-
-	Buffer cascadeUBO[max_cascades];
-	BindGroupLayout cascadeBindGroupLayout;
-	BindGroup cascadeBindGroup[max_cascades];
 
 	struct ShadowData {
 		alignas(16) glm::vec4 a;
@@ -72,6 +70,10 @@ struct CascadedShadowMap {
 		alignas(16) glm::vec4 cascadeOffsets[max_cascades - 1];
 	} shadowData;
 
+	Buffer cascadeUBO[max_cascades];
+	BindGroupLayout cascadeBindGroupLayout;
+	BindGroup cascadeBindGroup[max_cascades];
+
 	Buffer shadowUBO;
 	BindGroupLayout shadowBindGroupLayout;
 	BindGroup shadowBindGroup;
@@ -79,7 +81,22 @@ struct CascadedShadowMap {
 	Texture shadowMap;
 	Pipeline pipeline;
 
-	CascadedShadowMap(Device& device, span<const glm::vec2> distances) : device{ device } {
+	CascadedShadowMap(const Device& device, const Camera& camera, span<const glm::vec2> distances) : device{ device }, camera{ camera } {
+		InitCascades(distances);
+		InitVulkanResources();
+	}
+
+	~CascadedShadowMap() {
+		pipeline.Destroy(device);
+		
+		for (auto& cascade : cascadeUBO) cascade.Destroy(device);
+
+		shadowBindGroupLayout.Destroy(device);
+		cascadeBindGroupLayout.Destroy(device);
+		shadowMap.Destroy(device);
+	}
+
+	void InitVulkanResources() {
 		shadowMap = Texture::Create(device, {
 			.type = TextureDesc::Type::TEXTURE2DARRAY,
 			.width = n,
@@ -102,9 +119,6 @@ struct CascadedShadowMap {
 		});
 
 		for (int k = 0; k < max_cascades; k++) {
-			shadowData.a[k] = distances[k].x;
-			shadowData.b[k] = distances[k].y;
-			
 			cascadeUBO[k] = Buffer::Create(device, {
 				.debugName = "CSM cascade viewProj matrix",
 				.byteSize = sizeof(glm::mat4) * max_cascades,
@@ -120,7 +134,7 @@ struct CascadedShadowMap {
 
 		Shader shadowMapVert = Shader::Create(device, "shaders/shadowMap.vert.spv");
 		Shader shadowMapFrag = Shader::Create(device, "shaders/shadowMap.frag.spv");
-		
+
 		pipeline = Pipeline::Create(device, VK_PIPELINE_BIND_POINT_GRAPHICS, {
 			.debugName = "Shadow map pipeline",
 			.shaders = { shadowMapVert, shadowMapFrag },
@@ -143,14 +157,38 @@ struct CascadedShadowMap {
 		shadowMapFrag.Destroy(device);
 	}
 
-	~CascadedShadowMap() {
-		pipeline.Destroy(device);
-		
-		for (auto& cascade : cascadeUBO) cascade.Destroy(device);
+	void InitCascades(span<const glm::vec2> distances) {
+		Check(distances.size() == max_cascades, "All %i cascade distances must be specified", max_cascades);
 
-		shadowBindGroupLayout.Destroy(device);
-		cascadeBindGroupLayout.Destroy(device);
-		shadowMap.Destroy(device);
+		const float s = camera.aspect;
+		const float g = 1.0f / glm::tan(glm::radians(camera.fov) * 0.5f);
+
+		for (int k = 0; k < max_cascades; k++) {
+			const float a = distances[k].x;
+			const float b = distances[k].y;
+
+			// Save cascade distances; they are used in the shader for cascade transitions.
+			shadowData.a[k] = a;
+			shadowData.b[k] = b;
+
+			// Calculate the eight view-space frustum coordinates of the cascade
+			cascades[k] = {
+				.v0 = glm::vec3( a * s / g, -a / g, a),
+				.v1 = glm::vec3( a * s / g,  a / g, a),
+				.v2 = glm::vec3(-a * s / g,  a / g, a),
+				.v3 = glm::vec3(-a * s / g, -a / g, a),
+
+				.v4 = glm::vec3( b * s / g, -b / g, b),
+				.v5 = glm::vec3( b * s / g,  b / g, b),
+				.v6 = glm::vec3(-b * s / g,  b / g, b),
+				.v7 = glm::vec3(-b * s / g, -b / g, b),
+			};
+
+			// Calculate shadow map size (diameter of the cascade)
+			cascades[k].d = glm::ceil(glm::max(
+				glm::length(cascades[k].v0 - cascades[k].v6),
+				glm::length(cascades[k].v4 - cascades[k].v6)));
+		}
 	}
 
 	void RenderShadowMap(VkCommandBuffer cmd) {
@@ -208,29 +246,20 @@ struct CascadedShadowMap {
 			VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL,				VK_IMAGE_LAYOUT_READ_ONLY_OPTIMAL);
 	}
 
-	void UpdateCascades(glm::mat4 light, const Camera& camera) {
-		const float s = camera.aspect;
-		const float g = 1.0f / glm::tan(glm::radians(camera.fov) * 0.5f);
+	void UpdateCascades(glm::vec3 lightDir) {
+		// TODO: this breaks when lightdir is straight up or down. 
+		// Choose a different up vector in this case...
+		// 
+		// Calculate light matrix from light direction.
+		const glm::vec3 z = -glm::normalize(lightDir);
+		const glm::vec3 x = glm::normalize(glm::cross(glm::vec3(0.0f, 1.0f, 0.0f), z));
+		const glm::vec3 y = glm::cross(x, z);
+		const glm::mat4 light = glm::mat3(x, y, z);
 
+		// Camera space to light space matrix
 		const glm::mat4 L = glm::inverse(light) * glm::inverse(camera.view);
 
 		for (int k = 0; k < max_cascades; k++) {
-			const float a = shadowData.a[k];
-			const float b = shadowData.b[k];
-
-			// Calculate the eight view-space frustum coordinates of the cascade
-			cascades[k] = {
-				.v0 = glm::vec3( a * s / g, -a / g, a),
-				.v1 = glm::vec3( a * s / g,  a / g, a),
-				.v2 = glm::vec3(-a * s / g,  a / g, a),
-				.v3 = glm::vec3(-a * s / g, -a / g, a),
-				
-				.v4 = glm::vec3( b * s / g, -b / g, b),
-				.v5 = glm::vec3( b * s / g,  b / g, b),
-				.v6 = glm::vec3(-b * s / g,  b / g, b),
-				.v7 = glm::vec3(-b * s / g, -b / g, b),
-			};
-
 			// Transform cascade frustum points from camera view space to light space
 			const glm::vec4 Lv[8] = {
 				L * glm::vec4(cascades[k].v0, 1.0f),
@@ -260,11 +289,6 @@ struct CascadedShadowMap {
 				cascades[k].ymax = glm::max(cascades[k].ymax, Lvi.y);
 				cascades[k].zmax = glm::max(cascades[k].zmax, Lvi.z);
 			}
-
-			// Calculate shadow map size (diameter of the cascade)
-			cascades[k].d = glm::ceil(glm::max(
-				glm::length(cascades[k].v0 - cascades[k].v6),
-				glm::length(cascades[k].v4 - cascades[k].v6)));
 
 			// Calculate the physical size of shadow map texels
 			const float T = cascades[k].d / n;
@@ -330,12 +354,10 @@ struct CascadedShadowMap {
 			const glm::vec3 sk = -cascades[k].cascadeInvView[3];
 
 			shadowData.cascadeScales[k - 1] = glm::vec4(d0 / dk, d0 / dk, zd0 / zdk, 0.0f);
-			shadowData.cascadeOffsets[k - 1] = glm::vec4(
-				(s0.x - sk.x) / dk - d0 / (2.0f * dk) + 0.5f,
-				(s0.y - sk.y) / dk - d0 / (2.0f * dk) + 0.5f,
-				(s0.z - sk.z) / zdk,
-				0.0f
-			);
+
+			shadowData.cascadeOffsets[k - 1].x = (s0.x - sk.x) / dk - d0 / (2.0f * dk) + 0.5f;
+			shadowData.cascadeOffsets[k - 1].y = (s0.y - sk.y) / dk - d0 / (2.0f * dk) + 0.5f;
+			shadowData.cascadeOffsets[k - 1].z = (s0.z - sk.z) / zdk;
 		}
 	}
 };
@@ -373,8 +395,7 @@ struct RenderFrame {
 // Temporary namespace to contain globals
 namespace bz {
 	// Scene
-	//Camera camera(glm::vec3(0.0f, 1.25f, 1.5f), 1.0f, 60.0f, (float)WIDTH / HEIGHT, 0.01f, -30.0f, -90.0f);
-	Camera camera(glm::vec3(-0.822941f, 2.366521f, 3.494134f), 1.0f, 60.0f, (float)WIDTH / HEIGHT, 0.01f, -27.200000f, -69.100000f);
+	Camera camera(glm::vec3(0.0f, 1.5f, 1.0f), 1.0f, 60.0f, (float)WIDTH / HEIGHT, 0.01f, 0.0f, -30.0f);
 
 	Texture   skybox;
 	BindGroup skyboxBindGroup;
@@ -383,7 +404,7 @@ namespace bz {
 
 	bool bAnimateLight = false;
 	DirectionalLight dirLight = {
-		.direction = glm::vec3(1.0f, -1.0f, 0.0f),
+		.direction = glm::vec3(1.0f, -1.0f, -0.2f),
 		.ambient   = glm::vec3(0.05f, 0.05f, 0.05f),
 		.diffuse   = glm::vec3(1.0f,  0.8f,  0.7f),
 		.specular  = glm::vec3(0.1f,  0.1f,  0.1f)
@@ -874,8 +895,7 @@ void InitVulkan() {
 	CreateBindGroupLayouts();
 	CreateBindGroups();
 
-	bz::shadowMap = new CascadedShadowMap(bz::device, { {0.0f, 2.0f}, {1.5f, 16.0f}, {15.5f, 32.0f}, {31.0f, 128.0f} });
-	//bz::shadowMap = new CascadedShadowMap(bz::device, { {0.0f, 2.0f}, {1.75f, 4.0f}, {3.75f, 6.0f}, {5.75f, 8.0f} });
+	bz::shadowMap = new CascadedShadowMap(bz::device, bz::camera, { {0.0f, 8.0f}, {7.0f, 16.0f}, {14.0f, 32.0f}, {30.0f, 128.0f} });
 
 	CreatePipelines();
 
@@ -1171,42 +1191,7 @@ int main(int argc, char* argv[]) {
 		bz::camera.Update(deltaTime);
 		bz::overlay->Update();
 
-
-		
-		glm::vec3 z = -glm::normalize(bz::dirLight.direction);
-		glm::vec3 x = glm::normalize(glm::cross(glm::vec3(0.0f, 1.0f, 0.0f), z));
-		glm::vec3 y = glm::cross(x, z);
-
-		glm::mat4 dirLightMat = glm::mat4(glm::vec4(x, 0.0f), glm::vec4(y, 0.0f), glm::vec4(z, 0.0f), glm::vec4(0.0f, 0.0f, 0.0f, 1.0f));
-
-		/*
-		bz::dirLight.direction = glm::vec3(0.0f, -1.0f, 0.0f);
-		dirLightMat = glm::mat4(
-			1.0f, 0.0f, 0.0f, 0.0f,
-			0.0f, 0.0f, 1.0f, 0.0f,
-			0.0f, 1.0f, 0.0f, 0.0f,
-			0.0f, 0.0f, 0.0f, 1.0f);
-		*/
-
-		/*
-		glm::mat4 dirLightMat = glm::lookAt(glm::vec3(0.0f), -bz::dirLight.direction, glm::vec3(0.0f, 1.0f, 0.0f));
-		constexpr glm::mat4 X = glm::mat4(
-			1.0f, 0.0f, 0.0f, 0.0f,
-			0.0f, -1.0f, 0.0f, 0.0f,
-			0.0f, 0.0f, -1.0f, 0.0f,
-			0.0f, 0.0f, 0.0f, 1.0f);
-		dirLightMat = X * dirLightMat;
-		*/
-
-		/*
-		glm::vec4 dx = glm::vec4(1.0f, 0.0f, 0.0f, 0.0f);
-		glm::vec4 dy = glm::vec4(0.0f, 0.0f, 1.0f, 0.0f);
-		glm::vec4 dz = glm::vec4(0.0f, 1.0f, 0.0f, 0.0f);
-		glm::vec4 dt = glm::vec4(0.0f, 0.0f, 0.0f, 1.0f);
-		glm::mat4 dirLightMat = glm::mat4(dx, dy, dz, dt);
-		*/
-
-		bz::shadowMap->UpdateCascades(dirLightMat, bz::camera);
+		bz::shadowMap->UpdateCascades(bz::dirLight.direction);
 
 		DrawFrame();
 

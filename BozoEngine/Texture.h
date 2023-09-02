@@ -65,8 +65,8 @@ struct Texture {
 
 	void Destroy(const Device& device);
 
-	static Texture Create(Device& device, const char* file, TextureDesc&& desc);
-	static Texture Create(Device& device, const TextureDesc&& desc);
+	static Texture Create(const Device& device, const char* file, TextureDesc&& desc);
+	static Texture Create(const Device& device, const TextureDesc&& desc);
 
 	// Creates a cubemap from the given files, which must be provided in the order:
 	// +X, -X, +Y, -Y, +Z, -Z.
