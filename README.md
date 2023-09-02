@@ -1,7 +1,4 @@
 # Bozo Engine
-What kinda bozo would try to write an engine from scratch?
-
-## What
 Small `Vulkan 1.3` engine written in my spare time. The goal is to implement a real-time physically based deferred renderer along with some basic rendering techniques.
 
 ## Why
