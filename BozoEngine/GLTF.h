@@ -5,6 +5,7 @@
 #include "Texture.h"
 #include "Buffer.h"
 #include "BindGroup.h"
+#include "Pipeline.h"
 
 #pragma warning(push, 0)
 #include <tiny_gltf.h>
@@ -67,7 +68,7 @@ public:
 	GLTFModel(Device& device, BindGroupLayout materialLayout, const char* path);
 	~GLTFModel();
 
-	void Draw(VkCommandBuffer cmdBuffer, VkPipelineLayout pipelineLayout, bool bindMaterial = true);
+	void Draw(VkCommandBuffer cmdBuffer, const Pipeline& pipeline, bool bindMaterial = true);
 
 private:
 	struct PushConstants {
@@ -77,7 +78,7 @@ private:
 		float parallaxScale;
 	};
 
-	void DrawNode(VkCommandBuffer cmdBuffer, VkPipelineLayout pipelineLayout, Node* node, bool bindMaterial);
+	void DrawNode(VkCommandBuffer cmdBuffer, const Pipeline& pipeline, Node* node, bool bindMaterial);
 
 	void LoadImages(tinygltf::Model& model);
 

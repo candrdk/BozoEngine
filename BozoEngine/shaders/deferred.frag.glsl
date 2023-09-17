@@ -20,6 +20,7 @@ struct ShadowData {
 	mat4 shadowMat;
 	vec3 cascadeScales[3];
 	vec3 cascadeOffsets[3];
+	vec4 shadowOffsets[2];
 };
 
 #define MAX_POINT_LIGHTS 4
@@ -45,7 +46,7 @@ layout (set = 1, binding = 1) uniform sampler2D samplerNormal;
 layout (set = 1, binding = 2) uniform sampler2D samplerMetallicRoughness;
 layout (set = 1, binding = 3) uniform sampler2D samplerDepth;
 
-layout (set = 2, binding = 0) uniform sampler2DArray samplerShadowMap;
+layout (set = 2, binding = 0) uniform sampler2DArrayShadow samplerShadowMap;
 
 layout (location = 0) in vec2 inUV;
 
@@ -129,18 +130,8 @@ vec3 shade_point_light(PointLight light, vec3 n, vec3 v, vec3 p) {
 	//return (diffuse + specular) * yuksel_attenuation(d, r0);
 }
 
-vec4 shade_pixel() {
-	vec3 p = reconstruct_pos_view_space();
-	vec3 n = normalize(texture(samplerNormal, inUV).xyz * 2.0 - 1.0);
-	vec3 v = normalize((ubo.view * ubo.position).xyz - p);
-
-	vec3 shade = shade_directional_light(ubo.dirLight, n, v);
-
-	for (int i = 0; i < ubo.pointLightCount; i++) {
-		shade += shade_point_light(ubo.pointLights[i], n, v, p);
-	}
-
-	vec3 p1, p2;
+float get_shadow(vec3 p) {
+	vec4 p1, p2;
 	vec4 world_pos = inverse(ubo.view) * vec4(p, 1.0);
 
 	// Apply scales and offsets to get the texcoords in all four cascade
@@ -164,54 +155,35 @@ vec4 shade_pixel() {
 	vec2 shadowCoord2 = beyondCascade3 ? cascadeCoord3.xy : cascadeCoord1.xy;
 
 	// Select the depth to compare against
-	float depth1 = beyondCascade2 ? cascadeCoord2.z : cascadeCoord0.z;
-	float depth2 = beyondCascade3 ? clamp(cascadeCoord3.z, 0.0, 1.0) : cascadeCoord1.z;
-
-	depth1 += 0.0005;
-	depth2 += 0.0005;
+	p1.w = beyondCascade2 ? cascadeCoord2.z : cascadeCoord0.z;
+	p2.w = beyondCascade3 ? clamp(cascadeCoord3.z, 0.0, 1.0) : cascadeCoord1.z;
 
 	vec3 blend = clamp(vec3(u1, u2, u3), 0.0, 1.0);
 	float weight = beyondCascade2 ? (blend.y - blend.z) : (1.0 - blend.x);
 
-	float delta = 0.0005;
+	p1.xy = shadowCoord1 + ubo.shadow.shadowOffsets[0].xy;
+	float light1 = texture(samplerShadowMap, p1);
+	p1.xy = shadowCoord1 + ubo.shadow.shadowOffsets[0].zw;
+	light1 += texture(samplerShadowMap, p1);
+	p1.xy = shadowCoord1 + ubo.shadow.shadowOffsets[1].xy;
+	light1 += texture(samplerShadowMap, p1);
+	p1.xy = shadowCoord1 + ubo.shadow.shadowOffsets[1].zw;
+	light1 += texture(samplerShadowMap, p1);
 
-	p1.xy = shadowCoord1 + vec2(delta, delta);
-	float l0 = texture(samplerShadowMap, p1).x;
-	float light1 = l0 > depth1 ? 0.0 : 1.0;
-
-	p1.xy = shadowCoord1 + vec2(delta, -delta);
-	float l11 = texture(samplerShadowMap, p1).x;
-	light1 += l11 > depth1 ? 0.0 : 1.0;
-	
-	p1.xy = shadowCoord1 + vec2(-delta, delta);
-	float l12 = texture(samplerShadowMap, p1).x;
-	light1 += l12 > depth1 ? 0.0 : 1.0;
-	
-	p1.xy = shadowCoord1 + vec2(-delta, -delta);
-	float l13 = texture(samplerShadowMap, p1).x;
-	light1 += l13 > depth1 ? 0.0 : 1.0;
-
-
-	p2.xy = shadowCoord2 + vec2(delta, delta);
-	float l20 = texture(samplerShadowMap, p2).x;
-	float light2 = l20 > depth2 ? 0.0 : 1.0;
-	
-	p2.xy = shadowCoord2 + vec2(delta, -delta);
-	float l21 = texture(samplerShadowMap, p2).x;
-	light2 += l21 > depth2 ? 0.0 : 1.0;
-	
-	p2.xy = shadowCoord2 + vec2(-delta, delta);
-	float l22 = texture(samplerShadowMap, p2).x;
-	light2 += l22 > depth2 ? 0.0 : 1.0;
-	
-	p2.xy = shadowCoord2 + vec2(-delta, -delta);
-	float l23 = texture(samplerShadowMap, p2).x;
-	light2 += l23 > depth2 ? 0.0 : 1.0;
+	p2.xy = shadowCoord2 + ubo.shadow.shadowOffsets[0].xy;
+	float light2 = texture(samplerShadowMap, p2);
+	p2.xy = shadowCoord2 + ubo.shadow.shadowOffsets[0].zw;
+	light2 += texture(samplerShadowMap, p2);
+	p2.xy = shadowCoord2 + ubo.shadow.shadowOffsets[1].xy;
+	light2 += texture(samplerShadowMap, p2);
+	p2.xy = shadowCoord2 + ubo.shadow.shadowOffsets[1].zw;
+	light2 += texture(samplerShadowMap, p2);
 
 	float shadow = mix(light2, light1, weight) * 0.25;
 
-	shadow = 1.0 - (1.0 - shadow) * 0.95;
+	return shadow;
 
+#if 0	// Cascade debug view. This will be implemented properly later on...
 	vec3 cascades[3] = {
 		vec3(1.0, 0.0, 0.0),
 		vec3(0.0, 1.0, 0.0),
@@ -222,6 +194,22 @@ vec4 shade_pixel() {
 	cascadeDebug += (weight > 0.95 && weight < 1.0) ? cascades[int(min(p1.z, p2.z))] : vec3(0.0);
 
 	return vec4(shade * shadow + cascadeDebug, 1.0);
+#endif
+}
+
+vec4 shade_pixel() {
+	vec3 p = reconstruct_pos_view_space();
+	vec3 n = normalize(texture(samplerNormal, inUV).xyz * 2.0 - 1.0);
+	vec3 v = normalize((ubo.view * ubo.position).xyz - p);
+
+	vec3 shade = shade_directional_light(ubo.dirLight, n, v);
+	shade *= get_shadow(p);
+
+	for (int i = 0; i < ubo.pointLightCount; i++) {
+		shade += shade_point_light(ubo.pointLights[i], n, v, p);
+	}
+
+	return vec4(shade, 1.0);
 }
 
 void main() {

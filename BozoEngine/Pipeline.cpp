@@ -101,7 +101,10 @@ static VkPipeline CreatePipeline(const Device& device, VkPipelineLayout pipeline
         .polygonMode = VK_POLYGON_MODE_FILL,
         .cullMode = desc.rasterization.cullMode,
         .frontFace = desc.rasterization.frontFace,
-        .depthBiasEnable = VK_FALSE,
+        .depthBiasEnable = desc.rasterization.depthBiasEnable,
+        .depthBiasConstantFactor = desc.rasterization.depthBiasConstantFactor,
+        .depthBiasClamp = desc.rasterization.depthBiasClamp,
+        .depthBiasSlopeFactor = desc.rasterization.depthBiasSlopeFactor,
         .lineWidth = 1.0f,
     };
 

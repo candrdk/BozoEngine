@@ -10,12 +10,6 @@
 
 #include "Pipeline.h"
 
-constexpr glm::mat4 VKX = glm::mat4(
-	1.0f, 0.0f, 0.0f, 0.0f,
-	0.0f, -1.0f, 0.0f, 0.0f,
-	0.0f, 0.0f, -1.0f, 0.0f,
-	0.0f, 0.0f, 0.0f, 1.0f);
-
 constexpr u32 WIDTH = 1600;
 constexpr u32 HEIGHT = 900;
 
@@ -42,6 +36,7 @@ struct CascadedShadowMap {
 	const Device& device;
 	const Camera& camera;
 
+	// TODO: changing resolution introduces weird artifacts on camera motion?
 	const u32 n = 4096;		// Shadow map resolution
 
 	// TODO: should probably move away from the "view" matrix naming
@@ -68,6 +63,7 @@ struct CascadedShadowMap {
 		alignas(16) glm::mat4 shadowMat;
 		alignas(16) glm::vec4 cascadeScales[max_cascades - 1];
 		alignas(16) glm::vec4 cascadeOffsets[max_cascades - 1];
+		alignas(16) glm::vec4 shadowOffsets[2];
 	} shadowData;
 
 	Buffer cascadeUBO[max_cascades];
@@ -79,6 +75,7 @@ struct CascadedShadowMap {
 	BindGroup shadowBindGroup;
 
 	Texture shadowMap;
+	VkSampler shadowSampler;
 	Pipeline pipeline;
 
 	CascadedShadowMap(const Device& device, const Camera& camera, span<const glm::vec2> distances) : device{ device }, camera{ camera } {
@@ -93,6 +90,7 @@ struct CascadedShadowMap {
 
 		shadowBindGroupLayout.Destroy(device);
 		cascadeBindGroupLayout.Destroy(device);
+		vkDestroySampler(device.logicalDevice, shadowSampler, nullptr);
 		shadowMap.Destroy(device);
 	}
 
@@ -106,12 +104,31 @@ struct CascadedShadowMap {
 			.usage = Usage::DEPTH_STENCIL | Usage::SHADER_RESOURCE
 		});
 
+		// TODO: this should probably be Texture functionality...
+		VkSamplerCreateInfo samplerInfo = {
+			.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
+			.magFilter = VK_FILTER_LINEAR,
+			.minFilter = VK_FILTER_LINEAR,
+			.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR,
+			// Only enable anisotropic filtering if enabled on the device
+			.anisotropyEnable = device.enabledFeatures.samplerAnisotropy,
+			.maxAnisotropy = device.enabledFeatures.samplerAnisotropy ? device.properties.limits.maxSamplerAnisotropy : 1.0f,
+			// Enable comparisons, since this is a shadow sampler
+			.compareEnable = VK_TRUE,
+			.compareOp = VK_COMPARE_OP_GREATER,
+			// Max level-of-detail should match mip level count - this probably isnt needed for this sampler tho?
+			.minLod = 0.0f,
+			.maxLod = (float)shadowMap.mipLevels
+		};
+
+		vkCreateSampler(device.logicalDevice, &samplerInfo, nullptr, &shadowSampler);
+
 		shadowBindGroupLayout = BindGroupLayout::Create(device, {
 			{.binding = 0, .type = Binding::TEXTURE, .stages = ShaderStage::FRAGMENT}
 		});
 
 		shadowBindGroup = BindGroup::Create(device, shadowBindGroupLayout, {
-			.textures = { shadowMap.GetBinding(0) }
+			.textures = { { 0, shadowSampler, shadowMap.srv, VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL } }
 		});
 
 		cascadeBindGroupLayout = BindGroupLayout::Create(device, {
@@ -133,18 +150,21 @@ struct CascadedShadowMap {
 		}
 
 		Shader shadowMapVert = Shader::Create(device, "shaders/shadowMap.vert.spv");
-		Shader shadowMapFrag = Shader::Create(device, "shaders/shadowMap.frag.spv");
 
 		pipeline = Pipeline::Create(device, VK_PIPELINE_BIND_POINT_GRAPHICS, {
 			.debugName = "Shadow map pipeline",
-			.shaders = { shadowMapVert, shadowMapFrag },
+			.shaders = { shadowMapVert },
 			.bindGroups = { cascadeBindGroupLayout },
 			.graphicsState = {
 				.attachments = { .depthStencilFormat = shadowMap.format },
 				.rasterization = {
 					.depthClampEnable = VK_TRUE,
 					.cullMode = VK_CULL_MODE_BACK_BIT,
-					.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE
+					.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE,
+					.depthBiasEnable = VK_TRUE,
+					.depthBiasConstantFactor = -2.0f,
+					.depthBiasClamp = -1.0f / 128.0f,
+					.depthBiasSlopeFactor = -3.0f
 				},
 				.vertexInput = {
 					.bindingDesc = GLTFModel::Vertex::BindingDescripton,
@@ -154,11 +174,15 @@ struct CascadedShadowMap {
 		});
 
 		shadowMapVert.Destroy(device);
-		shadowMapFrag.Destroy(device);
 	}
 
 	void InitCascades(span<const glm::vec2> distances) {
 		Check(distances.size() == max_cascades, "All %i cascade distances must be specified", max_cascades);
+
+		// Offsets for shadow samples.
+		float d = 3.0f / 16.0f * (1.0f / n);
+		shadowData.shadowOffsets[0] = glm::vec4(glm::vec2(-d,-3*d), glm::vec2( 3*d,-d));
+		shadowData.shadowOffsets[1] = glm::vec4(glm::vec2( d, 3*d), glm::vec2(-3*d, d));
 
 		const float s = camera.aspect;
 		const float g = 1.0f / glm::tan(glm::radians(camera.fov) * 0.5f);
@@ -234,16 +258,11 @@ struct CascadedShadowMap {
 
 			vkCmdBeginRendering(cmd, &renderingInfo);
 
-			model->Draw(cmd, pipeline.pipelineLayout, false);
-			plane->Draw(cmd, pipeline.pipelineLayout, false);
+			model->Draw(cmd, pipeline, false);
+			plane->Draw(cmd, pipeline, false);
 
 			vkCmdEndRendering(cmd);
 		}
-
-		ImageBarrier(cmd, shadowMap.image, subresourceRange,
-			VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT,		VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
-			VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,	VK_ACCESS_SHADER_READ_BIT,
-			VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL,				VK_IMAGE_LAYOUT_READ_ONLY_OPTIMAL);
 	}
 
 	void UpdateCascades(glm::vec3 lightDir) {
@@ -640,8 +659,8 @@ void RecordDeferredCommandBuffer(VkCommandBuffer cmd, u32 imageIndex) {
 
 	vkCmdBeginRendering(cmd, &renderingInfo);
 
-	model->Draw(cmd, bz::offscreenPipeline.pipelineLayout);
-	plane->Draw(cmd, bz::offscreenPipeline.pipelineLayout);
+	model->Draw(cmd, bz::offscreenPipeline);
+	plane->Draw(cmd, bz::offscreenPipeline);
 
 	vkCmdEndRendering(cmd);
 
@@ -1052,10 +1071,6 @@ void DrawFrame() {
 }
 
 void OverlayRender() {
-	ImGui::Begin("Cascaded shadow maps");
-	ImGui::Image(&bz::shadowMap->shadowBindGroup, {512, 512});
-	ImGui::End();
-
 	ImGui::Begin("Bozo Engine", 0, 0);
 	bz::overlay->ShowFrameTimeGraph();
 
@@ -1172,7 +1187,7 @@ int main(int argc, char* argv[]) {
 
 		if (bz::bAnimateLight) {
 			float t = float(currentFrame * 0.5);
-			bz::dirLight.direction = glm::vec3(glm::cos(t), -0.5f, glm::sin(t));
+			bz::dirLight.direction = glm::vec3(glm::cos(t), -1.0f, 0.3f * glm::sin(t));
 
 			//bz::dirLight.direction = glm::vec3(0.5f, -0.5f, -1.0f);
 

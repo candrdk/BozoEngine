@@ -287,9 +287,6 @@
     <None Include="shaders\shadowMap.vert.glsl">
       <Filter>Shaders</Filter>
     </None>
-    <None Include="shaders\shadowMap.frag.glsl">
-      <Filter>Shaders</Filter>
-    </None>
   </ItemGroup>
   <ItemGroup>
     <Natvis Include="..\Extern\glm\util\glm.natvis">

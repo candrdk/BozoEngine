@@ -222,13 +222,6 @@ void UIOverlay::Draw(VkCommandBuffer cmdBuffer, VkExtent2D extent, const VkRende
 		ImDrawList* cmdList = imDrawData->CmdLists[i];
 		for (i32 j = 0; j < cmdList->CmdBuffer.Size; j++) {
 			ImDrawCmd* cmd = &cmdList->CmdBuffer[j];
-
-			// TODO: Hack to render images... Will implement this properly later
-			if (cmd->TextureId) { 
-				vkCmdBindDescriptorSets(cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline.pipelineLayout, 0, 1, &((BindGroup*)cmd->TextureId)->descriptorSet, 0, 0); }
-			else {
-				vkCmdBindDescriptorSets(cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline.pipelineLayout, 0, 1, &bindGroup.descriptorSet, 0, 0);
-			}
 			
 			VkRect2D scissorRect = {
 				.offset = {
@@ -241,6 +234,7 @@ void UIOverlay::Draw(VkCommandBuffer cmdBuffer, VkExtent2D extent, const VkRende
 				}
 			};
 			vkCmdSetScissor(cmdBuffer, 0, 1, &scissorRect);
+
 			vkCmdDrawIndexed(cmdBuffer, cmd->ElemCount, 1, indexOffset, vertexOffset, 0);
 			indexOffset += cmd->ElemCount;
 		}

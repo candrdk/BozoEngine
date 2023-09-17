@@ -21,6 +21,11 @@ struct PipelineDesc {
             VkBool32 depthClampEnable = VK_FALSE;
             VkCullModeFlags cullMode;
             VkFrontFace frontFace;
+
+            VkBool32 depthBiasEnable = VK_FALSE;
+            float    depthBiasConstantFactor;
+            float    depthBiasClamp;
+            float    depthBiasSlopeFactor;
         } rasterization;
 
         VkSampleCountFlagBits sampleCount = VK_SAMPLE_COUNT_1_BIT;

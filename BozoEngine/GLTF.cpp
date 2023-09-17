@@ -74,17 +74,17 @@ GLTFModel::~GLTFModel() {
 	}
 }
 
-void GLTFModel::Draw(VkCommandBuffer cmdBuffer, VkPipelineLayout pipelineLayout, bool bindMaterial) {
+void GLTFModel::Draw(VkCommandBuffer cmdBuffer, const Pipeline& pipeline, bool bindMaterial) {
 	VkDeviceSize offsets[] = { 0 };
 	vkCmdBindVertexBuffers(cmdBuffer, 0, 1, &vertices.buffer, offsets);
 	vkCmdBindIndexBuffer(cmdBuffer, indices.buffer, 0, VK_INDEX_TYPE_UINT32);
 
 	for (const auto& node : nodes) {
-		DrawNode(cmdBuffer, pipelineLayout, node, bindMaterial);
+		DrawNode(cmdBuffer, pipeline, node, bindMaterial);
 	}
 }
 
-void GLTFModel::DrawNode(VkCommandBuffer cmdBuffer, VkPipelineLayout pipelineLayout, Node* node, bool bindMaterial) {
+void GLTFModel::DrawNode(VkCommandBuffer cmdBuffer, const Pipeline& pipeline, Node* node, bool bindMaterial) {
 	if (node->mesh.primitives.size() > 0) {
 		// Calculate primitive matrix transform by traversing the node hiearchy to the root
 		glm::mat4 nodeTransform = node->transform;
@@ -98,7 +98,7 @@ void GLTFModel::DrawNode(VkCommandBuffer cmdBuffer, VkPipelineLayout pipelineLay
 			if (primitive.indexCount > 0) {
 				// Bind the descriptor for the current primitives' material
 				if (bindMaterial)
-					vkCmdBindDescriptorSets(cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 1, 1, &materials[primitive.materialIndex].bindGroup.descriptorSet, 0, nullptr);
+					vkCmdBindDescriptorSets(cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline.pipelineLayout, 1, 1, &materials[primitive.materialIndex].bindGroup.descriptorSet, 0, nullptr);
 
 				PushConstants p = {
 					.model = nodeTransform,
@@ -106,7 +106,7 @@ void GLTFModel::DrawNode(VkCommandBuffer cmdBuffer, VkPipelineLayout pipelineLay
 					.parallaxSteps = materials[primitive.materialIndex].parallaxSteps,
 					.parallaxScale = materials[primitive.materialIndex].parallaxScale
 				};
-				vkCmdPushConstants(cmdBuffer, pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(p), &p);
+				vkCmdPushConstants(cmdBuffer, pipeline.pipelineLayout, pipeline.pushConstants.stageFlags, 0, sizeof(p), &p);
 
 				vkCmdDrawIndexed(cmdBuffer, primitive.indexCount, 1, primitive.firstIndex, 0, 0);
 			}
@@ -114,7 +114,7 @@ void GLTFModel::DrawNode(VkCommandBuffer cmdBuffer, VkPipelineLayout pipelineLay
 	}
 
 	for (const auto& child : node->children) {
-		DrawNode(cmdBuffer, pipelineLayout, child, bindMaterial);
+		DrawNode(cmdBuffer, pipeline, child, bindMaterial);
 	}
 }
 

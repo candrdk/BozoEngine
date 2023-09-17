@@ -191,6 +191,7 @@ static VkDevice CreateLogicalDevice(VkPhysicalDevice physicalDevice, u32 queueFa
 		.pNext = &features11,
 		.features = {
 			.depthClamp = VK_TRUE,
+			.depthBiasClamp = VK_TRUE,
 			.samplerAnisotropy = VK_TRUE
 		}
 	};
@@ -253,8 +254,12 @@ void Device::CreateDevice(GLFWwindow* window) {
 	surface = CreateSurface(window, instance);
 	physicalDevice = CreatePhysicalDevice(instance);
 
-	// Take this as a parameter, and validate that device supports them.
-	enabledFeatures = { .samplerAnisotropy = VK_TRUE };
+	// TODO: Take this as a parameter, and validate that device supports them.
+	enabledFeatures = {
+		.depthClamp = VK_TRUE,
+		.depthBiasClamp = VK_TRUE,
+		.samplerAnisotropy = VK_TRUE
+	};
 
 	vkGetPhysicalDeviceProperties(physicalDevice, &properties);
 	vkGetPhysicalDeviceMemoryProperties(physicalDevice, &memoryProperties);
