@@ -69,7 +69,6 @@ struct CascadedShadowMap {
 	BindGroupLayout cascadeBindGroupLayout;
 	BindGroup cascadeBindGroup[MAX_FRAMES_IN_FLIGHT][max_cascades];
 
-	Buffer shadowUBO;
 	BindGroupLayout shadowBindGroupLayout;
 	BindGroup shadowBindGroup;
 

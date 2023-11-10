@@ -53,7 +53,7 @@ public:
 		u32 graphics;
 		u32 compute;
 		u32 transfer;
-	} queueIndex;
+	} queueIndex = {};
 
 	std::vector<VkQueueFamilyProperties>	queueFamilyProperties	= {};
 	VkPhysicalDeviceFeatures				enabledFeatures			= {};
