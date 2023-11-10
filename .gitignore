@@ -16,6 +16,9 @@ imgui.ini
 # SPIR-V files
 *.spv
 
+# Compilation Database for clangd
+compile_commands.json
+
 # Visual studio compile score extension files
 compileData.scor*
 

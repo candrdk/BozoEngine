@@ -36,8 +36,7 @@ struct CascadedShadowMap {
 	const Device& device;
 	const Camera& camera;
 
-	// TODO: changing resolution introduces weird artifacts on camera motion?
-	const u32 n = 4096;		// Shadow map resolution
+	const u32 n = 1024 * 2;		// Shadow map resolution
 
 	// TODO: should probably move away from the "view" matrix naming
 	// Just use	worldToCascade/cascadeToWorld naming. Same goes for the camera.
@@ -66,9 +65,9 @@ struct CascadedShadowMap {
 		alignas(16) glm::vec4 shadowOffsets[2];
 	} shadowData;
 
-	Buffer cascadeUBO[max_cascades];
+	Buffer cascadeUBOs[MAX_FRAMES_IN_FLIGHT][max_cascades];
 	BindGroupLayout cascadeBindGroupLayout;
-	BindGroup cascadeBindGroup[max_cascades];
+	BindGroup cascadeBindGroup[MAX_FRAMES_IN_FLIGHT][max_cascades];
 
 	Buffer shadowUBO;
 	BindGroupLayout shadowBindGroupLayout;
@@ -86,7 +85,9 @@ struct CascadedShadowMap {
 	~CascadedShadowMap() {
 		pipeline.Destroy(device);
 		
-		for (auto& cascade : cascadeUBO) cascade.Destroy(device);
+		for (auto& cascadeFrame : cascadeUBOs)
+			for (auto& cascade : cascadeFrame)
+				cascade.Destroy(device);
 
 		shadowBindGroupLayout.Destroy(device);
 		cascadeBindGroupLayout.Destroy(device);
@@ -128,25 +129,27 @@ struct CascadedShadowMap {
 		});
 
 		shadowBindGroup = BindGroup::Create(device, shadowBindGroupLayout, {
-			.textures = { { 0, shadowSampler, shadowMap.srv, VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL } }
+			.textures = { { 0, shadowSampler, shadowMap.srv, VK_IMAGE_LAYOUT_READ_ONLY_OPTIMAL } }
 		});
 
 		cascadeBindGroupLayout = BindGroupLayout::Create(device, {
 			{.binding = 0, .type = Binding::BUFFER }
 		});
 
-		for (int k = 0; k < max_cascades; k++) {
-			cascadeUBO[k] = Buffer::Create(device, {
-				.debugName = "CSM cascade viewProj matrix",
-				.byteSize = sizeof(glm::mat4) * max_cascades,
-				.usage = Usage::UNIFORM_BUFFER,
-				.memory = Memory::UPLOAD
-			});
-			cascadeUBO[k].Map(device);
+		for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
+			for (int k = 0; k < max_cascades; k++) {
+				cascadeUBOs[i][k] = Buffer::Create(device, {
+					.debugName = "CSM cascade viewProj matrix",
+					.byteSize = sizeof(glm::mat4) * max_cascades,
+					.usage = Usage::UNIFORM_BUFFER,
+					.memory = Memory::UPLOAD
+				});
+				cascadeUBOs[i][k].Map(device);
 
-			cascadeBindGroup[k] = BindGroup::Create(device, cascadeBindGroupLayout, {
-				.buffers = { cascadeUBO[k].GetBinding(0, sizeof(glm::mat4) * max_cascades)}
-			});
+				cascadeBindGroup[i][k] = BindGroup::Create(device, cascadeBindGroupLayout, {
+					.buffers = { cascadeUBOs[i][k].GetBinding(0, sizeof(glm::mat4) * max_cascades)}
+				});
+			}
 		}
 
 		Shader shadowMapVert = Shader::Create(device, "shaders/shadowMap.vert.spv");
@@ -251,7 +254,8 @@ struct CascadedShadowMap {
 		};
 
 		for (u32 k = 0; k < max_cascades; k++) {
-			vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline.pipelineLayout, 0, 1, &cascadeBindGroup[k].descriptorSet, 0, nullptr);
+			// TODO: dont like relying on the global currentframe int in here
+			vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline.pipelineLayout, 0, 1, &cascadeBindGroup[currentFrame][k].descriptorSet, 0, nullptr);
 
 			VkRenderingAttachmentInfo cascadeAttachment = shadowMap.GetAttachmentInfo(k);
 			renderingInfo.pDepthAttachment = &cascadeAttachment;
@@ -263,6 +267,12 @@ struct CascadedShadowMap {
 
 			vkCmdEndRendering(cmd);
 		}
+
+		ImageBarrier(cmd, shadowMap.image, subresourceRange,
+			VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT
+			| VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT,	VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+			VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,	VK_ACCESS_SHADER_READ_BIT,
+			VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL,				VK_IMAGE_LAYOUT_READ_ONLY_OPTIMAL);
 	}
 
 	void UpdateCascades(glm::vec3 lightDir) {
@@ -348,7 +358,7 @@ struct CascadedShadowMap {
 			cascades[k].viewProj = cascades[k].cascadeProj * cascades[k].cascadeInvView;
 
 			// Update cascade ubo...
-			memcpy(cascadeUBO[k].mapped, &cascades[k].viewProj, sizeof(glm::mat4));
+			memcpy(cascadeUBOs[currentFrame][k].mapped, &cascades[k].viewProj, sizeof(glm::mat4));
 		}
 
 		// Calculate world to shadow map texture coordinates texture.
@@ -1015,7 +1025,6 @@ void DrawFrame() {
 	VkCheck(vkResetFences(bz::device.logicalDevice, 1, &bz::renderFrames[currentFrame].inFlight), "Failed to reset inFlight fence");
 
 	VkCheck(vkResetCommandPool(bz::device.logicalDevice, bz::renderFrames[currentFrame].commandPool, 0), "Failed to reset frame command pool");
-
 
 	VkCommandBufferBeginInfo beginInfo = { .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO };
 	VkCheck(vkBeginCommandBuffer(bz::renderFrames[currentFrame].commandBuffer, &beginInfo), "Failed to begin recording command buffer!");
