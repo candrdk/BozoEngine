@@ -15,6 +15,4 @@ layout(push_constant) uniform PushConstants {
 
 void main() {
     gl_Position = ubo.viewProj * primitive.model * vec4(inPos, 1.0);
-    //gl_Position.xyz / gl_Position.w;
-    //gl_Position.z = 0.0;
 }

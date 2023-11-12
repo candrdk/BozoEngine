@@ -36,7 +36,7 @@ struct CascadedShadowMap {
 	const Device& device;
 	const Camera& camera;
 
-	const u32 n = 1024 * 2;		// Shadow map resolution
+	const u32 n = 1024 * 4;		// Shadow map resolution
 
 	// TODO: should probably move away from the "view" matrix naming
 	// Just use	worldToCascade/cascadeToWorld naming. Same goes for the camera.
@@ -1120,15 +1120,6 @@ void OverlayRender() {
 		}
 	}
 
-	ImGui::SeparatorText("Shader hot-reload");
-	if (ImGui::Button("Reload shaders")) {
-		vkDeviceWaitIdle(bz::device.logicalDevice);
-		bz::offscreenPipeline.Destroy(bz::device);
-		bz::deferredPipeline.Destroy(bz::device);
-		bz::skyboxPipeline.Destroy(bz::device);
-		CreatePipelines();
-	}
-
 	ImGui::End();
 }
 
@@ -1185,11 +1176,33 @@ int main(int argc, char* argv[]) {
 		//plane->nodes[0]->transform = glm::scale(glm::mat4(1.0f), glm::vec3(0.2f));
 	}
 
+	HANDLE shaderDir = FindFirstChangeNotificationA("shaders", false, FILE_NOTIFY_CHANGE_LAST_WRITE);
+	Check(shaderDir != INVALID_HANDLE_VALUE, "FindFirstChangeNotification failed to create a notification handle for the shaders folder.");
+
 	double lastFrame = 0.0f;
 	while (!glfwWindowShouldClose(window)) {
 		double currentFrame = glfwGetTime();
 		float deltaTime = float(currentFrame - lastFrame);
 		lastFrame = currentFrame;
+
+		// If any of the files in the shader directory changed, reload all shaders.
+		// Should call ReadDirectoryChangesW and only reload the specific shader.
+		// For now, manually rebuilding everything every time is okay...
+		if (WaitForSingleObject(shaderDir, 0) == WAIT_OBJECT_0) {
+			system(".\\shaders\\build_shaders.bat");
+
+			// build_shaders.bat will modify directory again. Ignore it.
+			FindNextChangeNotification(shaderDir);
+
+			vkDeviceWaitIdle(bz::device.logicalDevice);
+			bz::offscreenPipeline.Destroy(bz::device);
+			bz::deferredPipeline.Destroy(bz::device);
+			bz::skyboxPipeline.Destroy(bz::device);
+			CreatePipelines();
+
+			// Request that shaderDir is signaled when the directory is changed again.
+			FindNextChangeNotification(shaderDir);
+		}
 
 		bz::overlay->frameTimeHistory.Post(deltaTime);
 
@@ -1202,10 +1215,21 @@ int main(int argc, char* argv[]) {
 			bz::pointLightR.position = glm::vec3(-2.0f, glm::cos(2.0f * t) + 1.0f, 2.0f);
 			bz::pointLightG.position = glm::vec3(2.0f, 0.25f, 0.0f);
 			bz::pointLightB.position = glm::vec3(glm::cos(4.0f * t), 0.25f, -2.0f);
+
+			bz::pointLightR.position = glm::vec3(100.0f, 100.0f, 100.0f);
+			bz::pointLightG.position = glm::vec3(100.0f, 100.0f, 100.0f);
+			bz::pointLightB.position = glm::vec3(100.0f, 100.0f, 100.0f);
 		}
 		else {
 			//bz::dirLight.direction = glm::vec3(-0.5f, -0.5f, 1.0f);
 		}
+
+		plane->nodes[0]->transform = glm::translate(
+			glm::rotate(
+				glm::scale(glm::mat4(1.0f), glm::vec3(0.2f)),
+				glm::cos(float(currentFrame)),
+				glm::vec3(0.5f, 0.5f, 1.0f)),
+			glm::vec3(0.0f, 2.0f, 0.0f));
 
 		plane->materials[0].parallaxMode = bz::parallaxMode;
 		plane->materials[0].parallaxSteps = bz::parallaxSteps;
@@ -1220,6 +1244,8 @@ int main(int argc, char* argv[]) {
 
 		glfwPollEvents();
 	}
+
+	FindCloseChangeNotification(shaderDir);
 
 	// Wait until all commandbuffers are done so we can safely clean up semaphores they might potentially be using.
 	vkDeviceWaitIdle(bz::device.logicalDevice);
