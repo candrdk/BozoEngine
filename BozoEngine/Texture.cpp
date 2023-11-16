@@ -438,6 +438,9 @@ Texture Texture::Create(const Device& device, const TextureDesc&& desc) {
 		// Only enable anisotropic filtering if enabled on the device
 		.anisotropyEnable = device.enabledFeatures.samplerAnisotropy,
 		.maxAnisotropy = device.enabledFeatures.samplerAnisotropy ? device.properties.limits.maxSamplerAnisotropy : 1.0f,
+		// In some cases (like shadow maps) the user might want to enable sampler compare ops.
+		.compareEnable = desc.sampler.compareOpEnable,
+		.compareOp = desc.sampler.compareOp,
 		// Max level-of-detail should match mip level count
 		.minLod = 0.0f,
 		.maxLod = (float)texture.mipLevels,

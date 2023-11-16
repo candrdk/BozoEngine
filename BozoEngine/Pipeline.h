@@ -5,9 +5,7 @@
 #include "BindGroup.h"
 #include "Shader.h"
 
-// TODO:
-// PipelineDesc should start using our own enums instead of for example VkFormat.
-
+// TODO: PipelineDesc should start using our own enums instead of for example VkFormat.
 struct PipelineDesc {
     // TODO: fix these up as needed - this is just a rough estimate of what PipelineDesc might look like.
     struct GraphicsPipelineStateDesc {

@@ -23,6 +23,11 @@ struct TextureDesc {
 	Usage  usage  = Usage::NONE;
 	bool generateMipLevels = false;
 
+	struct {	// TODO: Shouldn't leak VkCompareOp to user code, define our own enum later...
+		bool compareOpEnable	= false;
+		VkCompareOp compareOp	= VK_COMPARE_OP_NEVER;
+	} sampler = {};
+
 	span<const u8> initialData;
 };
 

@@ -73,7 +73,6 @@ struct CascadedShadowMap {
 	BindGroup shadowBindGroup;
 
 	Texture shadowMap;
-	VkSampler shadowSampler;
 	Pipeline pipeline;
 
 	CascadedShadowMap(const Device& device, const Camera& camera, span<const glm::vec2> distances) : device{ device }, camera{ camera } {
@@ -90,7 +89,6 @@ struct CascadedShadowMap {
 
 		shadowBindGroupLayout.Destroy(device);
 		cascadeBindGroupLayout.Destroy(device);
-		vkDestroySampler(device.logicalDevice, shadowSampler, nullptr);
 		shadowMap.Destroy(device);
 	}
 
@@ -101,34 +99,16 @@ struct CascadedShadowMap {
 			.height = n,
 			.arrayLayers = max_cascades,
 			.format = Format::D32_SFLOAT,
-			.usage = Usage::DEPTH_STENCIL | Usage::SHADER_RESOURCE
+			.usage = Usage::DEPTH_STENCIL | Usage::SHADER_RESOURCE,
+			.sampler = { true, VK_COMPARE_OP_GREATER } // Enable depth comparisons on the sampler
 		});
-
-		// TODO: this should probably be Texture functionality...
-		VkSamplerCreateInfo samplerInfo = {
-			.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
-			.magFilter = VK_FILTER_LINEAR,
-			.minFilter = VK_FILTER_LINEAR,
-			.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR,
-			// Only enable anisotropic filtering if enabled on the device
-			.anisotropyEnable = device.enabledFeatures.samplerAnisotropy,
-			.maxAnisotropy = device.enabledFeatures.samplerAnisotropy ? device.properties.limits.maxSamplerAnisotropy : 1.0f,
-			// Enable comparisons, since this is a shadow sampler
-			.compareEnable = VK_TRUE,
-			.compareOp = VK_COMPARE_OP_GREATER,
-			// Max level-of-detail should match mip level count - this probably isnt needed for this sampler tho?
-			.minLod = 0.0f,
-			.maxLod = (float)shadowMap.mipLevels
-		};
-
-		vkCreateSampler(device.logicalDevice, &samplerInfo, nullptr, &shadowSampler);
 
 		shadowBindGroupLayout = BindGroupLayout::Create(device, {
 			{.binding = 0, .type = Binding::TEXTURE, .stages = ShaderStage::FRAGMENT}
 		});
 
 		shadowBindGroup = BindGroup::Create(device, shadowBindGroupLayout, {
-			.textures = { { 0, shadowSampler, shadowMap.srv, VK_IMAGE_LAYOUT_READ_ONLY_OPTIMAL } }
+			.textures = { shadowMap.GetBinding(0) }
 		});
 
 		cascadeBindGroupLayout = BindGroupLayout::Create(device, {
