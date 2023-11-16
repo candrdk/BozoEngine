@@ -163,7 +163,7 @@ struct CascadedShadowMap {
 		Check(distances.size() == max_cascades, "All %i cascade distances must be specified", max_cascades);
 
 		// Offsets for shadow samples.
-		float d = 3.0f / 16.0f * (1.0f / n);
+		float d = 3.0f / (16.0f * n);
 		shadowData.shadowOffsets[0] = glm::vec4(glm::vec2(-d,-3*d), glm::vec2( 3*d,-d));
 		shadowData.shadowOffsets[1] = glm::vec4(glm::vec2( d, 3*d), glm::vec2(-3*d, d));
 
@@ -257,10 +257,7 @@ struct CascadedShadowMap {
 	}
 
 	void UpdateCascades(glm::vec3 lightDir) {
-		// TODO: this breaks when lightdir is straight up or down. 
-		// Choose a different up vector in this case...
-		// 
-		// Calculate light matrix from light direction.
+		// Calculate light matrix from light direction. (This breaks when x,z are zero)
 		const glm::vec3 z = -glm::normalize(lightDir);
 		const glm::vec3 x = glm::normalize(glm::cross(glm::vec3(0.0f, 1.0f, 0.0f), z));
 		const glm::vec3 y = glm::cross(x, z);

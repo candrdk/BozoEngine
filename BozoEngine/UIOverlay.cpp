@@ -10,7 +10,6 @@ UIOverlay::UIOverlay(GLFWwindow* window, Device& device, VkFormat colorFormat, V
 	io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
 	io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;
 
-	// TODO: set our own imgui style here
 	ImGui::StyleColorsDark();
 
 	// Initialize glfw callbacks
@@ -166,7 +165,6 @@ void UIOverlay::Update() {
 	// TODO: log and return instead of assert
 	Check(vertexBufferSize < indexBufferOffset, "Vertex buffer size exceeded the maximum limit!");
 	Check(indexBufferOffset + indexBufferSize < drawDataBuffer.size, "Index buffer size exceeded the maximum limit!");
-
 
 	// Upload vertex / index data into a single contiguous GPU buffer
 	ImDrawVert* vertexDst = (ImDrawVert*)vertexBufferStart;

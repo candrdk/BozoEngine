@@ -254,11 +254,10 @@ void Device::CreateDevice(GLFWwindow* window) {
 	surface = CreateSurface(window, instance);
 	physicalDevice = CreatePhysicalDevice(instance);
 
-	// TODO: Take this as a parameter, and validate that device supports them.
 	enabledFeatures = {
-		.depthClamp = VK_TRUE,
-		.depthBiasClamp = VK_TRUE,
-		.samplerAnisotropy = VK_TRUE
+		.depthClamp			= VK_TRUE,
+		.depthBiasClamp		= VK_TRUE,
+		.samplerAnisotropy	= VK_TRUE
 	};
 
 	vkGetPhysicalDeviceProperties(physicalDevice, &properties);
@@ -347,7 +346,7 @@ void Device::FlushCommandBuffer(VkCommandBuffer commandBuffer, VkQueue queue) co
 	VkCheck(vkQueueSubmit2(queue, 1, &submitInfo, fence), "Failed to submit command buffer to queue");
 
 	// Wait for the fence to signal that the command buffer has finished executing
-	VkCheck(vkWaitForFences(logicalDevice, 1, &fence, VK_TRUE, 1ull << 32), "Wait for fence failed");	// TODO: define a default timeout macro. For now, 1 << 32 ~ 5 seconds.
+	VkCheck(vkWaitForFences(logicalDevice, 1, &fence, VK_TRUE, 1ull << 32), "Wait for fence failed");	// NOTE: maybe define a default timeout macro. For now, 1 << 32 ~ 5 seconds.
 
 	vkDestroyFence(logicalDevice, fence, nullptr);
 	vkFreeCommandBuffers(logicalDevice, commandPool, 1, &commandBuffer);

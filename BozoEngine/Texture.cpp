@@ -72,7 +72,6 @@ static constexpr u32 FormatStride(Format format) {
 		return 4;
 
 	default:
-		// TODO: maybe warn here?
 		Check(false, "Unsupported format or no known stride, %i", (int)format);
 		return 0;
 	}

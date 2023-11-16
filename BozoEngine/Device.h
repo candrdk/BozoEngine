@@ -2,7 +2,7 @@
 
 #include "Common.h"
 
-// TODO: should these enums really be here?
+// TODO: Move the enums to a separate class once they get too unwieldy to have in here.
 
 enum class Memory {
 	DEFAULT				= 1 << 0,	// GPU only			VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT

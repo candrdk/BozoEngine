@@ -54,42 +54,45 @@ BindGroup BindGroup::Create(const Device& device, const BindGroupLayout& layout,
     return bindGroup;
 }
 
-// TODO: should probablt batch these descriptor set updates instead of calling
-// vkUpdateDescriptorSets once for every binding...
 void BindGroup::Update(const Device& device, const BindGroupDesc&& desc) {
-    for (const Buffer::Binding& buffer : desc.buffers) {
-        VkDescriptorBufferInfo bufferInfo = {
-            .buffer = buffer.buffer,
-            .offset = buffer.offset,
-            .range = buffer.size
+    VkWriteDescriptorSet descriptorUpdates[16];
+    VkDescriptorBufferInfo bufferDescriptors[8];
+    VkDescriptorImageInfo imageDescriptors[8];
+
+    for (int i = 0; i < desc.buffers.size(); i++) {
+        bufferDescriptors[i] = {
+            .buffer = desc.buffers[i].buffer,
+            .offset = desc.buffers[i].offset,
+            .range = desc.buffers[i].size
         };
-        VkWriteDescriptorSet write = {
+        descriptorUpdates[i] = {
             .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
             .dstSet = descriptorSet,
-            .dstBinding = buffer.binding,
+            .dstBinding = desc.buffers[i].binding,
             .dstArrayElement = 0,
             .descriptorCount = 1,
             .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-            .pBufferInfo = &bufferInfo
+            .pBufferInfo = &bufferDescriptors[i]
         };
-        vkUpdateDescriptorSets(device.logicalDevice, 1, &write, 0, nullptr);
     }
 
-    for (const Texture::Binding& texture : desc.textures) {
-        VkDescriptorImageInfo imageInfo = {
-            .sampler = texture.sampler,
-            .imageView = texture.view,
-            .imageLayout = texture.layout
+    for (int i = desc.buffers.size(); i < desc.textures.size(); i++) {
+        imageDescriptors[i] = {
+            .sampler = desc.textures[i].sampler,
+            .imageView = desc.textures[i].view,
+            .imageLayout = desc.textures[i].layout
         };
-        VkWriteDescriptorSet write = {
+
+        descriptorUpdates[i] = {
             .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
             .dstSet = descriptorSet,
-            .dstBinding = texture.binding,
+            .dstBinding = desc.textures[i].binding,
             .dstArrayElement = 0,
             .descriptorCount = 1,
             .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-            .pImageInfo = &imageInfo
+            .pImageInfo = &imageDescriptors[i]
         };
-        vkUpdateDescriptorSets(device.logicalDevice, 1, &write, 0, nullptr);
     }
+
+    vkUpdateDescriptorSets(device.logicalDevice, desc.buffers.size() + desc.textures.size(), descriptorUpdates, 0, nullptr);
 }
