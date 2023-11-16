@@ -37,7 +37,7 @@ struct CascadedShadowMap {
 	const Device& device;
 	const Camera& camera;
 
-	const u32 n = 1024 * 4;		// Shadow map resolution
+	const u32 n = 1 << 12;		// Shadow map resolution
 
 	// TODO: should probably move away from the "view" matrix naming
 	// Just use	worldToCascade/cascadeToWorld naming. Same goes for the camera.
@@ -242,7 +242,7 @@ struct CascadedShadowMap {
 
 			vkCmdBeginRendering(cmd, &renderingInfo);
 
-			//model->Draw(cmd, pipeline, false);
+			model->Draw(cmd, pipeline, false);
 			plane->Draw(cmd, pipeline, false);
 			lightpoles->Draw(cmd, pipeline, false);
 
@@ -650,7 +650,7 @@ void RecordDeferredCommandBuffer(VkCommandBuffer cmd, u32 imageIndex) {
 
 	vkCmdBeginRendering(cmd, &renderingInfo);
 
-	//model->Draw(cmd, bz::offscreenPipeline);
+	model->Draw(cmd, bz::offscreenPipeline);
 	plane->Draw(cmd, bz::offscreenPipeline);
 	lightpoles->Draw(cmd, bz::offscreenPipeline);
 
@@ -906,7 +906,7 @@ void InitVulkan() {
 	CreateBindGroupLayouts();
 	CreateBindGroups();
 
-	bz::shadowMap = new CascadedShadowMap(bz::device, bz::camera, { {0.0f, 8.0f}, {7.0f, 16.0f}, {14.0f, 32.0f}, {30.0f, 128.0f} });
+	bz::shadowMap = new CascadedShadowMap(bz::device, bz::camera, { {0.0f, 3.0f}, {2.5f, 12.0f}, {11.0f, 32.0f}, {30.0f, 128.0f} });
 
 	CreatePipelines();
 
@@ -1127,9 +1127,9 @@ int main(int argc, char* argv[]) {
 
 	cube = new GLTFModel(bz::device, bz::materialLayout, "assets/Box.glb");
 
-	//model = new GLTFModel(bz::device, bz::materialLayout, "assets/FlightHelmet/FlightHelmet.gltf");
-	//model->nodes[0]->transform = glm::scale(glm::translate(model->nodes[0]->transform, glm::vec3(0.0, 1.0, 0.0)), glm::vec3(2.0));
-	model = new GLTFModel(bz::device, bz::materialLayout, "assets/Sponza/Sponza.gltf");
+	model = new GLTFModel(bz::device, bz::materialLayout, "assets/FlightHelmet/FlightHelmet.gltf");
+	model->nodes[0]->transform = glm::scale(glm::translate(model->nodes[0]->transform, glm::vec3(0.0, 1.0, 0.0)), glm::vec3(2.0));
+	//model = new GLTFModel(bz::device, bz::materialLayout, "assets/Sponza/Sponza.gltf");
 
 	lightpoles = new GLTFModel(bz::device, bz::materialLayout, "assets/Lightpoles.glb");
 	lightpoles->nodes[0]->transform = glm::scale(lightpoles->nodes[0]->transform, glm::vec3(0.4f));
