@@ -14,6 +14,7 @@ constexpr u32 WIDTH = 1600;
 constexpr u32 HEIGHT = 900;
 
 GLTFModel* model;
+GLTFModel* lightpoles;
 GLTFModel* plane;
 GLTFModel* cube;
 u32 currentFrame = 0;
@@ -241,8 +242,9 @@ struct CascadedShadowMap {
 
 			vkCmdBeginRendering(cmd, &renderingInfo);
 
-			model->Draw(cmd, pipeline, false);
+			//model->Draw(cmd, pipeline, false);
 			plane->Draw(cmd, pipeline, false);
+			lightpoles->Draw(cmd, pipeline, false);
 
 			vkCmdEndRendering(cmd);
 		}
@@ -648,8 +650,9 @@ void RecordDeferredCommandBuffer(VkCommandBuffer cmd, u32 imageIndex) {
 
 	vkCmdBeginRendering(cmd, &renderingInfo);
 
-	model->Draw(cmd, bz::offscreenPipeline);
+	//model->Draw(cmd, bz::offscreenPipeline);
 	plane->Draw(cmd, bz::offscreenPipeline);
+	lightpoles->Draw(cmd, bz::offscreenPipeline);
 
 	vkCmdEndRendering(cmd);
 
@@ -1128,16 +1131,23 @@ int main(int argc, char* argv[]) {
 	//model->nodes[0]->transform = glm::scale(glm::translate(model->nodes[0]->transform, glm::vec3(0.0, 1.0, 0.0)), glm::vec3(2.0));
 	model = new GLTFModel(bz::device, bz::materialLayout, "assets/Sponza/Sponza.gltf");
 
+	lightpoles = new GLTFModel(bz::device, bz::materialLayout, "assets/Lightpoles.glb");
+	lightpoles->nodes[0]->transform = glm::scale(lightpoles->nodes[0]->transform, glm::vec3(0.4f));
+
 	plane = new GLTFModel(bz::device, bz::materialLayout, "assets/ParallaxTest/plane.gltf");
 	{
+		const char* albedo = 1 ? "assets/Sponza/5823059166183034438.jpg"  : "assets/ParallaxTest/rocks_color_rgba.png";
+		const char* normal = 1 ? "assets/Sponza/14267839433702832875.jpg" : "assets/ParallaxTest/rocks_normal_height_rgba.png";
+
 		plane->images.resize(3);
-		plane->images[1] = Texture::Create(bz::device, "assets/ParallaxTest/rocks_color_rgba.png", {
+
+		plane->images[1] = Texture::Create(bz::device, albedo, {
 			.format = Format::RGBA8_SRGB,
 			.usage = Usage::SHADER_RESOURCE,
 			.generateMipLevels = true,
-		});
+			});
 
-		plane->images[2] = Texture::Create(bz::device, "assets/ParallaxTest/rocks_normal_height_rgba.png", {
+		plane->images[2] = Texture::Create(bz::device, normal, {
 			.format = Format::RGBA8_UNORM,
 			.usage = Usage::SHADER_RESOURCE,
 			.generateMipLevels = true,
@@ -1204,12 +1214,14 @@ int main(int argc, char* argv[]) {
 			//bz::dirLight.direction = glm::vec3(-0.5f, -0.5f, 1.0f);
 		}
 
+#if 0
 		plane->nodes[0]->transform = glm::translate(
 			glm::rotate(
 				glm::scale(glm::mat4(1.0f), glm::vec3(0.2f)),
 				glm::cos(float(currentFrame)),
 				glm::vec3(0.5f, 0.5f, 1.0f)),
 			glm::vec3(0.0f, 2.0f, 0.0f));
+#endif
 
 		plane->materials[0].parallaxMode = bz::parallaxMode;
 		plane->materials[0].parallaxSteps = bz::parallaxSteps;
@@ -1237,6 +1249,7 @@ int main(int argc, char* argv[]) {
 	bz::skyboxLayout.Destroy(bz::device);
 
 	delete plane;
+	delete lightpoles;
 	delete model;
 	delete cube;
 	

@@ -181,20 +181,8 @@ float get_shadow(vec3 p) {
 
 	float shadow = mix(light2, light1, weight) * 0.25;
 
-	return shadow;
-
-#if 0	// Cascade debug view. This will be implemented properly later on...
-	vec3 cascades[3] = {
-		vec3(1.0, 0.0, 0.0),
-		vec3(0.0, 1.0, 0.0),
-		vec3(0.0, 0.0, 1.0)
-	};
-
-	vec3 cascadeDebug = (weight > 0.0 && weight < 0.05) ? cascades[int(min(p1.z, p2.z))] : vec3(0.0);
-	cascadeDebug += (weight > 0.95 && weight < 1.0) ? cascades[int(min(p1.z, p2.z))] : vec3(0.0);
-
-	return vec4(shade * shadow + cascadeDebug, 1.0);
-#endif
+	// Add 0.1 to shadow arent 100% black untill we get proper ambient lighting
+	return min(1.0, shadow + 0.1);
 }
 
 vec4 shade_pixel() {
