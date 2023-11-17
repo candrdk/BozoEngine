@@ -37,7 +37,7 @@ struct CascadedShadowMap {
 	const Device& device;
 	const Camera& camera;
 
-	const u32 n = 1 << 12;		// Shadow map resolution
+	const u32 n = 1 << 13;		// Shadow map resolution
 
 	// TODO: should probably move away from the "view" matrix naming
 	// Just use	worldToCascade/cascadeToWorld naming. Same goes for the camera.
@@ -120,14 +120,14 @@ struct CascadedShadowMap {
 			for (int k = 0; k < max_cascades; k++) {
 				cascadeUBOs[i][k] = Buffer::Create(device, {
 					.debugName = "CSM cascade viewProj matrix",
-					.byteSize = sizeof(glm::mat4) * max_cascades,
+					.byteSize = sizeof(glm::mat4),
 					.usage = Usage::UNIFORM_BUFFER,
 					.memory = Memory::UPLOAD
 				});
 				cascadeUBOs[i][k].Map(device);
 
 				cascadeBindGroup[i][k] = BindGroup::Create(device, cascadeBindGroupLayout, {
-					.buffers = { cascadeUBOs[i][k].GetBinding(0, sizeof(glm::mat4) * max_cascades)}
+					.buffers = { cascadeUBOs[i][k].GetBinding(0, sizeof(glm::mat4))}
 				});
 			}
 		}
@@ -1124,9 +1124,9 @@ int main(int argc, char* argv[]) {
 
 	cube = new GLTFModel(bz::device, bz::materialLayout, "assets/Box.glb");
 
-	model = new GLTFModel(bz::device, bz::materialLayout, "assets/FlightHelmet/FlightHelmet.gltf");
-	model->nodes[0]->transform = glm::scale(glm::translate(model->nodes[0]->transform, glm::vec3(0.0, 1.0, 0.0)), glm::vec3(2.0));
-	//model = new GLTFModel(bz::device, bz::materialLayout, "assets/Sponza/Sponza.gltf");
+	//model = new GLTFModel(bz::device, bz::materialLayout, "assets/FlightHelmet/FlightHelmet.gltf");
+	//model->nodes[0]->transform = glm::scale(glm::translate(model->nodes[0]->transform, glm::vec3(0.0, 1.0, 0.0)), glm::vec3(2.0));
+	model = new GLTFModel(bz::device, bz::materialLayout, "assets/Sponza/Sponza.gltf");
 
 	lightpoles = new GLTFModel(bz::device, bz::materialLayout, "assets/Lightpoles.glb");
 	lightpoles->nodes[0]->transform = glm::scale(lightpoles->nodes[0]->transform, glm::vec3(0.4f));
