@@ -18,8 +18,8 @@ struct ShadowData {
 	vec4 a;
 	vec4 b;
 	mat4 shadowMat;
-	vec3 cascadeScales[3];
-	vec3 cascadeOffsets[3];
+	vec4 cascadeScales[3];
+	vec4 cascadeOffsets[3];
 	vec4 shadowOffsets[2];
 };
 
@@ -136,9 +136,9 @@ float get_shadow(vec3 p) {
 
 	// Apply scales and offsets to get the texcoords in all four cascade
 	vec3 cascadeCoord0 = (ubo.shadow.shadowMat * world_pos).xyz;
-	vec3 cascadeCoord1 = cascadeCoord0 * ubo.shadow.cascadeScales[0] + ubo.shadow.cascadeOffsets[0];
-	vec3 cascadeCoord2 = cascadeCoord0 * ubo.shadow.cascadeScales[1] + ubo.shadow.cascadeOffsets[1];
-	vec3 cascadeCoord3 = cascadeCoord0 * ubo.shadow.cascadeScales[2] + ubo.shadow.cascadeOffsets[2];
+	vec3 cascadeCoord1 = cascadeCoord0 * ubo.shadow.cascadeScales[0].xyz + ubo.shadow.cascadeOffsets[0].xyz;
+	vec3 cascadeCoord2 = cascadeCoord0 * ubo.shadow.cascadeScales[1].xyz + ubo.shadow.cascadeOffsets[1].xyz;
+	vec3 cascadeCoord3 = cascadeCoord0 * ubo.shadow.cascadeScales[2].xyz + ubo.shadow.cascadeOffsets[2].xyz;
 
 	float u1 = (p.z - ubo.shadow.a[1]) / (ubo.shadow.b[0] - ubo.shadow.a[1]);
 	float u2 = (p.z - ubo.shadow.a[2]) / (ubo.shadow.b[1] - ubo.shadow.a[2]);
