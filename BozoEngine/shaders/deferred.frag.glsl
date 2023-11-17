@@ -18,8 +18,8 @@ struct ShadowData {
 	vec4 a;
 	vec4 b;
 	mat4 shadowMat;
-	vec4 cascadeScales[3];
-	vec4 cascadeOffsets[3];
+	vec3 cascadeScales[3];
+	vec3 cascadeOffsets[3];
 	vec4 shadowOffsets[2];
 };
 
