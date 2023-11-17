@@ -145,9 +145,9 @@ struct CascadedShadowMap {
 					.cullMode = VK_CULL_MODE_BACK_BIT,
 					.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE,
 					.depthBiasEnable = VK_TRUE,
-					.depthBiasConstantFactor = -2.0f,
-					.depthBiasClamp = -1.0f / 128.0f,
-					.depthBiasSlopeFactor = -3.0f
+					.depthBiasConstantFactor = -2.0f,	// TODO: Play around with these
+					.depthBiasClamp = -1.0f / 128.0f,	// a bit to see if they can be
+					.depthBiasSlopeFactor = -3.0f		// improved + get a better feel
 				},
 				.vertexInput = {
 					.bindingDesc = GLTFModel::Vertex::BindingDescripton,
@@ -199,7 +199,7 @@ struct CascadedShadowMap {
 	}
 
 	void RenderShadowMap(VkCommandBuffer cmd) {
-		// Transition shadow map to depth attachment optimal
+		// Transition shadow map to attachment optimal
 		VkImageSubresourceRange subresourceRange = {
 			.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT,
 			.baseMipLevel = 0,
