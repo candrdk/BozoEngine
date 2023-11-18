@@ -37,7 +37,7 @@ struct CascadedShadowMap {
 	const Device& device;
 	const Camera& camera;
 
-	const u32 n = 1 << 13;		// Shadow map resolution
+	const u32 n = 1 << 12;		// Shadow map resolution
 
 	// TODO: should probably move away from the "view" matrix naming
 	// Just use	worldToCascade/cascadeToWorld naming. Same goes for the camera.
@@ -998,6 +998,12 @@ void DrawFrame() {
 		VkCheck(result, "Failed to acquire swapchain image!");
 	}
 
+	// UpdateCascades overwrites ubo memory so it has to be called on this side of the fence.
+	// Might be a good idea to separate this function into
+	//	- UpdateCascades		Updates cascade matrices in ShadowMap class, etc.
+	//	- UpdateGPUResources	Copies the updated matrices to the UBO.
+	bz::shadowMap->UpdateCascades(bz::dirLight.direction);
+
 	UpdateUniformBuffer(currentFrame);
 
 	// Only reset the fence if we swapchain was valid and we are actually submitting work.
@@ -1226,8 +1232,6 @@ int main(int argc, char* argv[]) {
 
 		bz::camera.Update(deltaTime);
 		bz::overlay->Update();
-
-		bz::shadowMap->UpdateCascades(bz::dirLight.direction);
 
 		DrawFrame();
 
