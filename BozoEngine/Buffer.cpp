@@ -23,7 +23,7 @@ static VkMemoryPropertyFlags GetMemoryProperties(Memory memory) {
 }
 
 bool Buffer::Map(const Device& device) {
-	return vkMapMemory(device.logicalDevice, memory, 0, size, 0, &mapped);
+	return vkMapMemory(device.logicalDevice, memory, 0, size, 0, (void**)&mapped);
 }
 
 void Buffer::Unmap(const Device& device) {

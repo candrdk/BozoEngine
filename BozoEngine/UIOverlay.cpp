@@ -75,9 +75,9 @@ void UIOverlay::InitializeVulkanResources() {
 	drawDataBuffer.Map(device);
 
 	vertexBufferOffset = 0;
-	vertexBufferStart = (u8*)drawDataBuffer.mapped + vertexBufferOffset;
+	vertexBufferStart = drawDataBuffer.mapped + vertexBufferOffset;
 	indexBufferOffset = drawDataBuffer.size - (drawDataBuffer.size >> 2);
-	indexBufferStart = (u8*)drawDataBuffer.mapped + indexBufferOffset;
+	indexBufferStart = drawDataBuffer.mapped + indexBufferOffset;
 }
 
 void UIOverlay::InitializeVulkanPipeline(VkFormat colorFormat, VkFormat depthFormat) {

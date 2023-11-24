@@ -10,6 +10,14 @@
 
 #include "Pipeline.h"
 
+// TODO:
+// Simplify updatecascades
+// Move ubo updates to separate function
+// Improve shadow filtering, blurring. See tardif
+// 
+// Check shadows beyond the last cascade - how should this be handled?
+// Record videos of artifacts before improving shadows further
+
 constexpr u32 WIDTH = 1600;
 constexpr u32 HEIGHT = 900;
 
@@ -66,9 +74,9 @@ struct CascadedShadowMap {
 		alignas(16) glm::vec4 shadowOffsets[2];
 	} shadowData;
 
-	Buffer cascadeUBOs[MAX_FRAMES_IN_FLIGHT][max_cascades];
+	Buffer cascadeUBO[MAX_FRAMES_IN_FLIGHT];
 	BindGroupLayout cascadeBindGroupLayout;
-	BindGroup cascadeBindGroup[MAX_FRAMES_IN_FLIGHT][max_cascades];
+	BindGroup cascadeBindGroup[MAX_FRAMES_IN_FLIGHT];
 
 	BindGroupLayout shadowBindGroupLayout;
 	BindGroup shadowBindGroup;
@@ -84,9 +92,8 @@ struct CascadedShadowMap {
 	~CascadedShadowMap() {
 		pipeline.Destroy(device);
 		
-		for (auto& cascadeFrame : cascadeUBOs)
-			for (auto& cascade : cascadeFrame)
-				cascade.Destroy(device);
+		for (auto& ubo : cascadeUBO)
+			ubo.Destroy(device);
 
 		shadowBindGroupLayout.Destroy(device);
 		cascadeBindGroupLayout.Destroy(device);
@@ -113,23 +120,21 @@ struct CascadedShadowMap {
 		});
 
 		cascadeBindGroupLayout = BindGroupLayout::Create(device, {
-			{.binding = 0, .type = Binding::BUFFER }
+			{.binding = 0, .type = Binding::BUFFER_DYNAMIC }
 		});
 
 		for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
-			for (int k = 0; k < max_cascades; k++) {
-				cascadeUBOs[i][k] = Buffer::Create(device, {
-					.debugName = "CSM cascade viewProj matrix",
-					.byteSize = sizeof(glm::mat4),
-					.usage = Usage::UNIFORM_BUFFER,
-					.memory = Memory::UPLOAD
-				});
-				cascadeUBOs[i][k].Map(device);
+			cascadeUBO[i] = Buffer::Create(device, {
+				.debugName = "CSM cascade viewProj matrix",
+				.byteSize = glm::max(sizeof(glm::mat4), 256ull) * max_cascades,
+				.usage = Usage::UNIFORM_BUFFER,
+				.memory = Memory::UPLOAD
+			});
+			cascadeUBO[i].Map(device);
 
-				cascadeBindGroup[i][k] = BindGroup::Create(device, cascadeBindGroupLayout, {
-					.buffers = { cascadeUBOs[i][k].GetBinding(0, sizeof(glm::mat4))}
-				});
-			}
+			cascadeBindGroup[i] = BindGroup::Create(device, cascadeBindGroupLayout, {
+				.buffers = { cascadeUBO[i].GetBinding(0, sizeof(glm::mat4)) }
+			});
 		}
 
 		Shader shadowMapVert = Shader::Create(device, "shaders/shadowMap.vert.spv");
@@ -234,17 +239,19 @@ struct CascadedShadowMap {
 		};
 
 		for (u32 k = 0; k < max_cascades; k++) {
-			// TODO: dont like relying on the global currentframe int in here
-			vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline.pipelineLayout, 0, 1, &cascadeBindGroup[currentFrame][k].descriptorSet, 0, nullptr);
+			// TODO: dont like relying on the global currentFrame int in here
+			// TODO: 256 is the max possible minUniformBufferOffsetAlignment. Use device.properties.minUniformBufferOffsetAlignment instead.
+			u32 dynamicOffset = k * 256;
+			vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline.pipelineLayout, 0, 1, &cascadeBindGroup[currentFrame].descriptorSet, 1, &dynamicOffset);
 
 			VkRenderingAttachmentInfo cascadeAttachment = shadowMap.GetAttachmentInfo(k);
 			renderingInfo.pDepthAttachment = &cascadeAttachment;
 
 			vkCmdBeginRendering(cmd, &renderingInfo);
 
-			model->Draw(cmd, pipeline, false);
-			plane->Draw(cmd, pipeline, false);
-			lightpoles->Draw(cmd, pipeline, false);
+			model->Draw(cmd, pipeline, true);
+			plane->Draw(cmd, pipeline, true);
+			lightpoles->Draw(cmd, pipeline, true);
 
 			vkCmdEndRendering(cmd);
 		}
@@ -336,7 +343,8 @@ struct CascadedShadowMap {
 			cascades[k].viewProj = cascades[k].cascadeProj * cascades[k].cascadeInvView;
 
 			// Update cascade ubo...
-			memcpy(cascadeUBOs[currentFrame][k].mapped, &cascades[k].viewProj, sizeof(glm::mat4));
+			// TODO: 256 is the max possible minUniformBufferOffsetAlignment. Use device.properties.minUniformBufferOffsetAlignment instead.
+			memcpy(cascadeUBO[currentFrame].mapped + k * 256, &cascades[k].viewProj, sizeof(glm::mat4));
 		}
 
 		// Calculate world to shadow map texture coordinates texture.

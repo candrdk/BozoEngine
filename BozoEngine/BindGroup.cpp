@@ -74,6 +74,13 @@ void BindGroup::Update(const Device& device, const BindGroupDesc&& desc) {
             .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
             .pBufferInfo = &bufferDescriptors[i]
         };
+
+        // Differentiate dynamic uniform buffers from normal ubos.
+        for (const auto& binding : layout.bindingDescs) {
+            if (binding.binding == desc.buffers[i].binding) {
+                descriptorUpdates[i].descriptorType = (VkDescriptorType)binding.type;
+            }
+        }
     }
 
     for (int i = desc.buffers.size(); i < desc.textures.size(); i++) {

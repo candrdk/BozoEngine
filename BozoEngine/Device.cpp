@@ -224,9 +224,10 @@ static VkCommandPool CreateCommandPool(VkDevice device, u32 queueFamilyIndex) {
 	return commandPool;
 }
 
-static VkDescriptorPool CreateDescriptorPool(VkDevice device, u32 maxBufferDescriptors, u32 maxImageDescriptors) {
+static VkDescriptorPool CreateDescriptorPool(VkDevice device, u32 maxBufferDescriptors, u32 maxDynamicBufferDescriptors, u32 maxImageDescriptors) {
 	VkDescriptorPoolSize poolSizes[] = {
 		{ .type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,			.descriptorCount = maxBufferDescriptors },
+		{ .type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC,	.descriptorCount = maxDynamicBufferDescriptors },
 		{ .type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,	.descriptorCount = maxImageDescriptors }
 	};
 
@@ -279,7 +280,7 @@ void Device::CreateDevice(GLFWwindow* window) {
 	graphicsQueue = CreateQueue(logicalDevice, queueIndex.graphics);
 
 	commandPool = CreateCommandPool(logicalDevice, queueIndex.graphics);
-	descriptorPool = CreateDescriptorPool(logicalDevice, 100, 100);
+	descriptorPool = CreateDescriptorPool(logicalDevice, 100, 1, 100);
 }
 
 void Device::DestroyDevice() {

@@ -21,7 +21,7 @@ struct BufferDesc {
 struct Buffer {
 	VkBuffer		buffer = VK_NULL_HANDLE;
 	VkDeviceMemory	memory = VK_NULL_HANDLE;
-	void*			mapped = nullptr;
+	u8*				mapped = nullptr;
 	VkDeviceSize	size   = 0;
 
 	struct Binding {

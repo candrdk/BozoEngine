@@ -74,17 +74,17 @@ GLTFModel::~GLTFModel() {
 	}
 }
 
-void GLTFModel::Draw(VkCommandBuffer cmdBuffer, const Pipeline& pipeline, bool bindMaterial) {
+void GLTFModel::Draw(VkCommandBuffer cmdBuffer, const Pipeline& pipeline, bool shadowMap) {
 	VkDeviceSize offsets[] = { 0 };
 	vkCmdBindVertexBuffers(cmdBuffer, 0, 1, &vertices.buffer, offsets);
 	vkCmdBindIndexBuffer(cmdBuffer, indices.buffer, 0, VK_INDEX_TYPE_UINT32);
 
 	for (const auto& node : nodes) {
-		DrawNode(cmdBuffer, pipeline, node, bindMaterial);
+		DrawNode(cmdBuffer, pipeline, node, shadowMap);
 	}
 }
 
-void GLTFModel::DrawNode(VkCommandBuffer cmdBuffer, const Pipeline& pipeline, Node* node, bool bindMaterial) {
+void GLTFModel::DrawNode(VkCommandBuffer cmdBuffer, const Pipeline& pipeline, Node* node, bool shadowMap) {
 	if (node->mesh.primitives.size() > 0) {
 		// Calculate primitive matrix transform by traversing the node hiearchy to the root
 		glm::mat4 nodeTransform = node->transform;
@@ -95,26 +95,32 @@ void GLTFModel::DrawNode(VkCommandBuffer cmdBuffer, const Pipeline& pipeline, No
 		}
 
 		for (const Primitive& primitive : node->mesh.primitives) {
-			if (primitive.indexCount > 0) {
+			if (primitive.indexCount <= 0) continue;
+
+			// If rendering to shadow map we dont need to bind material textures and push constants can be simplified.
+			if (shadowMap) {
+				vkCmdPushConstants(cmdBuffer, pipeline.pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(glm::mat4), &nodeTransform);
+			}
+			else {
 				// Bind the descriptor for the current primitives' material
-				if (bindMaterial)
-					vkCmdBindDescriptorSets(cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline.pipelineLayout, 1, 1, &materials[primitive.materialIndex].bindGroup.descriptorSet, 0, nullptr);
+				vkCmdBindDescriptorSets(cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline.pipelineLayout, 1, 1, &materials[primitive.materialIndex].bindGroup.descriptorSet, 0, nullptr);
 
 				PushConstants p = {
 					.model = nodeTransform,
-					.parallaxMode  = materials[primitive.materialIndex].parallaxMode,
+					.parallaxMode = materials[primitive.materialIndex].parallaxMode,
 					.parallaxSteps = materials[primitive.materialIndex].parallaxSteps,
 					.parallaxScale = materials[primitive.materialIndex].parallaxScale
 				};
-				vkCmdPushConstants(cmdBuffer, pipeline.pipelineLayout, pipeline.pushConstants.stageFlags, 0, sizeof(p), &p);
 
-				vkCmdDrawIndexed(cmdBuffer, primitive.indexCount, 1, primitive.firstIndex, 0, 0);
+				vkCmdPushConstants(cmdBuffer, pipeline.pipelineLayout, pipeline.pushConstants.stageFlags, 0, sizeof(p), &p);
 			}
+
+			vkCmdDrawIndexed(cmdBuffer, primitive.indexCount, 1, primitive.firstIndex, 0, 0);
 		}
 	}
 
 	for (const auto& child : node->children) {
-		DrawNode(cmdBuffer, pipeline, child, bindMaterial);
+		DrawNode(cmdBuffer, pipeline, child, shadowMap);
 	}
 }
 

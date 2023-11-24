@@ -68,7 +68,7 @@ public:
 	GLTFModel(Device& device, BindGroupLayout materialLayout, const char* path);
 	~GLTFModel();
 
-	void Draw(VkCommandBuffer cmdBuffer, const Pipeline& pipeline, bool bindMaterial = true);
+	void Draw(VkCommandBuffer cmdBuffer, const Pipeline& pipeline, bool shadowMap = false);
 
 private:
 	struct PushConstants {
@@ -78,7 +78,7 @@ private:
 		float parallaxScale;
 	};
 
-	void DrawNode(VkCommandBuffer cmdBuffer, const Pipeline& pipeline, Node* node, bool bindMaterial);
+	void DrawNode(VkCommandBuffer cmdBuffer, const Pipeline& pipeline, Node* node, bool shadowMap);
 
 	void LoadImages(tinygltf::Model& model);
 
