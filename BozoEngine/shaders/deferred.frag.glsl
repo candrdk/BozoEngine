@@ -39,6 +39,8 @@ layout(set = 0, binding = 0) uniform UniformBufferObject {
 
 layout(push_constant) uniform PushConstants {
     uint renderMode;
+	uint colorCascades;
+	uint enablePCF;
 };
 
 layout (set = 1, binding = 0) uniform sampler2D samplerAlbedo;
@@ -130,7 +132,7 @@ vec3 shade_point_light(PointLight light, vec3 n, vec3 v, vec3 p) {
 	//return (diffuse + specular) * yuksel_attenuation(d, r0);
 }
 
-float get_shadow(vec3 p) {
+vec3 get_shadow(vec3 p) {
 	vec4 p1, p2;
 	vec4 world_pos = inverse(ubo.view) * vec4(p, 1.0);
 
@@ -179,10 +181,29 @@ float get_shadow(vec3 p) {
 	p2.xy = shadowCoord2 + ubo.shadow.shadowOffsets[1].zw;
 	light2 += texture(samplerShadowMap, p2);
 
-	float shadow = mix(light2, light1, weight) * 0.25;
+	// We max(0.2, shadow) so shaded areas aren't 100% black.
+	vec3 shadow = vec3(max(0.2, mix(light2, light1, weight) * 0.25));
 
-	// Add 0.1 to shadow arent 100% black untill we get proper ambient lighting
-	return min(1.0, shadow + 0.1);
+	// Only sample once if PCF is disabled
+	if (enablePCF == 0) {
+		p1.xy = shadowCoord1;
+		p2.xy = shadowCoord2;
+		light1 = texture(samplerShadowMap, p1);
+		light2 = texture(samplerShadowMap, p2);
+		shadow = vec3(max(0.2, mix(light2, light1, weight)));
+	}
+
+	// Color cascades if enabled
+	if (colorCascades == 1) {
+		switch (int(mix(p2.z, p1.z, weight))) {
+			case 0: shadow *= vec3(1.0f,  0.25f, 0.25f); break;
+			case 1: shadow *= vec3(0.25f, 1.0f,  0.25f); break;
+			case 2:	shadow *= vec3(0.25f, 0.25f, 1.0f ); break;
+			case 3:	shadow *= vec3(1.0f,  0.25f, 0.25f); break;
+		}
+	}
+
+	return shadow;
 }
 
 vec4 shade_pixel() {
@@ -191,13 +212,12 @@ vec4 shade_pixel() {
 	vec3 v = normalize((ubo.view * ubo.position).xyz - p);
 
 	vec3 shade = shade_directional_light(ubo.dirLight, n, v);
-	shade *= get_shadow(p);
 
 	for (int i = 0; i < ubo.pointLightCount; i++) {
 		shade += shade_point_light(ubo.pointLights[i], n, v, p);
 	}
 
-	return vec4(shade, 1.0);
+	return vec4(shade * get_shadow(p), 1.0);
 }
 
 void main() {

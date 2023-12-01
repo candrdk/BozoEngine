@@ -444,7 +444,13 @@ namespace bz {
 	};
 
 	// Deferred pass settings
-	u32 renderMode      = 0;
+	struct {
+		u32 renderMode = 0;
+		u32 colorCascades = 0;
+		u32 enablePCF = 1;
+	} deferredSettings;
+
+	// Offscreen pass settings
 	u32 parallaxMode    = 4;
 	u32 parallaxSteps   = 8;
 	float parallaxScale = 0.05f;
@@ -704,7 +710,7 @@ void RecordDeferredCommandBuffer(VkCommandBuffer cmd, u32 imageIndex) {
 	vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, bz::deferredPipeline.pipelineLayout, 0, 1, &bz::deferredBindings[currentFrame].descriptorSet, 0, nullptr);
 	vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, bz::deferredPipeline.pipelineLayout, 1, 1, &bz::gbufferBindings.descriptorSet, 0, nullptr);
 	vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, bz::deferredPipeline.pipelineLayout, 2, 1, &bz::shadowMap->shadowBindGroup.descriptorSet, 0, nullptr);
-	vkCmdPushConstants(cmd, bz::deferredPipeline.pipelineLayout, VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(u32), &bz::renderMode);
+	vkCmdPushConstants(cmd, bz::deferredPipeline.pipelineLayout, VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(bz::deferredSettings), &bz::deferredSettings);
 
 	vkCmdBeginRendering(cmd, &renderingInfo);
 
@@ -1084,15 +1090,20 @@ void OverlayRender() {
 	ImGui::ColorEdit3("Diffuse", &bz::dirLight.diffuse.x, ImGuiColorEditFlags_Float);
 	ImGui::ColorEdit3("Specular", &bz::dirLight.specular.x, ImGuiColorEditFlags_Float);
 
+	if (ImGui::CollapsingHeader("Shadow settings", ImGuiTreeNodeFlags_DefaultOpen)) {
+		ImGui::Checkbox("Visualize cascades", (bool*)&bz::deferredSettings.colorCascades);
+		ImGui::Checkbox("Enable PCF", (bool*)&bz::deferredSettings.enablePCF);
+	}
+
 	if (ImGui::CollapsingHeader("Render Mode", ImGuiTreeNodeFlags_DefaultOpen)) {
 		ImGui::BeginTable("split", 2);
 
-		ImGui::TableNextColumn(); if (ImGui::RadioButton("Deferred", bz::renderMode == 0))			{ bz::renderMode = 0; }
+		ImGui::TableNextColumn(); if (ImGui::RadioButton("Deferred",			bz::deferredSettings.renderMode == 0))	{ bz::deferredSettings.renderMode = 0; }
 		ImGui::TableNextColumn();
-		ImGui::TableNextColumn(); if (ImGui::RadioButton("Albedo", bz::renderMode == 1))			{ bz::renderMode = 1; }
-		ImGui::TableNextColumn(); if (ImGui::RadioButton("Normal", bz::renderMode == 2))			{ bz::renderMode = 2; }
-		ImGui::TableNextColumn(); if (ImGui::RadioButton("Metallic/Roughness", bz::renderMode == 3)){ bz::renderMode = 3; }
-		ImGui::TableNextColumn(); if (ImGui::RadioButton("Depth", bz::renderMode == 4))				{ bz::renderMode = 4; }
+		ImGui::TableNextColumn(); if (ImGui::RadioButton("Albedo",				bz::deferredSettings.renderMode == 1))	{ bz::deferredSettings.renderMode = 1; }
+		ImGui::TableNextColumn(); if (ImGui::RadioButton("Normal",				bz::deferredSettings.renderMode == 2))	{ bz::deferredSettings.renderMode = 2; }
+		ImGui::TableNextColumn(); if (ImGui::RadioButton("Metallic/Roughness",	bz::deferredSettings.renderMode == 3))	{ bz::deferredSettings.renderMode = 3; }
+		ImGui::TableNextColumn(); if (ImGui::RadioButton("Depth",				bz::deferredSettings.renderMode == 4))	{ bz::deferredSettings.renderMode = 4; }
 
 		ImGui::EndTable();
 	}
@@ -1216,10 +1227,6 @@ int main(int argc, char* argv[]) {
 			bz::pointLightR.position = glm::vec3(-2.0f, glm::cos(2.0f * t) + 1.0f, 2.0f);
 			bz::pointLightG.position = glm::vec3(2.0f, 0.25f, 0.0f);
 			bz::pointLightB.position = glm::vec3(glm::cos(4.0f * t), 0.25f, -2.0f);
-
-			bz::pointLightR.position = glm::vec3(100.0f, 100.0f, 100.0f);
-			bz::pointLightG.position = glm::vec3(100.0f, 100.0f, 100.0f);
-			bz::pointLightB.position = glm::vec3(100.0f, 100.0f, 100.0f);
 		}
 		else {
 			//bz::dirLight.direction = glm::vec3(-0.5f, -0.5f, 1.0f);
