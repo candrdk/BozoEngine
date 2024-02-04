@@ -13,10 +13,6 @@
 // TODO:
 // Simplify updatecascades
 // Move ubo updates to separate function
-// Improve shadow filtering, blurring. See tardif
-// 
-// Check shadows beyond the last cascade - how should this be handled?
-// Record videos of artifacts before improving shadows further
 
 constexpr u32 WIDTH = 1600;
 constexpr u32 HEIGHT = 900;
