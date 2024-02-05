@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Common.h"
+
 #include <glm/gtc/matrix_transform.hpp>		// lookAt
 
 class Camera {

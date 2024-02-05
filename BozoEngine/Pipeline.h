@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Common.h"
+
 #include "Device.h"
 #include "BindGroup.h"
 #include "Shader.h"

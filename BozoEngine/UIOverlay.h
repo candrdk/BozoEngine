@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Common.h"
+
 #include "Device.h"
 #include "Texture.h"
 #include "Buffer.h"
