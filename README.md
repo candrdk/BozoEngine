@@ -1,5 +1,10 @@
 # Bozo Engine
-Small `Vulkan 1.3` renderer.
+Small `Vulkan 1.3` renderer written in c++ from scratch with only minimal dependencies.
+
+![Screenshot of BozoEngien in its current state.](screenshot.png)
+
+## ⚠️Big rewrite in progress⚠️
+The code is currently very messy. I'm in the progress of a big rewrite on a local branch.
 
 ## Why
 To learn vulkan and graphics programming. And for fun!
