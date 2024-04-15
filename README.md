@@ -1,4 +1,4 @@
-# Bozo Engine
+# Bozo Engine 🤡
 Small `Vulkan 1.3` hubby renderer written in c++ from scratch. The goal of BozoEngine is to gain some hands-on experience with Vulkan, try out some game engine programming and learn how rendering real-time rendering techniques are implemented. Most importantly, however, it's (allegedly suppossed to, at some point, become) fun!
 
 ![Screenshot of BozoEngien in its current state.](screenshot.png)
@@ -24,3 +24,4 @@ Bozo Engine uses the following 3rd party libraries:
 - ImGUI with [Dear ImGui](https://github.com/ocornut/imgui)
 - SPIR-V reflection with [SPIRV-Cross](https://github.com/KhronosGroup/SPIRV-Cross)
 - Vulkan meta-loader [volk](https://github.com/zeux/volk)
+- [VMA](https://github.com/GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator) is used for Vulkan memory allocations.
