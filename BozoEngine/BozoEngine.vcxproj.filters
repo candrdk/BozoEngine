@@ -23,9 +23,6 @@
     <Filter Include="Extern\volk">
       <UniqueIdentifier>{3e366fbb-0035-405e-a6e6-ca17ed84628e}</UniqueIdentifier>
     </Filter>
-    <Filter Include="Extern\SPIRV-Reflect">
-      <UniqueIdentifier>{703e81da-c357-401f-979d-e930ceb77026}</UniqueIdentifier>
-    </Filter>
     <Filter Include="Shaders">
       <UniqueIdentifier>{9fb3f89d-d67d-4ff5-885e-fab4601df355}</UniqueIdentifier>
     </Filter>
@@ -139,9 +136,6 @@
     <ClCompile Include="..\Extern\imgui\imgui_widgets.cpp">
       <Filter>Extern\imgui</Filter>
     </ClCompile>
-    <ClCompile Include="..\Extern\SPIRV-Reflect\spirv_reflect.c">
-      <Filter>Extern\SPIRV-Reflect</Filter>
-    </ClCompile>
     <ClCompile Include="Vulkan\VulkanDevice.cpp">
       <Filter>Vulkan</Filter>
     </ClCompile>
@@ -224,9 +218,6 @@
     </ClInclude>
     <ClInclude Include="..\Extern\tinygltf\json.hpp">
       <Filter>Extern\tinygltf</Filter>
-    </ClInclude>
-    <ClInclude Include="..\Extern\SPIRV-Reflect\spirv_reflect.h">
-      <Filter>Extern\SPIRV-Reflect</Filter>
     </ClInclude>
     <ClInclude Include="Core\Device.h">
       <Filter>Core</Filter>

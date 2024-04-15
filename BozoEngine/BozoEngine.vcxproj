@@ -198,7 +198,6 @@
     <ClCompile Include="..\Extern\SPIRV-Cross\spirv_cross.cpp" />
     <ClCompile Include="..\Extern\SPIRV-Cross\spirv_cross_parsed_ir.cpp" />
     <ClCompile Include="..\Extern\SPIRV-Cross\spirv_parser.cpp" />
-    <ClCompile Include="..\Extern\SPIRV-Reflect\spirv_reflect.c" />
     <ClCompile Include="..\Extern\volk\volk.c" />
     <ClCompile Include="main.cpp" />
     <ClCompile Include="Rendering\Camera.cpp" />
@@ -233,7 +232,6 @@
     <ClInclude Include="..\Extern\SPIRV-Cross\spirv_cross_error_handling.hpp" />
     <ClInclude Include="..\Extern\SPIRV-Cross\spirv_cross_parsed_ir.hpp" />
     <ClInclude Include="..\Extern\SPIRV-Cross\spirv_parser.hpp" />
-    <ClInclude Include="..\Extern\SPIRV-Reflect\spirv_reflect.h" />
     <ClInclude Include="..\Extern\stb\stb_image.h" />
     <ClInclude Include="..\Extern\stb\stb_image_write.h" />
     <ClInclude Include="..\Extern\tinygltf\json.hpp" />
