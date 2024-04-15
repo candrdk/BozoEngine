@@ -16,3 +16,9 @@
 [submodule "Extern/SPIRV-Reflect"]
 	path = Extern/SPIRV-Reflect
 	url = git@github.com:KhronosGroup/SPIRV-Reflect.git
+[submodule "Extern/SPIRV-Cross"]
+	path = Extern/SPIRV-Cross
+	url = git@github.com:KhronosGroup/SPIRV-Cross.git
+[submodule "Extern/VulkanMemoryAllocator"]
+	path = Extern/VulkanMemoryAllocator
+	url = git@github.com:GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator.git

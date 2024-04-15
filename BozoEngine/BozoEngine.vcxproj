@@ -106,7 +106,7 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>_DEBUG;_CONSOLE;%(PreprocessorDefinitions);_GLFW_WIN32;_CRT_SECURE_NO_WARNINGS;VK_USE_PLATFORM_WIN32_KHR;NOMINMAX;WIN32_LEAN_AND_MEAN;IMGUI_IMPL_VULKAN_NO_PROTOTYPES</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>..\Extern\SPIRV-Reflect;..\Extern\tinygltf;..\Extern\imgui;..\Extern\fast_obj;..\Extern\stb;..\Extern\glm;..\Extern\glfw\include;..\Extern\volk;$(VULKAN_SDK)\Include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(VULKAN_SDK)\include;..\Extern\imgui;..\Extern;..\Extern\glm;..\Extern\glfw\include;..\Extern\volk;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <LanguageStandard>stdcpp20</LanguageStandard>
       <ShowIncludes>false</ShowIncludes>
       <InlineFunctionExpansion>OnlyExplicitInline</InlineFunctionExpansion>
@@ -114,6 +114,7 @@
     <Link>
       <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
+      <AdditionalDependencies>%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
     <CustomBuild>
       <Command>
@@ -138,7 +139,7 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>NDEBUG;_CONSOLE;%(PreprocessorDefinitions);_GLFW_WIN32;_CRT_SECURE_NO_WARNINGS;VK_USE_PLATFORM_WIN32_KHR;NOMINMAX;WIN32_LEAN_AND_MEAN;IMGUI_IMPL_VULKAN_NO_PROTOTYPES</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>..\Extern\SPIRV-Reflect;..\Extern\tinygltf;..\Extern\imgui;..\Extern\fast_obj;..\Extern\stb;..\Extern\glm;..\Extern\glfw\include;..\Extern\volk;$(VULKAN_SDK)\Include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(VULKAN_SDK)\include;..\Extern\imgui;..\Extern;..\Extern\stb;..\Extern\glm;..\Extern\glfw\include;..\Extern\volk;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <LanguageStandard>stdcpp20</LanguageStandard>
       <ShowIncludes>false</ShowIncludes>
       <InlineFunctionExpansion>OnlyExplicitInline</InlineFunctionExpansion>
@@ -148,6 +149,7 @@
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
       <GenerateDebugInformation>true</GenerateDebugInformation>
+      <AdditionalDependencies>%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
     <CustomBuild>
       <Command>
@@ -192,22 +194,22 @@
     <ClCompile Include="..\Extern\imgui\imgui_draw.cpp" />
     <ClCompile Include="..\Extern\imgui\imgui_tables.cpp" />
     <ClCompile Include="..\Extern\imgui\imgui_widgets.cpp" />
+    <ClCompile Include="..\Extern\SPIRV-Cross\spirv_cfg.cpp" />
+    <ClCompile Include="..\Extern\SPIRV-Cross\spirv_cross.cpp" />
+    <ClCompile Include="..\Extern\SPIRV-Cross\spirv_cross_parsed_ir.cpp" />
+    <ClCompile Include="..\Extern\SPIRV-Cross\spirv_parser.cpp" />
     <ClCompile Include="..\Extern\SPIRV-Reflect\spirv_reflect.c" />
     <ClCompile Include="..\Extern\volk\volk.c" />
-    <ClCompile Include="BindGroup.cpp" />
-    <ClCompile Include="Buffer.cpp" />
-    <ClCompile Include="Common.cpp" />
-    <ClCompile Include="Device.cpp" />
-    <ClCompile Include="GLTF.cpp" />
     <ClCompile Include="main.cpp" />
-    <ClCompile Include="Pipeline.cpp" />
-    <ClCompile Include="Shader.cpp" />
-    <ClCompile Include="Swapchain.cpp" />
-    <ClCompile Include="Texture.cpp" />
-    <ClCompile Include="Tools.cpp" />
-    <ClCompile Include="UIOverlay.cpp" />
+    <ClCompile Include="Rendering\Camera.cpp" />
+    <ClCompile Include="Rendering\GLTFModel.cpp" />
+    <ClCompile Include="Rendering\Shadows.cpp" />
+    <ClCompile Include="Rendering\UIOverlay.cpp" />
+    <ClCompile Include="Vulkan\VulkanDevice.cpp" />
+    <ClCompile Include="Vulkan\VulkanResourceManager.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="..\Extern\glfw\include\GLFW\glfw3.h" />
     <ClInclude Include="..\Extern\glfw\src\internal.h" />
     <ClInclude Include="..\Extern\glfw\src\null_joystick.h" />
     <ClInclude Include="..\Extern\glfw\src\null_platform.h" />
@@ -222,24 +224,35 @@
     <ClInclude Include="..\Extern\imgui\imstb_rectpack.h" />
     <ClInclude Include="..\Extern\imgui\imstb_textedit.h" />
     <ClInclude Include="..\Extern\imgui\imstb_truetype.h" />
+    <ClInclude Include="..\Extern\SPIRV-Cross\GLSL.std.450.h" />
+    <ClInclude Include="..\Extern\SPIRV-Cross\spirv.hpp" />
+    <ClInclude Include="..\Extern\SPIRV-Cross\spirv_cfg.hpp" />
+    <ClInclude Include="..\Extern\SPIRV-Cross\spirv_common.hpp" />
+    <ClInclude Include="..\Extern\SPIRV-Cross\spirv_cross.hpp" />
+    <ClInclude Include="..\Extern\SPIRV-Cross\spirv_cross_containers.hpp" />
+    <ClInclude Include="..\Extern\SPIRV-Cross\spirv_cross_error_handling.hpp" />
+    <ClInclude Include="..\Extern\SPIRV-Cross\spirv_cross_parsed_ir.hpp" />
+    <ClInclude Include="..\Extern\SPIRV-Cross\spirv_parser.hpp" />
     <ClInclude Include="..\Extern\SPIRV-Reflect\spirv_reflect.h" />
     <ClInclude Include="..\Extern\stb\stb_image.h" />
+    <ClInclude Include="..\Extern\stb\stb_image_write.h" />
     <ClInclude Include="..\Extern\tinygltf\json.hpp" />
     <ClInclude Include="..\Extern\tinygltf\tiny_gltf.h" />
     <ClInclude Include="..\Extern\volk\volk.h" />
-    <ClInclude Include="BindGroup.h" />
-    <ClInclude Include="Buffer.h" />
-    <ClInclude Include="Camera.h" />
-    <ClInclude Include="Common.h" />
-    <ClInclude Include="Device.h" />
-    <ClInclude Include="GLTF.h" />
-    <ClInclude Include="Pipeline.h" />
-    <ClInclude Include="Shader.h" />
+    <ClInclude Include="..\Extern\VulkanMemoryAllocator\include\vk_mem_alloc.h" />
+    <ClInclude Include="Core\Device.h" />
+    <ClInclude Include="Core\Graphics.h" />
+    <ClInclude Include="Core\Pool.h" />
+    <ClInclude Include="Core\ResourceManager.h" />
+    <ClInclude Include="Core\Window.h" />
+    <ClInclude Include="Rendering\Camera.h" />
+    <ClInclude Include="Rendering\GLTFModel.h" />
+    <ClInclude Include="Rendering\Shadows.h" />
+    <ClInclude Include="Rendering\UIOverlay.h" />
     <ClInclude Include="span.h" />
-    <ClInclude Include="Swapchain.h" />
-    <ClInclude Include="Texture.h" />
-    <ClInclude Include="Tools.h" />
-    <ClInclude Include="UIOverlay.h" />
+    <ClInclude Include="Vulkan\VulkanDevice.h" />
+    <ClInclude Include="Vulkan\VulkanHelpers.h" />
+    <ClInclude Include="Vulkan\VulkanResourceManager.h" />
   </ItemGroup>
   <ItemGroup>
     <None Include="shaders\deferred.frag.glsl" />

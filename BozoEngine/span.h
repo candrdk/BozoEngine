@@ -131,6 +131,7 @@ private:
 #ifdef TEST_SPAN
 #include <vector>
 // TODO: test implicit/explicit constructors
+//       also make sure these are all actually correct lol
 namespace {
     // Type S can be noexcept constructed using an instance of type C.
     template <typename C, typename S>

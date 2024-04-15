@@ -35,6 +35,21 @@
     <Filter Include="Include">
       <UniqueIdentifier>{46049645-989b-4963-bbe6-803e32865924}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Core">
+      <UniqueIdentifier>{881c7744-6360-4930-813f-a75324280754}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Vulkan">
+      <UniqueIdentifier>{4bf62bf9-fe4f-4c7a-a63d-71fd2e5a0697}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Rendering">
+      <UniqueIdentifier>{4bb94f04-b60b-4541-b5ad-3d7b403ac867}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Extern\SPIRV-Cross">
+      <UniqueIdentifier>{153759a8-dedf-4dc8-819d-a38b7d75fb6c}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Extern\VulkanMemoryAllocator">
+      <UniqueIdentifier>{73ed28c7-de64-4e5a-98e5-f9b8cd325092}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="main.cpp">
@@ -124,41 +139,38 @@
     <ClCompile Include="..\Extern\imgui\imgui_widgets.cpp">
       <Filter>Extern\imgui</Filter>
     </ClCompile>
-    <ClCompile Include="Swapchain.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="Device.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="Texture.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="UIOverlay.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="Tools.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="GLTF.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="Common.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
     <ClCompile Include="..\Extern\SPIRV-Reflect\spirv_reflect.c">
       <Filter>Extern\SPIRV-Reflect</Filter>
     </ClCompile>
-    <ClCompile Include="BindGroup.cpp">
-      <Filter>Source Files</Filter>
+    <ClCompile Include="Vulkan\VulkanDevice.cpp">
+      <Filter>Vulkan</Filter>
     </ClCompile>
-    <ClCompile Include="Pipeline.cpp">
-      <Filter>Source Files</Filter>
+    <ClCompile Include="Vulkan\VulkanResourceManager.cpp">
+      <Filter>Vulkan</Filter>
     </ClCompile>
-    <ClCompile Include="Shader.cpp">
-      <Filter>Source Files</Filter>
+    <ClCompile Include="..\Extern\SPIRV-Cross\spirv_cfg.cpp">
+      <Filter>Extern\SPIRV-Cross</Filter>
     </ClCompile>
-    <ClCompile Include="Buffer.cpp">
-      <Filter>Source Files</Filter>
+    <ClCompile Include="..\Extern\SPIRV-Cross\spirv_cross.cpp">
+      <Filter>Extern\SPIRV-Cross</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Extern\SPIRV-Cross\spirv_cross_parsed_ir.cpp">
+      <Filter>Extern\SPIRV-Cross</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Extern\SPIRV-Cross\spirv_parser.cpp">
+      <Filter>Extern\SPIRV-Cross</Filter>
+    </ClCompile>
+    <ClCompile Include="Rendering\UIOverlay.cpp">
+      <Filter>Rendering</Filter>
+    </ClCompile>
+    <ClCompile Include="Rendering\GLTFModel.cpp">
+      <Filter>Rendering</Filter>
+    </ClCompile>
+    <ClCompile Include="Rendering\Shadows.cpp">
+      <Filter>Rendering</Filter>
+    </ClCompile>
+    <ClCompile Include="Rendering\Camera.cpp">
+      <Filter>Rendering</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
@@ -189,9 +201,6 @@
     <ClInclude Include="..\Extern\volk\volk.h">
       <Filter>Extern\volk</Filter>
     </ClInclude>
-    <ClInclude Include="..\Extern\stb\stb_image.h">
-      <Filter>Extern\stb</Filter>
-    </ClInclude>
     <ClInclude Include="..\Extern\imgui\backends\imgui_impl_glfw.h">
       <Filter>Extern\imgui</Filter>
     </ClInclude>
@@ -219,44 +228,83 @@
     <ClInclude Include="..\Extern\SPIRV-Reflect\spirv_reflect.h">
       <Filter>Extern\SPIRV-Reflect</Filter>
     </ClInclude>
-    <ClInclude Include="UIOverlay.h">
-      <Filter>Source Files</Filter>
+    <ClInclude Include="Core\Device.h">
+      <Filter>Core</Filter>
     </ClInclude>
-    <ClInclude Include="BindGroup.h">
-      <Filter>Source Files</Filter>
+    <ClInclude Include="Core\Graphics.h">
+      <Filter>Core</Filter>
     </ClInclude>
-    <ClInclude Include="Camera.h">
-      <Filter>Source Files</Filter>
+    <ClInclude Include="Core\Pool.h">
+      <Filter>Core</Filter>
     </ClInclude>
-    <ClInclude Include="Common.h">
-      <Filter>Source Files</Filter>
+    <ClInclude Include="Core\ResourceManager.h">
+      <Filter>Core</Filter>
     </ClInclude>
-    <ClInclude Include="Device.h">
-      <Filter>Source Files</Filter>
+    <ClInclude Include="Core\Window.h">
+      <Filter>Core</Filter>
     </ClInclude>
-    <ClInclude Include="GLTF.h">
-      <Filter>Source Files</Filter>
+    <ClInclude Include="Vulkan\VulkanDevice.h">
+      <Filter>Vulkan</Filter>
     </ClInclude>
-    <ClInclude Include="Pipeline.h">
-      <Filter>Source Files</Filter>
+    <ClInclude Include="Vulkan\VulkanHelpers.h">
+      <Filter>Vulkan</Filter>
     </ClInclude>
-    <ClInclude Include="Shader.h">
-      <Filter>Source Files</Filter>
+    <ClInclude Include="Vulkan\VulkanResourceManager.h">
+      <Filter>Vulkan</Filter>
     </ClInclude>
-    <ClInclude Include="Swapchain.h">
-      <Filter>Source Files</Filter>
+    <ClInclude Include="Rendering\Camera.h">
+      <Filter>Rendering</Filter>
     </ClInclude>
-    <ClInclude Include="Texture.h">
-      <Filter>Source Files</Filter>
+    <ClInclude Include="Rendering\Shadows.h">
+      <Filter>Rendering</Filter>
     </ClInclude>
-    <ClInclude Include="Tools.h">
-      <Filter>Source Files</Filter>
+    <ClInclude Include="Rendering\UIOverlay.h">
+      <Filter>Rendering</Filter>
     </ClInclude>
     <ClInclude Include="span.h">
       <Filter>Include</Filter>
     </ClInclude>
-    <ClInclude Include="Buffer.h">
-      <Filter>Source Files</Filter>
+    <ClInclude Include="..\Extern\SPIRV-Cross\GLSL.std.450.h">
+      <Filter>Extern\SPIRV-Cross</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Extern\SPIRV-Cross\spirv.hpp">
+      <Filter>Extern\SPIRV-Cross</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Extern\SPIRV-Cross\spirv_cfg.hpp">
+      <Filter>Extern\SPIRV-Cross</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Extern\SPIRV-Cross\spirv_common.hpp">
+      <Filter>Extern\SPIRV-Cross</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Extern\SPIRV-Cross\spirv_cross.hpp">
+      <Filter>Extern\SPIRV-Cross</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Extern\SPIRV-Cross\spirv_cross_containers.hpp">
+      <Filter>Extern\SPIRV-Cross</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Extern\SPIRV-Cross\spirv_cross_error_handling.hpp">
+      <Filter>Extern\SPIRV-Cross</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Extern\SPIRV-Cross\spirv_cross_parsed_ir.hpp">
+      <Filter>Extern\SPIRV-Cross</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Extern\SPIRV-Cross\spirv_parser.hpp">
+      <Filter>Extern\SPIRV-Cross</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Extern\VulkanMemoryAllocator\include\vk_mem_alloc.h">
+      <Filter>Extern\VulkanMemoryAllocator</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Extern\glfw\include\GLFW\glfw3.h">
+      <Filter>Extern\glfw</Filter>
+    </ClInclude>
+    <ClInclude Include="Rendering\GLTFModel.h">
+      <Filter>Rendering</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Extern\stb\stb_image.h">
+      <Filter>Extern\stb</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Extern\stb\stb_image_write.h">
+      <Filter>Extern\stb</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
