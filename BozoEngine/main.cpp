@@ -16,6 +16,7 @@ constexpr u32 HEIGHT = 900;
 //      - Recreate GBuffer resources on resize
 //      - Update GBuffer bindgroups
 //      - Fix image layout bug on resize
+//  - Add hot-reloading of shaders
 
 // NOTE: Until a proper input system has been implemented, camera is just stored as a global here.
 Camera* camera;
