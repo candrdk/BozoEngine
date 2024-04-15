@@ -13,9 +13,6 @@
 [submodule "Extern/imgui"]
 	path = Extern/imgui
 	url = git@github.com:ocornut/imgui.git
-[submodule "Extern/SPIRV-Reflect"]
-	path = Extern/SPIRV-Reflect
-	url = git@github.com:KhronosGroup/SPIRV-Reflect.git
 [submodule "Extern/SPIRV-Cross"]
 	path = Extern/SPIRV-Cross
 	url = git@github.com:KhronosGroup/SPIRV-Cross.git
