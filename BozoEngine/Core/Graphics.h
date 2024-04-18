@@ -40,9 +40,10 @@ inline std::vector<u32> ReadShaderSpv(const char* path) {
     long byteLength = ftell(fp);
     fseek(fp, 0, SEEK_SET);
     Check(byteLength > 0, "File: '%s' was empty", path);
-    //Check((byteLength % 4) == 0, "File: '%s' size was not aligned by 4", path);
 
+    Check((byteLength & 3) == 0, "File: '%s' size was not aligned by 4", path);
     std::vector<u32> buffer(byteLength / 4);
+
     size_t bytesRead = fread(buffer.data(), 1, byteLength, fp);
     Check(bytesRead == byteLength, "Failed to read all contents of '%s'", path);
     fclose(fp);
@@ -179,12 +180,14 @@ private:
 
 static_assert(sizeof(Handle<void>) == sizeof(u32));
 
+// empty types for resource handle type safety
 struct Texture;
 struct BindGroup;
 struct BindGroupLayout;
 struct Buffer;
 struct Shader;
 struct Pipeline;
+
 
 struct BufferDesc {
     const char* debugName = "";

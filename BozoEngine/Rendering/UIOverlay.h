@@ -21,6 +21,7 @@ public:
 	void DrawFrameTimeGraph();
 
 private:
+	// Frametime histogram
 	struct {
 		float entries[1024] = {};
 		u32  front  = 0;

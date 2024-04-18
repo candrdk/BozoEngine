@@ -166,6 +166,9 @@ void Render(Device* device, CascadedShadowMap* shadowMap, UIOverlay* UI, span<co
 
 
 int main(int argc, char* argv[]) {
+
+    // -- Create window and vulkan instance --
+
     Window* window = new Window("Bozo Engine 0.2", WIDTH, HEIGHT, {
         .FramebufferSize = FramebufferSizeCallback,
         .MouseButton = MouseButtonCallback,
@@ -179,17 +182,25 @@ int main(int argc, char* argv[]) {
     Device* device = Device::ptr;
     ResourceManager* rm = ResourceManager::ptr;
 
+
+    // -- Create UI overlay, 3D camera, shadow map and rendering resources -- 
+
     UIOverlay* UI = new UIOverlay(window, device, device->GetSwapchainFormat(), Format::D24_UNORM_S8_UINT, ImGuiRenderCallback);
     camera = new Camera(glm::vec3(0.0f, 1.5f, 1.0f), 1.0f, 60.0f, (float)WIDTH / HEIGHT, 0.01f, 0.0f, -30.0f);
     CascadedShadowMap* shadowMap = new CascadedShadowMap(1024, camera, { {0.0f, 3.0f}, {2.5f, 12.0f}, {11.0f, 32.0f}, {30.0f, 128.0f} });
-
     CreateGBuffer(shadowMap);
+
+
+    // -- Load 3D models --
 
     // TODO: Add skybox cubemap.
     // GLTFModel* cube = new GLTFModel(device, gbuffer.materialLayout, "assets/Box.glb");
 
-    GLTFModel* rocks = new GLTFModel(device, gbuffer.materialLayout, "assets/ParallaxTest/rocks.gltf");
+    GLTFModel* rocks  = new GLTFModel(device, gbuffer.materialLayout, "assets/ParallaxTest/rocks.gltf");
     GLTFModel* sponza = new GLTFModel(device, gbuffer.materialLayout, "assets/Sponza/Sponza.gltf");
+
+
+    // -- Main loop --
 
     double lastFrame = 0.0f;
     while (window->ShouldClose() == false) {
