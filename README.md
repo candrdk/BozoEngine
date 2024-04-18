@@ -1,5 +1,5 @@
 # Bozo Engine 🤡
-Small `Vulkan 1.3` hubby renderer written in c++ from scratch. The goal of BozoEngine is to gain some hands-on experience with Vulkan, try out some game engine programming and learn how rendering real-time rendering techniques are implemented. Most importantly, however, it's (allegedly suppossed to, at some point, become) fun!
+Small `Vulkan 1.3` hobby renderer written in c++ from scratch. The goal of BozoEngine is to gain some hands-on experience with Vulkan, try out some game engine programming and learn how rendering real-time rendering techniques are implemented. Most importantly, however, it's (allegedly suppossed to, at some point, become) fun!
 
 ![Screenshot of BozoEngien in its current state.](screenshot.png)
 
