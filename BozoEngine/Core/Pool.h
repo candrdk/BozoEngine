@@ -61,7 +61,7 @@ public:
     };
 
     bool valid(Handle<H> handle) const {
-        if (!handle.valid())                                 return false;
+        if (handle.index == 0)                               return false;
         if (handle.index >= m_capacity)                      return false;
         if (handle.generation != m_generation[handle.index]) return false;
 

@@ -739,9 +739,8 @@ void VulkanCommandBuffer::BeginRendering(Handle<Texture> depth, u32 layer, u32 w
 void VulkanCommandBuffer::BeginRendering(Extent2D extent, const span<const Handle<Texture>>&& attachments, Handle<Texture> depth) {
 	VulkanResourceManager* rm = VulkanResourceManager::impl();
 
-	VkRenderingAttachmentInfo depthAttachmentInfo;
-	if (depth.valid()) 
-		depthAttachmentInfo = rm->GetTexture(depth)->GetAttachmentInfo();
+	// TODO: add proper handle check
+	VkRenderingAttachmentInfo depthAttachmentInfo = rm->GetTexture(depth)->GetAttachmentInfo();
 
 	std::vector<VkRenderingAttachmentInfo> colorAttachments(attachments.size());
 	for (u32 i = 0; i < attachments.size(); i++)
@@ -753,7 +752,7 @@ void VulkanCommandBuffer::BeginRendering(Extent2D extent, const span<const Handl
 		.layerCount = 1,
 		.colorAttachmentCount = (u32)colorAttachments.size(),
 		.pColorAttachments = colorAttachments.data(),
-		.pDepthAttachment = depth.valid() ? &depthAttachmentInfo : nullptr
+		.pDepthAttachment = &depthAttachmentInfo
 	};
 
 	vkCmdBeginRendering(m_cmd, &renderingInfo);

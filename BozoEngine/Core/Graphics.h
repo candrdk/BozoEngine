@@ -141,8 +141,9 @@ enum class IndexType {
 template <typename T, typename H> 
 class Pool;
 
-// How should resource states be handled.
-// Some options (in no particular order) to consider:
+// TODO: Should handles carry some resource state bits? How should they be set?
+//       Handles can refer to allocated, but not initialized data - or the init
+//       might have failed. 2 bits could be used for memory safety checks.
 //
 // 1. Move resource initialization to the VulkanResource constructor.
 //    Take a mutable reference to the corresponding resource handle,
@@ -157,25 +158,20 @@ class Pool;
 //    state in the VulkanResource object instead of the handle. User code
 //    would then have to call rm->GetResourceState(handle); to check state.
 //
-
-enum HandleState : u16 {
-    Invalid   = 0,  // Resource is invalid, i.e. no underlying allocation
-    Allocated = 1,  // Resource is allocated but not initialized
-    Failed    = 2,  // Resource is allocated but initialization failed
-    Valid     = 3   // Resource is allocated and initialized
-};
-
 template <typename U>
 class Handle {
-public: 
-    bool valid() { return index != 0; }
-
-private:
-    template <typename T, typename H>
-    friend class Pool;
+    enum State {
+        Invalid   = 0,  // Resource is invalid, i.e. no underlying allocation
+        Allocated = 1,  // Resource is allocated but not initialized
+        Failed    = 2,  // Resource is allocated but initialization failed
+        Valid     = 3   // Resource is allocated and initialized
+    };
 
     u16 index;
     u16 generation;
+
+    template <typename T, typename H>
+    friend class Pool;
 };
 
 static_assert(sizeof(Handle<void>) == sizeof(u32));
