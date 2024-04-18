@@ -565,7 +565,7 @@ bool VulkanDevice::BeginFrame() {
 		.baseArrayLayer = 0, .layerCount = 1
 	};
 
-	ImageBarrier(frame().commandBuffers[0].m_cmd, m_swapchain.images[m_frameIndex], subresourceRange,
+	ImageBarrier(frame().commandBuffers[0].m_cmd, m_swapchain.images[m_swapchain.imageIndex], subresourceRange,
 		VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,  VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
 		VK_ACCESS_NONE,						VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
 		VK_IMAGE_LAYOUT_UNDEFINED,			VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL);
@@ -718,7 +718,7 @@ void VulkanDevice::FlushCommandBufferVK(VkCommandBuffer cmd) {
 }
 
 VkRenderingAttachmentInfo* VulkanDevice::GetSwapchainAttachmentInfo() {
-	return &m_swapchain.attachmentInfos[m_frameIndex];
+	return &m_swapchain.attachmentInfos[m_swapchain.imageIndex];
 }
 
 void VulkanCommandBuffer::BeginRendering(Handle<Texture> depth, u32 layer, u32 width, u32 height) {

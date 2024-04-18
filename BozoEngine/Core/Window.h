@@ -19,9 +19,7 @@ public:
         glfwWindowHint(GLFW_RESIZABLE, GLFW_TRUE);
         glfwWindowHint(GLFW_SRGB_CAPABLE, GLFW_TRUE);
 
-        m_width  = width; 
-        m_height = height;
-        m_window = glfwCreateWindow(m_width, m_height, title, nullptr, nullptr);
+        m_window = glfwCreateWindow(width, height, title, nullptr, nullptr);
 
         glfwSetInputMode(m_window, GLFW_RAW_MOUSE_MOTION, GLFW_TRUE);
 
@@ -45,8 +43,6 @@ public:
             glfwGetFramebufferSize(m_window, &width, &height);
             glfwWaitEvents();
         }
-
-        return;
     }
 
     void GetWindowSize(int* width, int* height) {
@@ -57,7 +53,5 @@ public:
         return glfwWindowShouldClose(m_window);
     }
 
-
     GLFWwindow* m_window = nullptr;
-    int m_width, m_height;
 };

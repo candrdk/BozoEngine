@@ -12,10 +12,6 @@ constexpr u32 HEIGHT = 900;
 // TODO: Stuff still missing from the old Bozo Engine:
 //  - Skybox rendering.
 //      - Cubemap textures
-//  - Handle window resizes properly
-//      - Recreate GBuffer resources on resize
-//      - Update GBuffer bindgroups
-//      - Fix image layout bug on resize
 //  - Add hot-reloading of shaders
 
 // NOTE: Until a proper input system has been implemented, camera is just stored as a global here.
@@ -128,6 +124,8 @@ struct DeferredUBO {
 
 // Struct to hold all GBuffer rendering resources.
 struct GBuffer {
+    Extent2D extent = {};
+
     Handle<Texture> albedo = {};
     Handle<Texture> normal = {};
     Handle<Texture> metallicRoughness = {};
@@ -150,10 +148,12 @@ struct GBuffer {
     } settings;
 } gbuffer = {};
 
-// Initialize the GBuffer resources.
-// TOOD: add support for recreating these on window resize.
-void InitGBufferResources(CascadedShadowMap* shadowMap);
-void DestroyGBufferResources();
+// Create/destroy the GBuffer
+void CreateGBuffer(CascadedShadowMap* shadowMap);
+void DestroyGBuffer();
+
+// Update the GBuffer on window resize
+void ResizeGBuffer();
 
 // Update the GBuffer UBO. This must be called *after*  successful Device.BeginFrame() call to avoid a race condition
 void UpdateGBufferUBO(CascadedShadowMap* shadowMap);
@@ -183,7 +183,7 @@ int main(int argc, char* argv[]) {
     camera = new Camera(glm::vec3(0.0f, 1.5f, 1.0f), 1.0f, 60.0f, (float)WIDTH / HEIGHT, 0.01f, 0.0f, -30.0f);
     CascadedShadowMap* shadowMap = new CascadedShadowMap(1024, camera, { {0.0f, 3.0f}, {2.5f, 12.0f}, {11.0f, 32.0f}, {30.0f, 128.0f} });
 
-    InitGBufferResources(shadowMap);
+    CreateGBuffer(shadowMap);
 
     // TODO: Add skybox cubemap.
     // GLTFModel* cube = new GLTFModel(device, gbuffer.materialLayout, "assets/Box.glb");
@@ -214,12 +214,19 @@ int main(int argc, char* argv[]) {
 
         Render(device, shadowMap, UI, { sponza, rocks });
 
+        // If the window was resized, we also have to resize the GBuffer and update the camera aspect
+        Extent2D swapchainExtent = device->GetSwapchainExtent();
+        if (swapchainExtent.width != gbuffer.extent.width || swapchainExtent.height != gbuffer.extent.height) {
+            ResizeGBuffer();
+            camera->aspect = (float)swapchainExtent.width / swapchainExtent.height;
+        }
+
         glfwPollEvents();
     }
 
     device->WaitIdle();
 
-    DestroyGBufferResources();
+    DestroyGBuffer();
 
     delete sponza;
     delete rocks;
@@ -263,7 +270,7 @@ void Render(Device* device, CascadedShadowMap* shadowMap, UIOverlay* UI, span<co
     cmd.ImageBarrier(gbuffer.metallicRoughness, Usage::SHADER_RESOURCE, Usage::RENDER_TARGET);
     cmd.ImageBarrier(gbuffer.depth, Usage::SHADER_RESOURCE, Usage::DEPTH_STENCIL);
 
-    cmd.BeginRendering({ WIDTH, HEIGHT }, { gbuffer.albedo, gbuffer.normal, gbuffer.metallicRoughness }, gbuffer.depth);
+    cmd.BeginRendering(extent, { gbuffer.albedo, gbuffer.normal, gbuffer.metallicRoughness }, gbuffer.depth);
 
     for (const GLTFModel* model : models)
         model->Draw(cmd);
@@ -294,35 +301,35 @@ void Render(Device* device, CascadedShadowMap* shadowMap, UIOverlay* UI, span<co
     device->EndFrame();
 }
 
-void InitGBufferResources(CascadedShadowMap* shadowMap) {
+void CreateGBufferResources() {
     ResourceManager* rm = ResourceManager::ptr;
     Device* device = Device::ptr;
 
     // Create GBuffer textures
     gbuffer.albedo = rm->CreateTexture({
         .debugName = "GBuffer Albedo",
-        .width = WIDTH, .height = HEIGHT,
+        .width = gbuffer.extent.width, .height = gbuffer.extent.height,
         .format = Format::RGBA8_UNORM,
         .usage = Usage::RENDER_TARGET | Usage::SHADER_RESOURCE
     });
 
     gbuffer.normal = rm->CreateTexture({
         .debugName = "GBuffer Normal",
-        .width = WIDTH, .height = HEIGHT,
+        .width = gbuffer.extent.width, .height = gbuffer.extent.height,
         .format = Format::RGBA8_UNORM,
         .usage = Usage::RENDER_TARGET | Usage::SHADER_RESOURCE
     });
 
     gbuffer.metallicRoughness = rm->CreateTexture({
         .debugName = "GBuffer Metallic/Roughness",
-        .width = WIDTH, .height = HEIGHT,
+        .width = gbuffer.extent.width, .height = gbuffer.extent.height,
         .format = Format::RGBA8_UNORM,
         .usage = Usage::RENDER_TARGET | Usage::SHADER_RESOURCE
     });
 
     gbuffer.depth = rm->CreateTexture({
         .debugName = "GBuffer Depth",
-        .width = WIDTH, .height = HEIGHT,
+        .width = gbuffer.extent.width, .height = gbuffer.extent.height,
         .format = Format::D24_UNORM_S8_UINT,
         .usage = Usage::DEPTH_STENCIL | Usage::SHADER_RESOURCE
     });
@@ -336,6 +343,10 @@ void InitGBufferResources(CascadedShadowMap* shadowMap) {
     cmd.ImageBarrier(gbuffer.depth, Usage::DEPTH_STENCIL, Usage::SHADER_RESOURCE);
 
     device->FlushCommandBuffer(cmd);
+}
+
+void CreateGBufferBindings() {
+    ResourceManager* rm = ResourceManager::ptr;
 
     // Create bindgroup layouts
     gbuffer.globalsLayout = rm->CreateBindGroupLayout({
@@ -382,63 +393,95 @@ void InitGBufferResources(CascadedShadowMap* shadowMap) {
             .buffers = { { 0, gbuffer.deferredUBO[i], 0, sizeof(DeferredUBO) } }
         });
     }
+}
 
+void CreateGBufferPipelines(CascadedShadowMap* shadowMap) {
     // Create Offscreen pipeline
-    {
-        std::vector<u32> vertShader = ReadShaderSpv("shaders/offscreen.vert.spv");
-        std::vector<u32> fragShader = ReadShaderSpv("shaders/offscreen.frag.spv");
+    std::vector<u32> offscreenVert = ReadShaderSpv("shaders/offscreen.vert.spv");
+    std::vector<u32> offscreenFrag = ReadShaderSpv("shaders/offscreen.frag.spv");
 
-        gbuffer.offscreen = rm->CreatePipeline({
-            .debugName = "Offscreen pipeline",
-            .shaderDescs = {
-                {.spirv = vertShader, .stage = ShaderStage::VERTEX},
-                {.spirv = fragShader, .stage = ShaderStage::FRAGMENT}
-            },
-            .bindgroupLayouts = { gbuffer.globalsLayout, gbuffer.materialLayout },
-            .graphicsState = {
-                .colorAttachments = { Format::RGBA8_UNORM, Format::RGBA8_UNORM, Format::RGBA8_UNORM },
-                .depthStencilState = {.depthStencilFormat = Format::D24_UNORM_S8_UINT },
-                .vertexInputState = GLTFModel::Vertex::InputState
-            }
-        });
-    }
+    gbuffer.offscreen = ResourceManager::ptr->CreatePipeline({
+        .debugName = "Offscreen pipeline",
+        .shaderDescs = {
+            {.spirv = offscreenVert, .stage = ShaderStage::VERTEX},
+            {.spirv = offscreenFrag, .stage = ShaderStage::FRAGMENT}
+        },
+        .bindgroupLayouts = { gbuffer.globalsLayout, gbuffer.materialLayout },
+        .graphicsState = {
+            .colorAttachments = { Format::RGBA8_UNORM, Format::RGBA8_UNORM, Format::RGBA8_UNORM },
+            .depthStencilState = {.depthStencilFormat = Format::D24_UNORM_S8_UINT },
+            .vertexInputState = GLTFModel::Vertex::InputState
+        }
+    });
 
     // Create Deferred pipeline
-    {
-        std::vector<u32> vertShader = ReadShaderSpv("shaders/deferred.vert.spv");
-        std::vector<u32> fragShader = ReadShaderSpv("shaders/deferred.frag.spv");
+    std::vector<u32> deferredVert = ReadShaderSpv("shaders/deferred.vert.spv");
+    std::vector<u32> deferredFrag = ReadShaderSpv("shaders/deferred.frag.spv");
 
-        gbuffer.deferred = rm->CreatePipeline({
-            .debugName = "Deferred pipeline",
-            .shaderDescs = {
-                {.spirv = vertShader, .stage = ShaderStage::VERTEX},
-                {.spirv = fragShader, .stage = ShaderStage::FRAGMENT}
-            },
-            .bindgroupLayouts = { gbuffer.globalsLayout, gbuffer.materialLayout, shadowMap->GetShadowBindingsLayout() },
-            .graphicsState = {
-                .colorAttachments = { Format::BGRA8_SRGB },
-                .depthStencilState = {.depthStencilFormat = Format::D24_UNORM_S8_UINT },
-                .rasterizationState = {.cullMode = CullMode::Front }
-            }
-        });
-    }
+    gbuffer.deferred = ResourceManager::ptr->CreatePipeline({
+        .debugName = "Deferred pipeline",
+        .shaderDescs = {
+            {.spirv = deferredVert, .stage = ShaderStage::VERTEX},
+            {.spirv = deferredFrag, .stage = ShaderStage::FRAGMENT}
+        },
+        .bindgroupLayouts = { gbuffer.globalsLayout, gbuffer.materialLayout, shadowMap->GetShadowBindingsLayout() },
+        .graphicsState = {
+            .colorAttachments = { Format::BGRA8_SRGB },
+            .depthStencilState = {.depthStencilFormat = Format::D24_UNORM_S8_UINT },
+            .rasterizationState = {.cullMode = CullMode::Front }
+        }
+    });
+}
+
+void CreateGBuffer(CascadedShadowMap* shadowMap) {
+    gbuffer.extent = Device::ptr->GetSwapchainExtent();
+
+    CreateGBufferResources();
+    CreateGBufferBindings();
+    CreateGBufferPipelines(shadowMap);
+}
+
+void DestroyGBufferPipelines() {
+    ResourceManager::ptr->DestroyPipeline(gbuffer.offscreen);
+    ResourceManager::ptr->DestroyPipeline(gbuffer.deferred);
 }
 
 void DestroyGBufferResources() {
-    ResourceManager* rm = ResourceManager::ptr;
+    ResourceManager::ptr->DestroyTexture(gbuffer.albedo);
+    ResourceManager::ptr->DestroyTexture(gbuffer.normal);
+    ResourceManager::ptr->DestroyTexture(gbuffer.metallicRoughness);
+    ResourceManager::ptr->DestroyTexture(gbuffer.depth);
+}
 
-    rm->DestroyPipeline(gbuffer.offscreen);
-    rm->DestroyPipeline(gbuffer.deferred);
+void DestroyGBufferBindings() {
     for (Handle<Buffer> buffer : gbuffer.deferredUBO)
-        rm->DestroyBuffer(buffer);
+        ResourceManager::ptr->DestroyBuffer(buffer);
 
-    rm->DestroyTexture(gbuffer.albedo);
-    rm->DestroyTexture(gbuffer.normal);
-    rm->DestroyTexture(gbuffer.metallicRoughness);
-    rm->DestroyTexture(gbuffer.depth);
+    ResourceManager::ptr->DestroyBindGroupLayout(gbuffer.materialLayout);
+    ResourceManager::ptr->DestroyBindGroupLayout(gbuffer.globalsLayout);
+}
 
-    rm->DestroyBindGroupLayout(gbuffer.materialLayout);
-    rm->DestroyBindGroupLayout(gbuffer.globalsLayout);
+void DestroyGBuffer() {
+    DestroyGBufferPipelines();
+    DestroyGBufferResources();
+    DestroyGBufferBindings();
+}
+
+void ResizeGBuffer() {
+    gbuffer.extent = Device::ptr->GetSwapchainExtent();
+
+    DestroyGBufferResources();
+    CreateGBufferResources();
+
+    // Update GBuffer bindgroup
+    for (Handle<BindGroup> bindgroup : gbuffer.offscreenBindings) {
+        ResourceManager::ptr->UpdateBindGroupTextures(bindgroup, {
+            { 0, gbuffer.albedo },
+            { 1, gbuffer.normal },
+            { 2, gbuffer.metallicRoughness },
+            { 3, gbuffer.depth }
+        });
+    }
 }
 
 void UpdateGBufferUBO(CascadedShadowMap* shadowMap) {
