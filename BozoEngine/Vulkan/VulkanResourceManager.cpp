@@ -59,8 +59,9 @@ u8* VulkanResourceManager::GetMapped(Handle<Buffer> handle) {
     VulkanBuffer* buffer = m_buffers.get(handle);
 
     if (!buffer) return nullptr; // TODO: log error
+    // if (!buffer->mapped) // TODO: log error
 
-    return IsMapped(handle) ? buffer->mapped : nullptr;
+    return buffer->mapped;
 }
 
 bool VulkanResourceManager::MapBuffer(Handle<Buffer> handle) {
