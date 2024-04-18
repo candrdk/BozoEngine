@@ -68,7 +68,7 @@ public:
         return true;
     }
 
-    void free(Handle<H>& handle) {
+    void free(Handle<H> handle) {
         // Make sure the handle is valid
         if (!valid(handle)) return;
 
@@ -77,9 +77,6 @@ public:
 
         // Push the newly freed pool index to the freelist
         m_freelist[++m_free_top] = handle.index;
-
-        // Clear handle bits
-        handle = {};
     }
 
     T* get(Handle<H> handle) const {
@@ -97,11 +94,8 @@ public:
 
 private:
     void grow() {
-        // Add indices of the new pool slots being allocated to the freelist
-        for (int i = 1; i < m_capacity; i++)
-            m_freelist[i] = m_capacity + i;
-
-        m_free_top = m_capacity - 1;
+        // Update the freelist top
+        m_free_top = m_capacity;
 
         // Double the pool capacity
         m_capacity *= 2;
@@ -110,6 +104,10 @@ private:
         VirtualAlloc(m_data,       sizeof(T)   * m_capacity, MEM_COMMIT, PAGE_READWRITE);
         VirtualAlloc(m_generation, sizeof(u16) * m_capacity, MEM_COMMIT, PAGE_READWRITE);
         VirtualAlloc(m_freelist,   sizeof(u16) * m_capacity, MEM_COMMIT, PAGE_READWRITE);
+
+        // Add indices of the new pool slots being allocated to the freelist
+        for (int i = m_free_top; i > 0; i--)
+            m_freelist[i] = m_capacity - i;
     }
 
     u16  m_capacity;
