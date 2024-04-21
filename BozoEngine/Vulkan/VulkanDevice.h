@@ -16,7 +16,7 @@ public:
 
     void BeginRendering(Handle<Texture> depth, u32 layer, u32 width, u32 height);
     void BeginRendering(Extent2D extent, const span<const Handle<Texture>>&& attachments = {}, Handle<Texture> depth = {});
-    void BeginRenderingSwapchain();
+    void BeginRenderingSwapchain(Handle<Texture> depth = {});
     void EndRendering();
 
     void ImageBarrier(Handle<Texture> texture, Usage srcUsage, Usage dstUsage, u32 baseMip = 0, u32 mipCount = 1, u32 baseLayer = 0, u32 layerCount = 1);

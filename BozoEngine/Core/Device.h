@@ -6,7 +6,7 @@
 struct CommandBuffer {
     virtual void BeginRendering(Handle<Texture> depth, u32 layer, u32 width, u32 height) = 0;
     virtual void BeginRendering(Extent2D extent, const span<const Handle<Texture>>&& attachments = {}, Handle<Texture> depth = {}) = 0;
-    virtual void BeginRenderingSwapchain() = 0;
+    virtual void BeginRenderingSwapchain(Handle<Texture> depth = {}) = 0;
     virtual void EndRendering() = 0;
 
     // Insert an image barrier. To transition all mip levels, use mipCount = -1. To transition all array layers, use layerCount = -1

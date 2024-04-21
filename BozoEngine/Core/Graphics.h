@@ -172,6 +172,9 @@ class Handle {
 
     template <typename T, typename H>
     friend class Pool;
+
+public:
+    bool valid() { return index != 0; }
 };
 
 static_assert(sizeof(Handle<void>) == sizeof(u32));

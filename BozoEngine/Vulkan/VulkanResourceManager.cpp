@@ -85,7 +85,6 @@ static VkImageView CreateView(VkImage image, VkFormat format, TextureDesc::Type 
 	VkImageViewCreateInfo viewInfo = {
 		.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
 		.image = image,
-		.viewType = VK_IMAGE_VIEW_TYPE_MAX_ENUM,
 		.format = format,
 		.subresourceRange = {
 			.aspectMask = aspect,
@@ -96,12 +95,14 @@ static VkImageView CreateView(VkImage image, VkFormat format, TextureDesc::Type 
 		}
 	};
 
-	// TODO: Look into if some special cases are missing here.
 	switch (type) {
 	case TextureDesc::Type::TEXTURE2D:		viewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;		 break;
 	case TextureDesc::Type::TEXTURE2DARRAY:	viewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D_ARRAY; break;
 	case TextureDesc::Type::TEXTURE3D:		viewInfo.viewType = VK_IMAGE_VIEW_TYPE_3D;		 break;
 	case TextureDesc::Type::TEXTURECUBE:	viewInfo.viewType = VK_IMAGE_VIEW_TYPE_CUBE;	 break;
+
+    default:
+        Check(false, "Unknown texture type: %u", type);
 	}
 
 	VkImageView view;
@@ -736,7 +737,7 @@ static constexpr u32 CalculateTextureByteSize(VkFormat format, const TextureRang
         byteSize += FormatStride(format) * mipWidth * mipHeight;
     }
 
-    return byteSize;
+    return byteSize * range.numLayers;
 }
 
 static constexpr bool ValidateTextureRange(VulkanTexture* texture, const TextureRange& range) {

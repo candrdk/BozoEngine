@@ -759,17 +759,26 @@ void VulkanCommandBuffer::BeginRendering(Extent2D extent, const span<const Handl
 }
 
 
-void VulkanCommandBuffer::BeginRenderingSwapchain() {
+void VulkanCommandBuffer::BeginRenderingSwapchain(Handle<Texture> depth) {
 	VulkanDevice* device = VulkanDevice::impl();
+	VulkanResourceManager* rm = VulkanResourceManager::impl();
 
 	Extent2D extent = device->GetSwapchainExtent();
 	VkRenderingInfo renderingInfo = {
 		.sType = VK_STRUCTURE_TYPE_RENDERING_INFO,
-		.renderArea = { .extent = { extent.width, extent.height } },
+		.renderArea = {.extent = { extent.width, extent.height } },
 		.layerCount = 1,
 		.colorAttachmentCount = 1,
 		.pColorAttachments = device->GetSwapchainAttachmentInfo(),
 	};
+
+	// If depth is also passed, we want to sample it, so set load_op_load.
+	VkRenderingAttachmentInfo depthAttachmentInfo = {};
+	if (depth.valid()) {
+		depthAttachmentInfo = rm->GetTexture(depth)->GetAttachmentInfo(0);
+		depthAttachmentInfo.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
+		renderingInfo.pDepthAttachment = &depthAttachmentInfo;
+	}
 
 	vkCmdBeginRendering(m_cmd, &renderingInfo);
 }
