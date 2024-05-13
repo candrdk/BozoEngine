@@ -66,10 +66,6 @@ CascadedShadowMap::CascadedShadowMap(u32 resolution, Camera* camera, span<const 
             .rasterizationState = {
                 .depthClampEnable = true,
                 .depthBiasEnable = true,
-                .depthBiasConstantFactor = -2.0f,   // TODO: play around with these values
-                .depthBiasClamp = -1.0f / 128.0f,
-                .depthBiasSlopeFactor = -3.0f,
-
                 .cullMode = CullMode::Back
             },
             .vertexInputState = {

@@ -392,11 +392,11 @@ struct GraphicsState {
     } depthStencilState = {};
 
     struct RasterizationState {
-        bool depthClampEnable = false;
-        bool depthBiasEnable  = false;
-        float depthBiasConstantFactor;
-        float depthBiasClamp;
-        float depthBiasSlopeFactor;
+        bool depthClampEnable         = false;
+        bool depthBiasEnable          = false;
+        float depthBiasConstantFactor = 0.0f;   // these are just the values i found worked best
+        float depthBiasClamp          = 0.0f;
+        float depthBiasSlopeFactor    = -1.75f;
 
         CullMode cullMode     = CullMode::Back;
         FrontFace frontFace   = FrontFace::CounterClockwise;
