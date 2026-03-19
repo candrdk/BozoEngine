@@ -45,20 +45,18 @@ UIOverlay::UIOverlay(Window* window, Device* device, Format colorFormat, Format 
 		.textures  = { {.binding = 0, .texture = m_font} }
 	});
 
-	m_drawDataBuffer = rm->CreateBuffer({
-		.debugName = "UI combined vertex/index buffer",
-		.byteSize  = 1 << 20,
-		.usage	   = Usage::VERTEX_BUFFER | Usage::INDEX_BUFFER,
-		.memory	   = Memory::Upload
-	});
-
-	// We keep the UI draw data persistently mapped
-	Check(rm->MapBuffer(m_drawDataBuffer), "Failed to map UI vertex/index buffer");
-
 	m_vertexBufferOffset = 0;
-	m_vertexBufferStart  = rm->GetMapped(m_drawDataBuffer) + m_vertexBufferOffset;
 	m_indexBufferOffset  = (1 << 20) - (1 << 18);
-	m_indexBufferStart   = rm->GetMapped(m_drawDataBuffer) + m_indexBufferOffset;
+
+	for (u32 i = 0; i < Device::MaxFramesInFlight; i++) {
+		m_drawDataBuffer[i] = rm->CreateBuffer({
+			.debugName = "UI combined vertex/index buffer",
+			.byteSize  = 1 << 20,
+			.usage	   = Usage::VERTEX_BUFFER | Usage::INDEX_BUFFER,
+			.memory	   = Memory::Upload
+		});
+		Check(rm->MapBuffer(m_drawDataBuffer[i]), "Failed to map UI vertex/index buffer");
+	}
 
 	// Load the UI shaders and initialize the vulkan pipeline used for rendering the overlay
 	std::vector<u32> vertShader = ReadShaderSpv("shaders/uioverlay.vert.spv");
@@ -91,14 +89,18 @@ UIOverlay::~UIOverlay() {
 	ResourceManager* rm = ResourceManager::ptr;
 
 	rm->DestroyPipeline(m_pipeline);
-	rm->DestroyBuffer(m_drawDataBuffer);
+	for (u32 i = 0; i < Device::MaxFramesInFlight; i++) {
+		rm->DestroyBuffer(m_drawDataBuffer[i]);
+	}
 	rm->DestroyBindGroupLayout(m_bindgroupLayout);
 	rm->DestroyTexture(m_font);
 }
 
-void UIOverlay::Update(float deltaTime) {
+void UIOverlay::Tick(float deltaTime) {
 	m_frameTimeHistory.Post(deltaTime);
+}
 
+void UIOverlay::Update() {
 	ImGui_ImplGlfw_NewFrame();
 	ImGui::NewFrame();
 
@@ -127,8 +129,10 @@ void UIOverlay::Update(float deltaTime) {
 	Check(m_indexBufferOffset + indexBufferSize < (1 << 20), "Index buffer size exceeded the maximum limit!");
 
 	// Write the new vertex and index data to the unified drawdata buffer on the GPU
-	ImDrawVert* vertexDst = (ImDrawVert*)m_vertexBufferStart;
-	ImDrawIdx* indexDst = (ImDrawIdx*)m_indexBufferStart;
+	ResourceManager* rm = ResourceManager::ptr;
+	u32 frameIdx = m_device->FrameIdx();
+	ImDrawVert* vertexDst = (ImDrawVert*)(rm->GetMapped(m_drawDataBuffer[frameIdx]) + m_vertexBufferOffset);
+	ImDrawIdx*  indexDst  = (ImDrawIdx*) (rm->GetMapped(m_drawDataBuffer[frameIdx]) + m_indexBufferOffset);
 	for (int i = 0; i < drawData->CmdListsCount; i++) {
 		ImDrawList* cmdList = drawData->CmdLists[i];
 
@@ -156,8 +160,9 @@ void UIOverlay::Render(CommandBuffer& cmd) {
 
 	cmd.SetPipeline(m_pipeline);
 	cmd.SetBindGroup(m_bindgroup, 0);
-	cmd.SetVertexBuffer(m_drawDataBuffer, m_vertexBufferOffset);
-	cmd.SetIndexBuffer(m_drawDataBuffer, m_indexBufferOffset, IndexType::UINT16);
+	Handle<Buffer> buf = m_drawDataBuffer[m_device->FrameIdx()];
+	cmd.SetVertexBuffer(buf, m_vertexBufferOffset);
+	cmd.SetIndexBuffer(buf, m_indexBufferOffset, IndexType::UINT16);
 
 	ImGuiIO& io = ImGui::GetIO();
 	m_pushConstants.scale = glm::vec2(2.0f / io.DisplaySize.x, 2.0f / io.DisplaySize.y);

@@ -216,7 +216,7 @@ int main(int argc, char* argv[]) {
         lastFrame = currentFrame;
 
         camera->Update(deltaTime);
-        UI->Update(deltaTime);
+        UI->Tick(deltaTime);
 
         // Temporary debug interface to modify parallax params.
         rocks->UpdateMaterialParallax(parallaxMode, parallaxSteps, parallaxScale);
@@ -266,6 +266,7 @@ void Render(Device* device, CascadedShadowMap* shadowMap, UIOverlay* UI, span<co
         return;
     }
 
+    UI->Update();
     camera->UpdateUBO();
     shadowMap->UpdateCascadeUBO(dirLight.direction);
     UpdateGBufferUBO(shadowMap);

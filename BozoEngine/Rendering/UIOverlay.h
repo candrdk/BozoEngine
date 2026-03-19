@@ -16,7 +16,8 @@ public:
 	UIOverlay(Window* window, Device* device, Format colorFormat, Format depthFormat, void (*ImGUIRenderCallback)());
 	~UIOverlay();
 
-	void Update(float deltaTime);
+	void Tick(float deltaTime);
+	void Update();
 	void Render(CommandBuffer& cmd);
 	void DrawFrameTimeGraph();
 
@@ -54,15 +55,13 @@ private:
 	void (*m_ImGUIRenderCallback)(void);
 
 	Handle<BindGroupLayout> m_bindgroupLayout;
-	Handle<BindGroup>		m_bindgroup;
-	Handle<Pipeline>		m_pipeline;
-	Handle<Texture>			m_font;
-	Handle<Buffer>			m_drawDataBuffer;
+	Handle<BindGroup>       m_bindgroup;
+	Handle<Pipeline>        m_pipeline;
+	Handle<Texture>         m_font;
+	Handle<Buffer>          m_drawDataBuffer[Device::MaxFramesInFlight];
 
-	void* m_vertexBufferStart  = nullptr;
-	void* m_indexBufferStart	 = nullptr;
-	u64   m_vertexBufferOffset = 0;
-	u64   m_indexBufferOffset	 = 0;
+	u64 m_vertexBufferOffset = 0;
+	u64 m_indexBufferOffset  = 0;
 
 	struct PushConstantBlock {
 		glm::vec2 scale;
