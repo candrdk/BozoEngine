@@ -55,7 +55,7 @@ CascadedShadowMap::CascadedShadowMap(u32 resolution, Camera* camera, span<const 
         });
     }
 
-    std::vector<u32> vertShader = ReadShaderSpv("shaders/shadowMap.vert.spv");
+    std::vector<u32> vertShader = ReadShaderSpv("Shaders/shadowMap.vert.spv");
 
     m_pipeline = rm->CreatePipeline({
         .debugName = "Cascaded shadow map render pipeline",

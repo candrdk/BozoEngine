@@ -59,8 +59,8 @@ UIOverlay::UIOverlay(Window* window, Device* device, Format colorFormat, Format 
 	}
 
 	// Load the UI shaders and initialize the vulkan pipeline used for rendering the overlay
-	std::vector<u32> vertShader = ReadShaderSpv("shaders/uioverlay.vert.spv");
-	std::vector<u32> fragShader = ReadShaderSpv("shaders/uioverlay.frag.spv");
+	std::vector<u32> vertShader = ReadShaderSpv("Shaders/uioverlay.vert.spv");
+	std::vector<u32> fragShader = ReadShaderSpv("Shaders/uioverlay.frag.spv");
 
 	m_pipeline = rm->CreatePipeline({
 		.debugName = "UI pipeline",

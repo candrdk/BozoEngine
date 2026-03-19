@@ -442,8 +442,8 @@ void CreateSkybox() {
         .textures = { {0, skybox.texture } }
     });
 
-    std::vector<u32> vertShader = ReadShaderSpv("shaders/skybox.vert.spv");
-    std::vector<u32> fragShader = ReadShaderSpv("shaders/skybox.frag.spv");
+    std::vector<u32> vertShader = ReadShaderSpv("Shaders/skybox.vert.spv");
+    std::vector<u32> fragShader = ReadShaderSpv("Shaders/skybox.frag.spv");
 
     skybox.pipeline = rm->CreatePipeline({
         .debugName = "Skybox pipeline",
@@ -569,8 +569,8 @@ static void CreateGBufferBindings() {
 
 static void CreateGBufferPipelines(CascadedShadowMap* shadowMap) {
     // Create Offscreen pipeline
-    std::vector<u32> offscreenVert = ReadShaderSpv("shaders/offscreen.vert.spv");
-    std::vector<u32> offscreenFrag = ReadShaderSpv("shaders/offscreen.frag.spv");
+    std::vector<u32> offscreenVert = ReadShaderSpv("Shaders/offscreen.vert.spv");
+    std::vector<u32> offscreenFrag = ReadShaderSpv("Shaders/offscreen.frag.spv");
 
     gbuffer.offscreen = ResourceManager::ptr->CreatePipeline({
         .debugName = "Offscreen pipeline",
@@ -587,8 +587,8 @@ static void CreateGBufferPipelines(CascadedShadowMap* shadowMap) {
     });
 
     // Create Deferred pipeline
-    std::vector<u32> deferredVert = ReadShaderSpv("shaders/deferred.vert.spv");
-    std::vector<u32> deferredFrag = ReadShaderSpv("shaders/deferred.frag.spv");
+    std::vector<u32> deferredVert = ReadShaderSpv("Shaders/deferred.vert.spv");
+    std::vector<u32> deferredFrag = ReadShaderSpv("Shaders/deferred.frag.spv");
 
     gbuffer.deferred = ResourceManager::ptr->CreatePipeline({
         .debugName = "Deferred pipeline",

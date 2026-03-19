@@ -85,30 +85,35 @@ target_compile_definitions(BozoEngine PRIVATE
 )
 
 # Shader compilation
-set(GLSLANG "$ENV{VULKAN_SDK}/Bin/glslangValidator.exe")
+set(DXC "$ENV{VULKAN_SDK}/Bin/dxc.exe")
 set(SHADER_SRC_DIR "${CMAKE_CURRENT_SOURCE_DIR}/shaders")
 set(SHADER_OUT_DIR "${CMAKE_CURRENT_BINARY_DIR}/shaders")
 
 set(SHADERS
-    deferred.vert.glsl
-    deferred.frag.glsl
-    offscreen.vert.glsl
-    offscreen.frag.glsl
-    shadowMap.vert.glsl
-    skybox.vert.glsl
-    skybox.frag.glsl
-    uioverlay.vert.glsl
-    uioverlay.frag.glsl
+    deferred.vert.hlsl
+    deferred.frag.hlsl
+    offscreen.vert.hlsl
+    offscreen.frag.hlsl
+    shadowMap.vert.hlsl
+    skybox.vert.hlsl
+    skybox.frag.hlsl
+    uioverlay.vert.hlsl
+    uioverlay.frag.hlsl
 )
 
 set(SPV_OUTPUTS)
 foreach(SHADER ${SHADERS})
-    string(REPLACE ".glsl" ".spv" SPV_NAME "${SHADER}")
+    if(SHADER MATCHES "\\.vert\\.hlsl$")
+        set(STAGE vs_6_0)
+    elseif(SHADER MATCHES "\\.frag\\.hlsl$")
+        set(STAGE ps_6_0)
+    endif()
+    string(REPLACE ".hlsl" ".spv" SPV_NAME "${SHADER}")
     set(SPV_OUT "${SHADER_OUT_DIR}/${SPV_NAME}")
     add_custom_command(
         OUTPUT "${SPV_OUT}"
         COMMAND ${CMAKE_COMMAND} -E make_directory "${SHADER_OUT_DIR}"
-        COMMAND "${GLSLANG}" "${SHADER_SRC_DIR}/${SHADER}" -gVS -V -o "${SPV_OUT}"
+        COMMAND "${DXC}" -spirv -T ${STAGE} -E main -Zpc -fvk-use-gl-layout "${SHADER_SRC_DIR}/${SHADER}" -Fo "${SPV_OUT}"
         DEPENDS "${SHADER_SRC_DIR}/${SHADER}"
     )
     list(APPEND SPV_OUTPUTS "${SPV_OUT}")
