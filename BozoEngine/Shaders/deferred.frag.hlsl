@@ -4,14 +4,12 @@ struct DirLight {
     float3 direction;
     float3 ambient;
     float3 diffuse;
-    float3 specular;
 };
 
 struct PointLight {
     float3 position;
     float3 ambient;
     float3 diffuse;
-    float3 specular;
 };
 
 struct ShadowData {
@@ -70,15 +68,45 @@ float3 reconstruct_pos_view_space(float2 inUV) {
     return viewSpacePosition.xyz / viewSpacePosition.w;
 }
 
-float3 shade_directional_light(DirLight light, float3 n, float3 v, float2 inUV) {
-    const float alpha = 200.0;
-    float3 l = -normalize(mul((float3x3)view, light.direction));
-    float3 directColor = light.diffuse * clamp(dot(n, l), 0.0, 1.0);
-    float3 diffuse = (light.ambient + directColor) * samplerAlbedo.Sample(samplerAlbedoState, inUV).rgb;
-    float3 h = normalize(l + v);
-    float highlight = pow(clamp(dot(n, h), 0.0, 1.0), alpha) * (float)(dot(n, l) > 0.0);
-    float3 specular = light.diffuse * light.specular * highlight;
-    return diffuse + specular;
+static const float PI = 3.14159265359f;
+
+// GGX/Trowbridge-Reitz normal distribution function
+float D_GGX(float NdotH, float roughness) {
+    float a  = roughness * roughness;
+    float a2 = a * a;
+    float d  = NdotH * NdotH * (a2 - 1.0) + 1.0;
+    return a2 / (PI * d * d);
+}
+
+// Schlick-GGX geometry term (direct lighting: k = (roughness+1)^2 / 8)
+float G_SchlickGGX(float NdotX, float roughness) {
+    float k = (roughness + 1.0);
+    k = (k * k) / 8.0;
+    return NdotX / (NdotX * (1.0 - k) + k);
+}
+
+// Fresnel-Schlick approximation
+float3 F_Schlick(float HdotV, float3 F0) {
+    return F0 + (1.0 - F0) * pow(1.0 - HdotV, 5.0);
+}
+
+// Cook-Torrance BRDF for a single direct light contribution
+float3 pbr_direct(float3 albedo, float metallic, float roughness, float3 F0,
+                  float3 n, float3 v, float3 l, float3 lightColor) {
+    float3 h    = normalize(v + l);
+    float NdotL = max(dot(n, l), 0.0);
+    float NdotV = max(dot(n, v), 0.0);
+    float NdotH = max(dot(n, h), 0.0);
+    float HdotV = max(dot(h, v), 0.0);
+
+    float  D = D_GGX(NdotH, roughness);
+    float  G = G_SchlickGGX(NdotV, roughness) * G_SchlickGGX(NdotL, roughness);
+    float3 F = F_Schlick(HdotV, F0);
+
+    float3 specular = D * G * F / max(4.0 * NdotV * NdotL, 0.001);
+    float3 kd       = (1.0 - F) * (1.0 - metallic);
+
+    return (kd * albedo / PI + specular) * lightColor * NdotL;
 }
 
 float smooth_attenuation(float r, float2 attenuationConstants) {
@@ -88,18 +116,20 @@ float smooth_attenuation(float r, float2 attenuationConstants) {
     return clamp(attenuation, 0.0, 1.0);
 }
 
-float3 shade_point_light(PointLight light, float3 n, float3 v, float3 p, float2 inUV) {
-    const float alpha = 200.0;
+float3 shade_directional_light(DirLight light, float3 albedo, float metallic, float roughness, float3 n, float3 v) {
+    float3 F0 = lerp(float3(0.04, 0.04, 0.04), albedo, metallic);
+    float3 l  = -normalize(mul((float3x3)view, light.direction));
+    return pbr_direct(albedo, metallic, roughness, F0, n, v, l, light.diffuse);
+}
+
+float3 shade_point_light(PointLight light, float3 albedo, float metallic, float roughness, float3 n, float3 v, float3 p) {
+    float3 F0   = lerp(float3(0.04, 0.04, 0.04), albedo, metallic);
     float3 lpos = mul(view, float4(light.position, 1.0)).xyz;
-    float3 l = normalize(lpos - p);
-    float3 directColor = light.diffuse * clamp(dot(n, l), 0.0, 1.0);
-    float3 diffuse = (light.ambient + directColor) * samplerAlbedo.Sample(samplerAlbedoState, inUV).rgb;
-    float3 h = normalize(l + v);
-    float highlight = pow(clamp(dot(n, h), 0.0, 1.0), alpha) * (float)(dot(n, l) > 0.0);
-    float3 specular = light.diffuse * light.specular * highlight;
-    float d    = length(lpos - p);
-    float rmax = 4.0;
-    return (diffuse + specular) * smooth_attenuation(d, float2(1.0 / (rmax * rmax), 2.0 / rmax));
+    float3 l    = normalize(lpos - p);
+    float  d    = length(lpos - p);
+    float  rmax = 4.0;
+    float  att  = smooth_attenuation(d, float2(1.0 / (rmax * rmax), 2.0 / rmax));
+    return pbr_direct(albedo, metallic, roughness, F0, n, v, l, light.diffuse * att);
 }
 
 float SampleShadowMap(float4 p) {
@@ -151,14 +181,14 @@ float3 get_shadow(float3 p) {
     p2.xy = shadowCoord2 + shadow.shadowOffsets[1].zw;
     light2 += SampleShadowMap(p2);
 
-    float3 shadowColor = max(0.2, lerp(light2, light1, weight) * 0.25);
+    float3 shadowColor = lerp(light2, light1, weight) * 0.25;
 
     if (pc.enablePCF == 0) {
         p1.xy = shadowCoord1;
         p2.xy = shadowCoord2;
         light1 = SampleShadowMap(p1);
         light2 = SampleShadowMap(p2);
-        shadowColor = max(0.2, lerp(light2, light1, weight));
+        shadowColor = lerp(light2, light1, weight);
     }
 
     if (pc.colorCascades == 1) {
@@ -174,16 +204,22 @@ float3 get_shadow(float3 p) {
 }
 
 float4 shade_pixel(float2 inUV) {
-    float3 p = reconstruct_pos_view_space(inUV);
-    float3 n = normalize(samplerNormal.Sample(samplerNormalState, inUV).xyz * 2.0 - 1.0);
-    float3 v = normalize(mul(view, position).xyz - p);
+    float3 p         = reconstruct_pos_view_space(inUV);
+    float3 n         = normalize(samplerNormal.Sample(samplerNormalState, inUV).xyz * 2.0 - 1.0);
+    float3 v         = normalize(mul(view, position).xyz - p);
+    float3 albedo    = samplerAlbedo.Sample(samplerAlbedoState, inUV).rgb;
+    float4 mr        = samplerMetallicRoughness.Sample(samplerMetallicRoughnessState, inUV);
+    float  ao        = mr.r;
+    float  roughness = mr.g;
+    float  metallic  = mr.b;
 
-    float3 shade = shade_directional_light(dirLight, n, v, inUV);
+    float3 ambient = dirLight.ambient * albedo * ao;
+    float3 direct  = shade_directional_light(dirLight, albedo, metallic, roughness, n, v) * get_shadow(p);
     for (int i = 0; i < pointLightCount; i++) {
-        shade += shade_point_light(pointLights[i], n, v, p, inUV);
+        direct += shade_point_light(pointLights[i], albedo, metallic, roughness, n, v, p);
     }
 
-    return float4(shade * get_shadow(p), 1.0);
+    return float4(ambient + direct, 1.0);
 }
 
 float4 main([[vk::location(0)]] float2 inUV : TEXCOORD0) : SV_Target0 {

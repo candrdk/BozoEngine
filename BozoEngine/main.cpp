@@ -68,40 +68,19 @@ struct DirectionalLight {
     alignas(16) glm::vec3 direction;
     alignas(16) glm::vec3 ambient;
     alignas(16) glm::vec3 diffuse;
-    alignas(16) glm::vec3 specular;
 };
 
 struct PointLight {
     alignas(16) glm::vec3 position;
     alignas(16) glm::vec3 ambient;
     alignas(16) glm::vec3 diffuse;
-    alignas(16) glm::vec3 specular;
 };
 
 bool bAnimateLight = false;
 DirectionalLight dirLight = {
     .direction = glm::vec3(1.0f, -1.0f, -0.2f),
     .ambient   = glm::vec3(0.05f, 0.05f, 0.05f),
-    .diffuse   = glm::vec3(1.0f,  0.8f,  0.7f),
-    .specular  = glm::vec3(0.1f,  0.1f,  0.1f)
-};
-PointLight pointLightR = {
-    .position = glm::vec3(0.0f,  0.25f, 0.25f),
-    .ambient  = glm::vec3(0.1f,  0.1f,  0.1f),
-    .diffuse  = glm::vec3(1.0f,  0.0f,  0.0f),
-    .specular = glm::vec3(0.05f, 0.05f, 0.05f)
-};
-PointLight pointLightG = {
-    .position = glm::vec3(0.0f,  0.25f, 0.25f),
-    .ambient  = glm::vec3(0.1f,  0.1f,  0.1f),
-    .diffuse  = glm::vec3(0.0f,  1.0f,  0.0f),
-    .specular = glm::vec3(0.05f, 0.05f, 0.05f)
-};
-PointLight pointLightB = {
-    .position = glm::vec3(0.0f,  0.25f, 0.25f),
-    .ambient  = glm::vec3(0.1f,  0.1f,  0.1f),
-    .diffuse  = glm::vec3(0.0f,  0.0f,  1.0f),
-    .specular = glm::vec3(0.05f, 0.05f, 0.05f)
+    .diffuse   = glm::vec3(2.0f,  1.6f,  1.4f)
 };
 
 // Parallax settings - can be modfied in the GUI.
@@ -110,7 +89,7 @@ u32 parallaxSteps = 8;
 float parallaxScale = 0.05f;
 
 // NOTE: Temporary deferred ubo struct, will change once proper lights are implemented
-constexpr u32 MAX_POINT_LIGHTS = 4;
+constexpr u32 MAX_POINT_LIGHTS = 20;
 struct DeferredUBO {
     alignas(16) glm::mat4 view;
     alignas(16) glm::mat4 invProj;
@@ -224,10 +203,6 @@ int main(int argc, char* argv[]) {
         if (bAnimateLight) {
             float t = float(currentFrame * 0.5);
             dirLight.direction = glm::vec3(glm::cos(t), -1.0f, 0.3f * glm::sin(t));
-
-            pointLightR.position = glm::vec3(-2.0f, glm::cos(2.0f * t) + 1.0f, 2.0f);
-            pointLightG.position = glm::vec3(2.0f, 0.25f, 0.0f);
-            pointLightB.position = glm::vec3(glm::cos(4.0f * t), 0.25f, -2.0f);
         }
 
         Render(device, shadowMap, UI, { sponza, rocks });
@@ -662,14 +637,17 @@ void UpdateGBufferUBO(CascadedShadowMap* shadowMap) {
         .invProj = glm::inverse(camera->projection),
         .camPos = glm::vec4(camera->position, 1.0f),
         .shadowData = shadowMap->m_shadowData,
-        .pointLightCount = 3,
+        .pointLightCount = MAX_POINT_LIGHTS,
         .dirLight = dirLight,
-        .pointLights = {
-            pointLightR,
-            pointLightG,
-            pointLightB
-        }
+        .pointLights = {}
     };
+
+    for (i32 i = 0; i < MAX_POINT_LIGHTS; i++)
+        ubo.pointLights[i] = {
+            .position = glm::vec3(2.5f * (i - 10), (i/10) * 4.0f + 1.0f, ((i % 3) - 1) * 2.5f),
+            .ambient = glm::vec3(1.2f, 1.0f, 1.0f),
+            .diffuse = glm::vec3(1.4f, 1.0f, 1.0f)
+        };
 
     ResourceManager::ptr->WriteBuffer(gbuffer.deferredUBO[Device::ptr->FrameIdx()], &ubo, sizeof(ubo), 0);
 }
@@ -682,7 +660,6 @@ void ImGuiRenderCallback() {
     ImGui::Checkbox("Animate light", &bAnimateLight);
     ImGui::ColorEdit3("Ambient", &dirLight.ambient.x, ImGuiColorEditFlags_Float);
     ImGui::ColorEdit3("Diffuse", &dirLight.diffuse.x, ImGuiColorEditFlags_Float);
-    ImGui::ColorEdit3("Specular", &dirLight.specular.x, ImGuiColorEditFlags_Float);
 
     if (ImGui::CollapsingHeader("Shadow settings", ImGuiTreeNodeFlags_DefaultOpen)) {
         ImGui::Checkbox("Visualize cascades", (bool*)&gbuffer.settings.colorCascades);
