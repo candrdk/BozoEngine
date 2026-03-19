@@ -25,7 +25,7 @@ struct CommandBuffer {
     virtual void Draw(u32 vertexCount, u32 instanceCount, u32 firstVertex, u32 firstInstance) = 0;
     virtual void DrawIndexed(u32 indexCount, u32 instanceCount, u32 firstIndex, u32 vertexOffset, u32 firstInstance) = 0;
 
-    u32 m_index;
+    u32 m_index = 0;
 };
 
 class Device {

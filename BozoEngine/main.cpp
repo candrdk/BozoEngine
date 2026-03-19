@@ -21,18 +21,18 @@ Camera* camera;
 // NOTE: These callbacks should be handled by some input system. For now we just store previous mouse positions as globals
 double lastXpos = WIDTH / 2.0f;
 double lastYpos = HEIGHT / 2.0f;
-void FramebufferSizeCallback(GLFWwindow* window, int width, int height) { 
+static void FramebufferSizeCallback(GLFWwindow* window, int width, int height) { 
     Device::ptr->windowResized = true;
 }
 
-void MouseButtonCallback(GLFWwindow* window, int button, int action, int mods) {
+static void MouseButtonCallback(GLFWwindow* window, int button, int action, int mods) {
     if (button == GLFW_MOUSE_BUTTON_RIGHT) {
         glfwSetInputMode(window, GLFW_CURSOR, action == GLFW_PRESS ? GLFW_CURSOR_DISABLED : GLFW_CURSOR_NORMAL);
         glfwGetCursorPos(window, &lastXpos, &lastYpos);
     }
 }
 
-void CursorPosCallback(GLFWwindow* window, double xpos, double ypos) {
+static void CursorPosCallback(GLFWwindow* window, double xpos, double ypos) {
     if (glfwGetInputMode(window, GLFW_CURSOR) == GLFW_CURSOR_NORMAL)
         return;
 
@@ -45,7 +45,7 @@ void CursorPosCallback(GLFWwindow* window, double xpos, double ypos) {
     camera->ProcessMouseMovement(xoffset, yoffset);
 }
 
-void KeyCallback(GLFWwindow* window, int key, int scancode, int action, int mods) {
+static void KeyCallback(GLFWwindow* window, int key, int scancode, int action, int mods) {
     switch (key) {
     case GLFW_KEY_ESCAPE:
         glfwSetWindowShouldClose(window, true);
@@ -204,8 +204,8 @@ int main(int argc, char* argv[]) {
 
 
     // -- Load 3D models --
-    GLTFModel* rocks  = new GLTFModel(device, gbuffer.materialLayout, "assets/ParallaxTest/rocks.gltf");
-    GLTFModel* sponza = new GLTFModel(device, gbuffer.materialLayout, "assets/Sponza/Sponza.gltf");
+    GLTFModel* rocks  = new GLTFModel(device, gbuffer.materialLayout, "Assets/ParallaxTest/rocks.gltf");
+    GLTFModel* sponza = new GLTFModel(device, gbuffer.materialLayout, "Assets/Sponza/Sponza.gltf");
 
 
     // -- Main loop --
@@ -385,12 +385,12 @@ void CreateSkybox() {
     rm->Upload(skybox.indexBuffer, indices, indexBufferByteSize);
 
     const char* files[] = {
-        "assets/Skybox/right.jpg",
-        "assets/Skybox/left.jpg",
-        "assets/Skybox/top.jpg",
-        "assets/Skybox/bottom.jpg",
-        "assets/Skybox/front.jpg",
-        "assets/Skybox/back.jpg"
+        "Assets/Skybox/right.jpg",
+        "Assets/Skybox/left.jpg",
+        "Assets/Skybox/top.jpg",
+        "Assets/Skybox/bottom.jpg",
+        "Assets/Skybox/front.jpg",
+        "Assets/Skybox/back.jpg"
     };
 
     int width, height, channels;
@@ -473,7 +473,7 @@ void DestroySkybox() {
     rm->DestroyBuffer(skybox.indexBuffer);
 }
 
-void CreateGBufferResources() {
+static void CreateGBufferResources() {
     ResourceManager* rm = ResourceManager::ptr;
     Device* device = Device::ptr;
 
@@ -516,7 +516,7 @@ void CreateGBufferResources() {
     device->FlushCommandBuffer(cmd);
 }
 
-void CreateGBufferBindings() {
+static void CreateGBufferBindings() {
     ResourceManager* rm = ResourceManager::ptr;
 
     // Create bindgroup layouts
@@ -566,7 +566,7 @@ void CreateGBufferBindings() {
     }
 }
 
-void CreateGBufferPipelines(CascadedShadowMap* shadowMap) {
+static void CreateGBufferPipelines(CascadedShadowMap* shadowMap) {
     // Create Offscreen pipeline
     std::vector<u32> offscreenVert = ReadShaderSpv("shaders/offscreen.vert.spv");
     std::vector<u32> offscreenFrag = ReadShaderSpv("shaders/offscreen.frag.spv");
@@ -604,7 +604,7 @@ void CreateGBufferPipelines(CascadedShadowMap* shadowMap) {
     });
 }
 
-void CreateGBuffer(CascadedShadowMap* shadowMap) {
+static void CreateGBuffer(CascadedShadowMap* shadowMap) {
     gbuffer.extent = Device::ptr->GetSwapchainExtent();
 
     CreateGBufferResources();
@@ -612,19 +612,19 @@ void CreateGBuffer(CascadedShadowMap* shadowMap) {
     CreateGBufferPipelines(shadowMap);
 }
 
-void DestroyGBufferPipelines() {
+static void DestroyGBufferPipelines() {
     ResourceManager::ptr->DestroyPipeline(gbuffer.offscreen);
     ResourceManager::ptr->DestroyPipeline(gbuffer.deferred);
 }
 
-void DestroyGBufferResources() {
+static void DestroyGBufferResources() {
     ResourceManager::ptr->DestroyTexture(gbuffer.albedo);
     ResourceManager::ptr->DestroyTexture(gbuffer.normal);
     ResourceManager::ptr->DestroyTexture(gbuffer.metallicRoughness);
     ResourceManager::ptr->DestroyTexture(gbuffer.depth);
 }
 
-void DestroyGBufferBindings() {
+static void DestroyGBufferBindings() {
     for (Handle<Buffer> buffer : gbuffer.deferredUBO)
         ResourceManager::ptr->DestroyBuffer(buffer);
 
@@ -632,7 +632,7 @@ void DestroyGBufferBindings() {
     ResourceManager::ptr->DestroyBindGroupLayout(gbuffer.globalsLayout);
 }
 
-void DestroyGBuffer() {
+static void DestroyGBuffer() {
     DestroyGBufferPipelines();
     DestroyGBufferResources();
     DestroyGBufferBindings();
