@@ -349,7 +349,6 @@ VulkanDevice::VulkanDevice(Window* window) {
 
     for (Frame& frame : m_frames) {
         VkCheck(vkCreateSemaphore  (vkDevice, &semaphoreInfo, nullptr, &frame.imageAvailable), "Failed to create RenderFrame imageAvailable semaphore");
-		VkCheck(vkCreateSemaphore  (vkDevice, &semaphoreInfo, nullptr, &frame.renderFinished), "Failed to create RenderFrame renderFinished semaphore");
 		VkCheck(vkCreateFence      (vkDevice, &fenceInfo,     nullptr, &frame.inFlight),       "Failed to create RenderFrame inFlight fence");
 	    VkCheck(vkCreateCommandPool(vkDevice, &poolInfo,      nullptr, &frame.commandPool),    "Failed to create RenderFrame command pool");
         frame.descriptorPool = CreateDescriptorPool(vkDevice, 100, 1, 100);
@@ -364,7 +363,6 @@ VulkanDevice::~VulkanDevice() {
 
     for (Frame& frame : m_frames) {
         vkDestroySemaphore(vkDevice, frame.imageAvailable, nullptr);
-        vkDestroySemaphore(vkDevice, frame.renderFinished, nullptr);
         vkDestroyFence(vkDevice, frame.inFlight, nullptr);
         vkDestroyCommandPool(vkDevice, frame.commandPool, nullptr);
         vkDestroyDescriptorPool(vkDevice, frame.descriptorPool, nullptr);
@@ -488,7 +486,13 @@ void VulkanDevice::CreateSwapchain(bool VSync) {
 	// Update swapchain images
 	m_swapchain.images.resize(imageCount);
 	m_swapchain.imageViews.resize(imageCount);
+	m_swapchain.renderFinished.resize(imageCount);
 	m_swapchain.attachmentInfos.reserve(imageCount);
+
+	VkSemaphoreCreateInfo semaphoreInfo = { .sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO };
+	for (u32 i = 0; i < imageCount; i++) {
+		VkCheck(vkCreateSemaphore(vkDevice, &semaphoreInfo, nullptr, &m_swapchain.renderFinished[i]), "Failed to create swapchain renderFinished semaphore");
+	}
 
 	vkGetSwapchainImagesKHR(vkDevice, m_swapchain.swapchain, &imageCount, m_swapchain.images.data());
 
@@ -532,6 +536,10 @@ void VulkanDevice::RecreateSwapchain() {
 void VulkanDevice::DestroySwapchain() {
     for (VkImageView imageView : m_swapchain.imageViews) {
 		vkDestroyImageView(vkDevice, imageView, nullptr);
+	}
+
+	for (VkSemaphore semaphore : m_swapchain.renderFinished) {
+		vkDestroySemaphore(vkDevice, semaphore, nullptr);
 	}
 
 	vkDestroySwapchainKHR(vkDevice, m_swapchain.swapchain, nullptr);
@@ -597,7 +605,7 @@ void VulkanDevice::EndFrame() {
 
 	VkSemaphoreSubmitInfo signalSemaphoreSubmitInfo = {
 		.sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
-		.semaphore = frame().renderFinished,
+		.semaphore = m_swapchain.renderFinished[m_swapchain.imageIndex],
 		.stageMask = VK_PIPELINE_STAGE_ALL_COMMANDS_BIT		// signal once all commandbuffers have been executed.
 	};
 
@@ -621,7 +629,7 @@ void VulkanDevice::EndFrame() {
 	VkPresentInfoKHR presentInfo = {
 		.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
 		.waitSemaphoreCount = 1,
-		.pWaitSemaphores = &frame().renderFinished,
+		.pWaitSemaphores = &m_swapchain.renderFinished[m_swapchain.imageIndex],
 		.swapchainCount = 1,
 		.pSwapchains = &m_swapchain.swapchain,
 		.pImageIndices = &m_swapchain.imageIndex

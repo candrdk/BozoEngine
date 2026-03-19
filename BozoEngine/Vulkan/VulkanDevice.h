@@ -90,7 +90,6 @@ private:
     // persistently mapped buffer that gets bump allocated.
     struct Frame {
         VkSemaphore      imageAvailable = VK_NULL_HANDLE;
-        VkSemaphore      renderFinished = VK_NULL_HANDLE;
         VkFence          inFlight       = VK_NULL_HANDLE;
 
         // Command buffers are transient and one time submit.
@@ -127,9 +126,10 @@ private:
 
         u32            imageIndex = 0;
 
-        std::vector<VkImage>                   images          = {};
-        std::vector<VkImageView>               imageViews      = {};
-        std::vector<VkRenderingAttachmentInfo> attachmentInfos = {};
+        std::vector<VkImage>                   images               = {};
+        std::vector<VkImageView>               imageViews           = {};
+        std::vector<VkRenderingAttachmentInfo> attachmentInfos      = {};
+        std::vector<VkSemaphore>               renderFinished       = {};
     } m_swapchain;
 
     Frame m_frames[MaxFramesInFlight] = {};
