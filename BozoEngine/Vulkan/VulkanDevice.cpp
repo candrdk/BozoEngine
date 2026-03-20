@@ -560,10 +560,17 @@ bool VulkanDevice::BeginFrame() {
 	}
 
 	VkCheck(vkResetFences(vkDevice, 1, &frame().inFlight), "Failed to reset inFlight fence");
+
+	// Free command buffers before resetting the pool. vkResetCommandPool only moves CBs back to the
+	// initial state without freeing them — calling vkAllocateCommandBuffers afterwards allocates new
+	// ones, leaving the reset (but still allocated) CBs orphaned in the pool. Over thousands of frames
+	// this causes unbounded growth.
+	for (VulkanCommandBuffer& cb : frame().commandBuffers)
+		vkFreeCommandBuffers(vkDevice, frame().commandPool, 1, &cb.m_cmd);
+
 	VkCheck(vkResetCommandPool(vkDevice, frame().commandPool, 0), "Failed to reset frame command pool.");
 	VkCheck(vkResetDescriptorPool(vkDevice, frame().descriptorPool, 0), "Failed to reset frame descriptor pool");
 
-	// Also reset the VulkanCommandBuffer vector
 	frame().commandBuffers.clear();
 	Check(GetCommandBuffer().m_index == 0, "Main rendering command buffer should always be at index 0");
 
