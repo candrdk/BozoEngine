@@ -5,8 +5,9 @@ Small `Vulkan 1.3` hobby renderer written in c++ from scratch. The goal of BozoE
 The Vulkan API abstraction is heavily inspired by the design described by Sebastian Aaltonen in his [REAC2023 presentation](https://enginearchitecture.org/downloads/reac2023_modern_mobile_rendering_at_hypehype.pdf). Eric Lengyel's FGED series of books have also served as a guide for the implementation of rendering techniques like shadow mapping.
 
 ## Features
-- Basic Deferred Physically-Based Renderer.
+- Basic Deferred Physically-Based Shading.
 - Cascaded shadow mapping. Based on the implementation described in Eric Lengyels FGED2.
+- Screen-Space Ambient Occlusion (GTAO)
 - Implementations of various parallax mapping techniques such as POM.
 ![Screenshot 1](screenshot1.png)
 - Small custom [Dear ImGui](https://github.com/ocornut/imgui) vulkan backend for use with `dynamic_rendering`.
