@@ -326,7 +326,7 @@ void GLTFModel::DrawNode(CommandBuffer& cmd, Node* node, bool shadowMap) const {
 		Node* parent = node->parent;
 		while (parent) {
 			nodeTransform = parent->transform * nodeTransform;
-			parent = node->parent;
+			parent = parent->parent;
 		}
 
 		for (const Primitive& p : node->mesh.primitives) {

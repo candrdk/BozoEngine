@@ -5,6 +5,7 @@
 #include "Rendering/UIOverlay.h"
 #include "Rendering/GLTFModel.h"
 #include "Rendering/Shadows.h"
+#include "Rendering/GTAO.h"
 
 // TODO: Remove this include. Only used for loading skybox textures.
 #include <stb/stb_image.h>
@@ -17,6 +18,7 @@ constexpr u32 HEIGHT = 900;
 
 // NOTE: Until a proper input system has been implemented, camera is just stored as a global here.
 Camera* camera;
+GTAO* g_gtao;
 
 // NOTE: These callbacks should be handled by some input system. For now we just store previous mouse positions as globals
 double lastXpos = WIDTH / 2.0f;
@@ -125,12 +127,15 @@ struct GBuffer {
         u32 renderMode = 0;
         u32 colorCascades = 0;
         u32 enablePCF = 1;
+        u32 enableGTAO = 1;
     } settings;
 } gbuffer = {};
 
 // Create/destroy the GBuffer
-void CreateGBuffer(CascadedShadowMap* shadowMap);
+void CreateGBuffer(CascadedShadowMap* shadowMap, GTAO* gtao);
 void DestroyGBuffer();
+static void CreateGBufferPipelines(CascadedShadowMap* shadowMap, GTAO* gtao);
+static void DestroyGBufferPipelines();
 
 // Update the GBuffer on window resize
 void ResizeGBuffer();
@@ -154,8 +159,8 @@ void DestroySkybox();
 // The user-specified ImGui overlay render callback.
 void ImGuiRenderCallback();
 
-// Render models with a given shadowMap and UIOverlay.
-void Render(Device* device, CascadedShadowMap* shadowMap, UIOverlay* UI, span<const GLTFModel* const> models);
+// Render models with a given shadowMap, GTAO and UIOverlay.
+void Render(Device* device, CascadedShadowMap* shadowMap, GTAO* gtao, UIOverlay* UI, span<const GLTFModel* const> models);
 
 
 int main(int argc, char* argv[]) {
@@ -178,7 +183,10 @@ int main(int argc, char* argv[]) {
     UIOverlay* UI = new UIOverlay(window, device, device->GetSwapchainFormat(), Format::D24_UNORM_S8_UINT, ImGuiRenderCallback);
     camera = new Camera(glm::vec3(0.0f, 1.5f, 1.0f), 1.0f, 60.0f, (float)WIDTH / HEIGHT, 0.01f, 0.0f, -30.0f);
     CascadedShadowMap* shadowMap = new CascadedShadowMap(1024 * 2, camera, { {0.0f, 3.0f}, {2.5f, 12.0f}, {11.0f, 32.0f}, {30.0f, 128.0f} });
-    CreateGBuffer(shadowMap);
+    CreateGBuffer(shadowMap, nullptr);
+    GTAO* gtao = new GTAO(gbuffer.extent.width, gbuffer.extent.height, gbuffer.depth, gbuffer.normal);
+    g_gtao = gtao;
+    CreateGBufferPipelines(shadowMap, gtao);
     CreateSkybox();
 
 
@@ -205,12 +213,13 @@ int main(int argc, char* argv[]) {
             dirLight.direction = glm::vec3(glm::cos(t), -1.0f, 0.3f * glm::sin(t));
         }
 
-        Render(device, shadowMap, UI, { sponza, rocks });
+        Render(device, shadowMap, gtao, UI, { sponza, rocks });
 
         // If the window was resized, we also have to resize the GBuffer and update the camera aspect
         Extent2D swapchainExtent = device->GetSwapchainExtent();
         if (swapchainExtent.width != gbuffer.extent.width || swapchainExtent.height != gbuffer.extent.height) {
             ResizeGBuffer();
+            gtao->Resize(swapchainExtent.width, swapchainExtent.height, gbuffer.depth, gbuffer.normal);
             camera->aspect = (float)swapchainExtent.width / swapchainExtent.height;
         }
 
@@ -225,6 +234,7 @@ int main(int argc, char* argv[]) {
     delete sponza;
     delete rocks;
 
+    delete gtao;
     delete shadowMap;
     delete camera;
     delete UI;
@@ -236,7 +246,7 @@ int main(int argc, char* argv[]) {
 }
 
 
-void Render(Device* device, CascadedShadowMap* shadowMap, UIOverlay* UI, span<const GLTFModel* const> models) {
+void Render(Device* device, CascadedShadowMap* shadowMap, GTAO* gtao, UIOverlay* UI, span<const GLTFModel* const> models) {
     if (!device->BeginFrame()) {
         return;
     }
@@ -245,6 +255,7 @@ void Render(Device* device, CascadedShadowMap* shadowMap, UIOverlay* UI, span<co
     camera->UpdateUBO();
     shadowMap->UpdateCascadeUBO(dirLight.direction);
     UpdateGBufferUBO(shadowMap);
+    gtao->Update(camera->projection, glm::inverse(camera->projection));
 
     CommandBuffer& cmd = device->GetFrameCommandBuffer();
 
@@ -270,18 +281,24 @@ void Render(Device* device, CascadedShadowMap* shadowMap, UIOverlay* UI, span<co
 
     cmd.EndRendering();
 
+    // Transition depth and normal for GTAO to read
+    cmd.ImageBarrier(gbuffer.normal, Usage::RENDER_TARGET, Usage::SHADER_RESOURCE);
+    cmd.ImageBarrier(gbuffer.depth, Usage::DEPTH_STENCIL, Usage::SHADER_RESOURCE);
+
+    // -- GTAO pass --
+    gtao->Render(cmd);
+
+    // Transition remaining gbuffer resources for deferred pass
+    cmd.ImageBarrier(gbuffer.albedo, Usage::RENDER_TARGET, Usage::SHADER_RESOURCE);
+    cmd.ImageBarrier(gbuffer.metallicRoughness, Usage::RENDER_TARGET, Usage::SHADER_RESOURCE);
+
     // -- Deferred pass --
     cmd.SetPipeline(gbuffer.deferred);
     cmd.SetBindGroup(gbuffer.deferredBindings[device->FrameIdx()], 0);
     cmd.SetBindGroup(gbuffer.offscreenBindings[device->FrameIdx()], 1);
     cmd.SetBindGroup(shadowMap->GetShadowBindings(), 2);
+    cmd.SetBindGroup(gtao->GetAOBindings(), 3);
     cmd.PushConstants(&gbuffer.settings, 0, sizeof(gbuffer.settings), ShaderStage::FRAGMENT);
-
-    // Transition gbuffer resources to shader resources
-    cmd.ImageBarrier(gbuffer.albedo, Usage::RENDER_TARGET, Usage::SHADER_RESOURCE);
-    cmd.ImageBarrier(gbuffer.normal, Usage::RENDER_TARGET, Usage::SHADER_RESOURCE);
-    cmd.ImageBarrier(gbuffer.metallicRoughness, Usage::RENDER_TARGET, Usage::SHADER_RESOURCE);
-    cmd.ImageBarrier(gbuffer.depth, Usage::DEPTH_STENCIL, Usage::SHADER_RESOURCE);
 
     cmd.BeginRenderingSwapchain();
     cmd.Draw(3, 1, 0, 0);
@@ -542,7 +559,7 @@ static void CreateGBufferBindings() {
     }
 }
 
-static void CreateGBufferPipelines(CascadedShadowMap* shadowMap) {
+static void CreateGBufferPipelines(CascadedShadowMap* shadowMap, GTAO* gtao) {
     // Create Offscreen pipeline
     std::vector<u32> offscreenVert = ReadShaderSpv("Shaders/offscreen.vert.spv");
     std::vector<u32> offscreenFrag = ReadShaderSpv("Shaders/offscreen.frag.spv");
@@ -571,7 +588,7 @@ static void CreateGBufferPipelines(CascadedShadowMap* shadowMap) {
             {.spirv = deferredVert, .stage = ShaderStage::VERTEX},
             {.spirv = deferredFrag, .stage = ShaderStage::FRAGMENT}
         },
-        .bindgroupLayouts = { gbuffer.globalsLayout, gbuffer.materialLayout, shadowMap->GetShadowBindingsLayout() },
+        .bindgroupLayouts = { gbuffer.globalsLayout, gbuffer.materialLayout, shadowMap->GetShadowBindingsLayout(), gtao->GetAOBindingsLayout() },
         .graphicsState = {
             .colorAttachments = { Format::BGRA8_SRGB },
             .depthStencilState = {.depthStencilFormat = Format::D24_UNORM_S8_UINT },
@@ -580,12 +597,16 @@ static void CreateGBufferPipelines(CascadedShadowMap* shadowMap) {
     });
 }
 
-static void CreateGBuffer(CascadedShadowMap* shadowMap) {
+static void CreateGBuffer(CascadedShadowMap* shadowMap, GTAO* gtao) {
     gbuffer.extent = Device::ptr->GetSwapchainExtent();
 
     CreateGBufferResources();
     CreateGBufferBindings();
-    CreateGBufferPipelines(shadowMap);
+
+    // Pipelines are created separately after GTAO is initialized,
+    // since the deferred pipeline needs GTAO's bind group layout.
+    if (gtao)
+        CreateGBufferPipelines(shadowMap, gtao);
 }
 
 static void DestroyGBufferPipelines() {
@@ -675,8 +696,17 @@ void ImGuiRenderCallback() {
         ImGui::TableNextColumn(); if (ImGui::RadioButton("Normal", gbuffer.settings.renderMode == 2)) { gbuffer.settings.renderMode = 2; }
         ImGui::TableNextColumn(); if (ImGui::RadioButton("Metallic/Roughness", gbuffer.settings.renderMode == 3)) { gbuffer.settings.renderMode = 3; }
         ImGui::TableNextColumn(); if (ImGui::RadioButton("Depth", gbuffer.settings.renderMode == 4)) { gbuffer.settings.renderMode = 4; }
+        ImGui::TableNextColumn(); if (ImGui::RadioButton("AO", gbuffer.settings.renderMode == 5)) { gbuffer.settings.renderMode = 5; }
 
         ImGui::EndTable();
+    }
+
+    if (ImGui::CollapsingHeader("GTAO Settings", ImGuiTreeNodeFlags_DefaultOpen)) {
+        ImGui::Checkbox("Enable GTAO##gtao", (bool*)&gbuffer.settings.enableGTAO);
+        ImGui::SliderInt("DirectionSampleCount##gtao", &g_gtao->settings.DirectionSampleCount, 4, 64);
+        ImGui::SliderInt("SliceCount##gtao", &g_gtao->settings.SliceCount, 4, 64);
+        ImGui::SliderFloat("Power##gtao", &g_gtao->settings.Power, 0.01f, 5.0f);
+        ImGui::SliderFloat("WorldRadius##gtao", &g_gtao->settings.WorldRadius, 0.001f, 5.0f);
     }
 
     if (ImGui::CollapsingHeader("Parallax Mode", ImGuiTreeNodeFlags_DefaultOpen)) {

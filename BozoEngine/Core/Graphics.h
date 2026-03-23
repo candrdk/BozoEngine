@@ -63,6 +63,7 @@ enum class Memory {
 
 enum class Format {
 	UNDEFINED,
+	R8_UNORM,
 	RGBA8_UNORM,
 	RGBA8_SRGB,
     BGRA8_SRGB,

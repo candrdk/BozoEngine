@@ -58,6 +58,7 @@ inline constexpr VkIndexType ConvertIndexType(IndexType type) {
 inline constexpr VkFormat ConvertFormat(Format format) {
 	switch (format) {
 	case Format::UNDEFINED:			return VK_FORMAT_UNDEFINED;
+	case Format::R8_UNORM:			return VK_FORMAT_R8_UNORM;
 	case Format::RGBA8_UNORM:		return VK_FORMAT_R8G8B8A8_UNORM;
 	case Format::RGBA8_SRGB:		return VK_FORMAT_R8G8B8A8_SRGB;
 	case Format::BGRA8_SRGB:		return VK_FORMAT_B8G8R8A8_SRGB;
@@ -75,6 +76,7 @@ inline constexpr VkFormat ConvertFormat(Format format) {
 inline constexpr Format ConvertFormatVK(VkFormat format) {
 	switch (format) {
 	case VK_FORMAT_UNDEFINED:			return Format::UNDEFINED;
+	case VK_FORMAT_R8_UNORM:			return Format::R8_UNORM;
 	case VK_FORMAT_R8G8B8A8_UNORM:		return Format::RGBA8_UNORM;
 	case VK_FORMAT_R8G8B8A8_SRGB:		return Format::RGBA8_SRGB;
 	case VK_FORMAT_B8G8R8A8_SRGB:		return Format::BGRA8_SRGB;
@@ -230,6 +232,9 @@ inline constexpr VkImageType ParseImageType(TextureDesc::Type type) {
 inline constexpr u32 FormatStride(VkFormat format) {
     switch (format)
     {
+	case VK_FORMAT_R8_UNORM:
+		return 1;
+
 	case VK_FORMAT_R8G8B8A8_UNORM:
 	case VK_FORMAT_R8G8B8A8_SRGB:
 	case VK_FORMAT_B8G8R8A8_SRGB:

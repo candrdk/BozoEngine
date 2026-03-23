@@ -34,7 +34,7 @@ cbuffer UniformBufferObject {
     PointLight pointLights[MAX_POINT_LIGHTS];
 };
 
-struct PushConstants { uint renderMode; uint colorCascades; uint enablePCF; };
+struct PushConstants { uint renderMode; uint colorCascades; uint enablePCF; uint enableGTAO; };
 [[vk::push_constant]] PushConstants pc;
 
 [[vk::combinedImageSampler]] [[vk::binding(0, 1)]] Texture2D<float4>   samplerAlbedo;
@@ -47,6 +47,8 @@ struct PushConstants { uint renderMode; uint colorCascades; uint enablePCF; };
 [[vk::combinedImageSampler]] [[vk::binding(3, 1)]] SamplerState        samplerDepthState;
 [[vk::combinedImageSampler]] [[vk::binding(0, 2)]] Texture2DArray<float> samplerShadowMap;
 [[vk::combinedImageSampler]] [[vk::binding(0, 2)]] SamplerComparisonState samplerShadowMapState;
+[[vk::combinedImageSampler]] [[vk::binding(0, 3)]] Texture2D<float4>   samplerGTAO;
+[[vk::combinedImageSampler]] [[vk::binding(0, 3)]] SamplerState        samplerGTAOState;
 
 // View matrix is affine (rotation + translation), so use the efficient inverse
 float4x4 InverseView(float4x4 v) {
@@ -209,17 +211,20 @@ float4 shade_pixel(float2 inUV) {
     float3 v         = normalize(mul(view, position).xyz - p);
     float3 albedo    = samplerAlbedo.Sample(samplerAlbedoState, inUV).rgb;
     float4 mr        = samplerMetallicRoughness.Sample(samplerMetallicRoughnessState, inUV);
-    float  ao        = mr.r;
+    float  bakedAO   = mr.r;
+    float  ssao      = pc.enableGTAO ? samplerGTAO.Sample(samplerGTAOState, inUV).r : 1.0;
     float  roughness = mr.g;
     float  metallic  = mr.b;
 
-    float3 ambient = dirLight.ambient * albedo * ao;
+    float3 ambient = dirLight.ambient * albedo * bakedAO;
     float3 direct  = shade_directional_light(dirLight, albedo, metallic, roughness, n, v) * get_shadow(p);
     for (int i = 0; i < pointLightCount; i++) {
         direct += shade_point_light(pointLights[i], albedo, metallic, roughness, n, v, p);
     }
 
-    return float4(ambient + direct, 1.0);
+    // Apply SSAO independently from baked AO — affects both ambient and direct light
+    float directAO = lerp(1.0, ssao, 0.5 * (1.0 - metallic));
+    return float4((ambient + direct) * directAO, 1.0);
 }
 
 float4 main([[vk::location(0)]] float2 inUV : TEXCOORD0) : SV_Target0 {
@@ -234,6 +239,7 @@ float4 main([[vk::location(0)]] float2 inUV : TEXCOORD0) : SV_Target0 {
             return result;
         }
         case 4: return float4(samplerDepth.Sample(samplerDepthState, inUV).r, 0.0, 0.0, 1.0);
+        case 5: return float4(samplerGTAO.Sample(samplerGTAOState, inUV).rrr, 1.0);
         default: return float4(0, 0, 0, 1);
     }
 }

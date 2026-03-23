@@ -12,6 +12,7 @@ add_executable(BozoEngine
     Rendering/Camera.cpp
     Rendering/GLTFModel.cpp
     Rendering/Shadows.cpp
+    Rendering/GTAO.cpp
     Rendering/UIOverlay.cpp
     Vulkan/VulkanDevice.cpp
     Vulkan/VulkanResourceManager.cpp
@@ -99,6 +100,8 @@ set(SHADERS
     skybox.frag.hlsl
     uioverlay.vert.hlsl
     uioverlay.frag.hlsl
+    gtao.frag.hlsl
+    gtao_blur.frag.hlsl
 )
 
 set(SPV_OUTPUTS)

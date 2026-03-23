@@ -754,20 +754,22 @@ void VulkanCommandBuffer::BeginRendering(Handle<Texture> depth, u32 layer, u32 w
 void VulkanCommandBuffer::BeginRendering(Extent2D extent, const span<const Handle<Texture>>&& attachments, Handle<Texture> depth) {
 	VulkanResourceManager* rm = VulkanResourceManager::impl();
 
-	// TODO: add proper handle check
-	VkRenderingAttachmentInfo depthAttachmentInfo = rm->GetTexture(depth)->GetAttachmentInfo();
+	bool hasDepth = depth.valid();
+	VkRenderingAttachmentInfo depthAttachmentInfo = {};
+	if (hasDepth)
+		depthAttachmentInfo = rm->GetTexture(depth)->GetAttachmentInfo();
 
 	std::vector<VkRenderingAttachmentInfo> colorAttachments(attachments.size());
 	for (u32 i = 0; i < attachments.size(); i++)
 		colorAttachments[i] = rm->GetTexture(attachments[i])->GetAttachmentInfo();
-	
+
 	VkRenderingInfo renderingInfo = {
 		.sType = VK_STRUCTURE_TYPE_RENDERING_INFO,
 		.renderArea = { .extent = { extent.width, extent.height} },
 		.layerCount = 1,
 		.colorAttachmentCount = (u32)colorAttachments.size(),
 		.pColorAttachments = colorAttachments.data(),
-		.pDepthAttachment = &depthAttachmentInfo
+		.pDepthAttachment = hasDepth ? &depthAttachmentInfo : nullptr
 	};
 
 	vkCmdBeginRendering(m_cmd, &renderingInfo);
